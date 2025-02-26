@@ -50,6 +50,9 @@ ana.x.config_groups = {}
 # named function hooks that can modify store_parts of task outputs if needed
 ana.x.store_parts_modifiers = {}
 
+# histogramming hooks, invoked before creating plots when --hist-hook parameter set
+ana.x.hist_hooks = {}
+
 
 #
 # setup configs

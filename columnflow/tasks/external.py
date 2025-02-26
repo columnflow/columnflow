@@ -397,6 +397,8 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     external files.
     """
 
+    single_config = True
+
     replicas = luigi.IntParameter(
         default=5,
         description="number of replicas to generate; default: 5",

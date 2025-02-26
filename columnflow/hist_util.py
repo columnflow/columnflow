@@ -102,20 +102,20 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
     default_axis_type = "integer" if variable_inst.discrete_x else "variable"
     axis_type = variable_inst.x("axis_type", default_axis_type).lower()
 
-    if axis_type in ("variable", "var"):
+    if axis_type in {"variable", "var"}:
         return histogram.Var(variable_inst.bin_edges, **axis_kwargs)
 
-    if axis_type in ("integer", "int"):
+    if axis_type in {"integer", "int"}:
         return histogram.Integer(
             int(variable_inst.bin_edges[0]),
             int(variable_inst.bin_edges[-1]),
             **axis_kwargs,
         )
 
-    if axis_type in ("boolean", "bool"):
+    if axis_type in {"boolean", "bool"}:
         return histogram.Boolean(**axis_kwargs)
 
-    if axis_type in ("intcategory", "intcat"):
+    if axis_type in {"intcategory", "intcat"}:
         binning = (
             [int(b) for b in variable_inst.binning]
             if isinstance(variable_inst.binning, list)
@@ -124,11 +124,11 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
         axis_kwargs.setdefault("growth", True)
         return histogram.IntCat(binning, **axis_kwargs)
 
-    if axis_type in ("strcategory", "strcat"):
+    if axis_type in {"strcategory", "strcat"}:
         axis_kwargs.setdefault("growth", True)
         return histogram.StrCat([], **axis_kwargs)
 
-    if axis_type in ("regular", "reg"):
+    if axis_type in {"regular", "reg"}:
         if not variable_inst.even_binning:
             logger.warning(
                 "regular axis with uneven binning is not supported, using first and last bin edge "

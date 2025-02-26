@@ -13,8 +13,8 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
-    CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    CategoriesMixin, DatasetsProcessesShiftSourcesMixin, HistHookMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -26,21 +26,23 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 
 
 class PlotVariablesBase(
-    HistHookMixin,
-    VariablePlotSettingMixin,
-    ProcessPlotSettingMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
+    # MLModelsMixin,
+    WeightProducerClassMixin,
     CategoriesMixin,
-    MLModelsMixin,
-    WeightProducerMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
+    ProcessPlotSettingMixin,
+    VariablePlotSettingMixin,
+    HistHookMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
-    exclude_index = True
+    # TODO: testing for now
+    single_config = True
+
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -48,7 +50,9 @@ class PlotVariablesBase(
         MergeHistograms=MergeHistograms,
     )
 
-    def store_parts(self):
+    exclude_index = True
+
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
         return parts
@@ -62,9 +66,7 @@ class PlotVariablesBase(
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-
         reqs["merged_hists"] = self.requires_from_branch()
-
         return reqs
 
     @abstractmethod
@@ -193,8 +195,8 @@ class PlotVariablesBase(
 
 
 class PlotVariablesBaseSingleShift(
-    PlotVariablesBase,
     ShiftTask,
+    PlotVariablesBase,
 ):
     exclude_index = True
 
@@ -245,7 +247,7 @@ class PlotVariablesBaseSingleShift(
             "plots": [self.target(name) for name in self.get_plot_names("plot")],
         }
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         if "shift" in parts:
             parts.insert_before("datasets", "shift", parts.pop("shift"))
@@ -276,8 +278,8 @@ class PlotVariables2D(
 
 
 class PlotVariablesPerProcess2D(
-    law.WrapperTask,
     PlotVariables2D,
+    law.WrapperTask,
 ):
     # force this one to be a local workflow
     workflow = "local"
@@ -290,8 +292,8 @@ class PlotVariablesPerProcess2D(
 
 
 class PlotVariablesBaseMultiShifts(
+    DatasetsProcessesShiftSourcesMixin,
     PlotVariablesBase,
-    ShiftSourcesMixin,
 ):
     legend_title = luigi.Parameter(
         default=law.NO_STR,
@@ -299,6 +301,9 @@ class PlotVariablesBaseMultiShifts(
         description="sets the title of the legend; when empty and only one process is present in "
         "the plot, the process_inst label is used; empty default",
     )
+
+    # use the MergeHistograms task to validate shift sources against the requested dataset
+    shift_validation_task_cls = MergeHistograms
 
     exclude_index = True
 
@@ -348,7 +353,7 @@ class PlotVariablesBaseMultiShifts(
             "plots": [self.target(name) for name in self.get_plot_names("plot")],
         }
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_before("datasets", "shifts", f"shifts_{self.shift_sources_repr}")
         return parts
