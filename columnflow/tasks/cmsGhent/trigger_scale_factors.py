@@ -175,7 +175,7 @@ class TriggerScaleFactors(
             sf = util.syst_hist(eff_ct["data"].axes, syst_name="central",
                                 arrays=eff_ct["data"].values() / eff_ct["mc"].values())
 
-            if set(law.util.make_list(vars)) == set(tcfg.main_variables):
+            if set(law.util.make_list(vrs)) == set(tcfg.main_variables):
                 # full uncertainties for main binning
                 for unc_function in self.trigger_config_inst.uncertainties:
                     if (unc := unc_function(histograms, store_hists)) is not None:
@@ -435,7 +435,10 @@ class PlotTriggerScaleFactors1D(
             # convert down and up variations to up and down errors
             hists[k] = [hs[0]] + [np.abs(h - hs[0]) for h in hs[1:]]
 
-        kwargs = dict(skip_ratio=len(hists) == 1) | self.get_plot_parameters()
+        
+        kwargs = self.get_plot_parameters()
+        if not kwargs.setdefault("skip_ratio"):
+            kwargs["skip_ratio"] = len(hists) == 1
         fig, axes = self.call_plot_func(
             self.plot_function,
             hists=hists,
