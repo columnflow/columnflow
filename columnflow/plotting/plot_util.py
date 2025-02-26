@@ -398,13 +398,21 @@ def prepare_style_config(
         # TODO: options for very large ranges, or non-uniform discrete x
         tx = np.array(variable_inst.bin_edges)
         tx = (tx[1:] + tx[:-1]) / 2
-        style_config["ax_cfg"]["xticks"] = tx[::len(tx) // 10]
+        slices = getattr(variable_inst, "slice", None) or variable_inst.x("slice", None)
+        if (
+            slices and isinstance(slices, Iterable) and len(slices) >= 2 and
+            try_complex(slices[0]) and try_complex(slices[1])
+        ):
+            sl = slice(*slices[:2], len(tx) // 10)
+        else:
+            sl = slice(None, None, len(tx) // 10)
+        style_config["ax_cfg"]["xticks"] = tx[sl]
         style_config["ax_cfg"]["minorxticks"] = []
 
         # add custom bin labels if specified and same amount of x ticks
         if x_labels := variable_inst.x_labels:
             if len(x_labels) == len(tx):
-                style_config["ax_cfg"]["xticklabels"] = x_labels[::len(tx) // 10]
+                style_config["ax_cfg"]["xticklabels"] = x_labels[sl]
 
     if variable_inst.discrete_y:
         style_config["ax_cfg"]["minoryticks"] = []
