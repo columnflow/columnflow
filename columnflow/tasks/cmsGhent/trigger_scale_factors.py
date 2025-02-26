@@ -381,7 +381,7 @@ class PlotTriggerScaleFactors2D(
             p.dump(fig, formatter="mpl")
 
 
-class TriggerScaleFactors1D(
+class PlotTriggerScaleFactors1D(
     PlotTriggerScaleFactorsBase,
     PlotBase1D,
 ):
@@ -450,7 +450,7 @@ class TriggerScaleFactors1D(
             p.dump(fig, formatter="mpl")
 
 
-class TriggerEfficiencies1D(
+class PlotTriggerEfficiencies1D(
     PlotTriggerScaleFactorsBase,
     PlotBase1D,
 ):
@@ -500,7 +500,7 @@ class TriggerEfficiencies1D(
             p.dump(fig, formatter="mpl")
 
 
-class TriggerScaleFactorsHist(
+class PlotTriggerScaleFactorsHist(
     TrigPlotLabelMixin,
     TriggerDatasetsMixin,
     SelectionEfficiencyHistMixin,
