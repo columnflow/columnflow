@@ -12,32 +12,35 @@ from collections import OrderedDict
 import law
 
 from columnflow import __version__ as cf_version
-from columnflow.types import Sequence, Any
-from columnflow.inference import (
-    InferenceModel, ParameterType, ParameterTransformation, FlowStrategy,
-)
+from columnflow.inference import InferenceModel, ParameterType, ParameterTransformation, FlowStrategy
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div, maybe_int
+from columnflow.types import Sequence, Any, Union, Hashable
 
-np = maybe_import("np")
 hist = maybe_import("hist")
-uproot = maybe_import("uproot")
 
 
 logger = law.logger.get_logger(__name__)
 
+# type aliases for nested histogram structs
+ShiftHists = dict[Union[str, tuple[str, str]], hist.Hist]  # "nominal" or (param_name, "up|down") -> hists
+ConfigHists = dict[str, ShiftHists]  # config name -> hists
+ProcHists = dict[str, ConfigHists]  # process name -> hists
+DatacardHists = dict[str, ProcHists]  # category name -> hists
+
 
 class DatacardWriter(object):
     """
-    Generic writer for combine datacards using a instance of an :py:class:`InferenceModel`
-    *inference_model_inst* and a threefold nested dictionary "category -> process -> shift -> hist".
+    Generic writer for combine datacards using a instance of an :py:class:`InferenceModel` *inference_model_inst* and a
+    four-fold nested dictionary "category -> process -> config -> shift -> hist".
 
-    *rate_precision* and *parameter_precision* control the number of digits of values for measured
-    rates and parameter effects.
+    *rate_precision* and *effect_precision* control the number of digits of values for measured rates and parameter
+    effects. They are used in case the category and parameter objects of the inference model are configured with
+    non-postive values for *rate_precision* and *effect_precision*, respectively.
 
     .. note::
 
-        At the moment, all shapes are written into the same root file and a shape line with
-        wildcards for both bin and process resolution is created.
+        At the moment, all shapes are written into the same root file and a shape line with wildcards for both bin and
+        process resolution is created.
     """
 
     # minimum separator between columns
@@ -46,17 +49,17 @@ class DatacardWriter(object):
     def __init__(
         self,
         inference_model_inst: InferenceModel,
-        histograms: dict[str, dict[str, dict[str, hist.Hist]]],
+        histograms: DatacardHists,
         rate_precision: int = 4,
-        parameter_precision: int = 4,
-    ):
+        effect_precision: int = 4,
+    ) -> None:
         super().__init__()
 
         # store attributes
         self.inference_model_inst = inference_model_inst
         self.histograms = histograms
         self.rate_precision = rate_precision
-        self.parameter_precision = parameter_precision
+        self.effect_precision = effect_precision
 
     def write(
         self,
@@ -98,14 +101,20 @@ class DatacardWriter(object):
         blocks.shapes = [("shapes", "*", "*", shapes_path_ref, nom_pattern, syst_pattern)]
         separators.add("shapes")
 
+        # store rate precisions per category
+        rate_precisions = {
+            cat_obj.name: self.rate_precision if cat_obj.rate_precision <= 0 else cat_obj.rate_precision
+            for cat_obj in map(self.inference_model_inst.get_category, rates.keys())
+        }
+
         # observations
         blocks.observations = []
         if all("data" in _rates for _rates in rates.values()):
             blocks.observations = [
                 ("bin", list(rates)),
                 ("observation", [
-                    maybe_int(round(_rates["data"], self.rate_precision))
-                    for _rates in rates.values()
+                    maybe_int(round(_rates["data"], rate_precisions[cat_name]))
+                    for cat_name, _rates in rates.items()
                 ]),
             ]
             separators.add("observations")
@@ -133,13 +142,15 @@ class DatacardWriter(object):
                 (-s_names.index(proc_name) if proc_name in s_names else b_names.index(proc_name) + 1)
                 for _, proc_name in flat_rates
             ]),
-            ("rate", [round(rate, self.rate_precision) for rate in flat_rates.values()]),
+            ("rate", [
+                round(rate, rate_precisions[cat_name])
+                for (cat_name, _), rate in flat_rates.items()
+            ]),
         ]
         separators.add("rates")
 
         # tabular-style parameters
         blocks.tabular_parameters = []
-        rnd = lambda f: round(f, self.parameter_precision)
         for param_name in self.inference_model_inst.get_parameters(flat=True):
             param_obj = None
             effects = []
@@ -165,12 +176,20 @@ class DatacardWriter(object):
                     param_obj = _param_obj
                 elif _param_obj.type != param_obj.type:
                     raise ValueError(
-                        f"misconfigured parameter '{param_name}' with type '{_param_obj.type}' "
-                        f"that was previously seen with incompatible type '{param_obj.type}'",
+                        f"misconfigured parameter '{param_name}' with type '{_param_obj.type}' that was previously "
+                        f"seen with incompatible type '{param_obj.type}'",
                     )
 
                 # get the effect
                 effect = _param_obj.effect
+
+                # rounding helper depending on the effect precision
+                effect_precision = (
+                    self.effect_precision
+                    if _param_obj.effect_precision <= 0
+                    else _param_obj.effect_precision
+                )
+                rnd = lambda f: round(f, effect_precision)
 
                 # update and transform effects
                 if _param_obj.type.is_rate:
@@ -228,8 +247,8 @@ class DatacardWriter(object):
                     effects.append(f"{rnd(effect[0])}/{rnd(effect[1])}")
                 else:
                     raise ValueError(
-                        f"effect '{effect}' of parameter '{param_name}' with type {param_obj.type} "
-                        f"on process '{proc_name}' in category '{cat_name}' cannot be encoded",
+                        f"effect '{effect}' of parameter '{param_name}' with type {param_obj.type} on process "
+                        f"'{proc_name}' in category '{cat_name}' cannot be encoded",
                     )
 
             # add the tabular line
@@ -343,6 +362,8 @@ class DatacardWriter(object):
             - the datacard pattern for extracting nominal shapes, and
             - the datacard pattern for extracting systematic shapes.
         """
+        import uproot
+
         # create the directory
         shapes_path = real_path(shapes_path)
         shapes_dir = os.path.dirname(shapes_path)
@@ -419,39 +440,54 @@ class DatacardWriter(object):
             h.view().variance[mask] = cat_obj.empty_bin_value
 
         # iterate through shapes
-        for cat_name, hists in self.histograms.items():
+        for cat_name, proc_hists in self.histograms.items():
             cat_obj = self.inference_model_inst.get_category(cat_name)
 
             _rates = rates[cat_name] = OrderedDict()
             _effects = effects[cat_name] = OrderedDict()
-            for proc_name, _hists in hists.items():
-                __effects = _effects[proc_name] = OrderedDict()
+            for proc_name, config_hists in proc_hists.items():
+                # skip if process is not known to category
+                if not self.inference_model_inst.has_process(process=proc_name, category=cat_name):
+                    continue
 
                 # defer the handling of data to the end
                 if proc_name == "data":
                     continue
+
+                # flat list of hists for configs that contribute to this category
+                hists: list[dict[Hashable, hist.Hist]] = [
+                    hd for config_name, hd in config_hists.items()
+                    if config_name in cat_obj.config_data
+                ]
+                if not hists:
+                    continue
+
+                # helper to sum over them for a given shift key and an optional fallback
+                def sum_hists(key: Hashable, fallback_key: Hashable | None = None) -> hist.Hist:
+                    def get(hd: dict[Hashable, hist.Hist]) -> hist.Hist:
+                        if key in hd:
+                            return hd[key]
+                        if fallback_key and fallback_key in hd:
+                            return hd[fallback_key]
+                        raise Exception(
+                            f"'{key}' shape for process '{proc_name}' in category '{cat_name}' misconfigured: {hd}",
+                        )
+                    return sum(map(get, hists[1:]), get(hists[0]).copy())
 
                 # get the process scale (usually 1)
                 proc_obj = self.inference_model_inst.get_process(proc_name, category=cat_name)
                 scale = proc_obj.scale
 
                 # nominal shape
-                h_nom = _hists["nominal"].copy() * scale
+                h_nom = sum_hists("nominal") * scale
                 fill_empty(cat_obj, h_nom)
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
                 handle_flow(cat_obj, h_nom, nom_name)
                 out_file[nom_name] = h_nom
                 _rates[proc_name] = h_nom.sum().value
 
-                # helper to return the two variations
-                def get_shapes(param_name):
-                    __hists = _hists[param_name]
-                    if "up" not in __hists or "down" not in __hists:
-                        raise Exception(
-                            f"shapes of parameter '{param_name}' for process '{proc_name}' "
-                            f"in category '{cat_name}' misconfigured: {__hists}",
-                        )
-                    return __hists["down"] * scale, __hists["up"] * scale
+                # prepare effects
+                __effects = _effects[proc_name] = OrderedDict()
 
                 # go through all parameters and check if varied shapes need to be processed
                 for _, _, param_obj in self.inference_model_inst.iter_parameters(category=cat_name, process=proc_name):
@@ -465,19 +501,21 @@ class DatacardWriter(object):
                                 f_down, f_up = param_obj.effect
                             else:
                                 raise ValueError(
-                                    f"cannot interpret effect of parameter '{param_obj.name}' to "
-                                    f"create shape: {param_obj.effect}",
+                                    f"cannot interpret effect of parameter '{param_obj.name}' to create shape: "
+                                    f"{param_obj.effect}",
                                 )
                             h_down = h_nom.copy() * f_down
                             h_up = h_nom.copy() * f_up
                         else:
                             # just extract the shapes
-                            h_down, h_up = get_shapes(param_obj.name)
+                            h_down = sum_hists((param_obj.name, "down"), "nominal") * scale
+                            h_up = sum_hists((param_obj.name, "up"), "nominal") * scale
 
                     elif param_obj.type.is_rate:
                         if param_obj.transformations.any_from_shape:
                             # just extract the shapes
-                            h_down, h_up = get_shapes(param_obj.name)
+                            h_down = sum_hists((param_obj.name, "down"), "nominal") * scale
+                            h_up = sum_hists((param_obj.name, "up"), "nominal") * scale
                         else:
                             # skip the parameter
                             continue
@@ -491,9 +529,8 @@ class DatacardWriter(object):
                             if not (min(d, n) <= n <= max(d, n)):
                                 # skip one sided effects
                                 logger.info(
-                                    f"skipping shape centralization of parameter '{param_obj.name}' "
-                                    f"for process '{proc_name}' in category '{cat_name}' as effect "
-                                    "is one-sided",
+                                    f"skipping shape centralization of parameter '{param_obj.name}' for process "
+                                    f"'{proc_name}' in category '{cat_name}' as effect is one-sided",
                                 )
                                 continue
                             # find the central point, compute the diff w.r.t. nominal, and shift
@@ -544,31 +581,31 @@ class DatacardWriter(object):
                 # fake data from processes
                 h_data = []
                 for proc_name in cat_obj.data_from_processes:
-                    if proc_name not in hists:
-                        logger.warning(
-                            f"process '{proc_name}' not found in histograms for created fake data, "
-                            "skipping",
-                        )
-                        continue
-                    h_data.append(hists[proc_name]["nominal"])
+                    if proc_name in proc_hists:
+                        h_data.extend([hd["nominal"] for hd in proc_hists[proc_name].values()])
+                    else:
+                        logger.warning(f"process '{proc_name}' not found in histograms for created fake data, skipping")
                 if not h_data:
                     proc_str = ",".join(map(str, cat_obj.data_from_processes))
-                    raise Exception(f"no requested process '{proc_str}' found to create fake data")
+                    raise Exception(f"none of requested processes '{proc_str}' found to create fake data")
                 h_data = sum(h_data[1:], h_data[0].copy())
                 data_name = data_pattern.format(category=cat_name)
                 out_file[data_name] = h_data
                 _rates["data"] = float(h_data.sum().value)
 
-            elif cat_obj.config_data_datasets:
-                if "data" not in hists:
-                    raise Exception(
-                        f"the inference model '{self.inference_model_inst.name}' is configured to "
-                        f"use real data in category '{cat_name}' but no histogram named 'data' "
-                        "exists",
-                    )
+            elif any(cd.data_datasets for cd in cat_obj.config_data.values()):
+                h_data = []
+                for config_name, config_data in cat_obj.config_data.items():
+                    if "data" not in proc_hists or config_name not in proc_hists["data"]:
+                        raise Exception(
+                            f"the inference model '{self.inference_model_inst.cls_name}' is configured to use real "
+                            f"data for config '{config_name}' in category '{cat_name}' but no histogram received at "
+                            f"entry ['data']['{config_name}']: {proc_hists}",
+                        )
+                    h_data.append(proc_hists["data"][config_name]["nominal"])
 
-                # simply save the data histogram
-                h_data = hists["data"]["nominal"].copy()
+                # simply save the data histogram that was already built from the requested datasets
+                h_data = sum(h_data[1:], h_data[0].copy())
                 data_name = data_pattern.format(category=cat_name)
                 handle_flow(cat_obj, h_data, data_name)
                 out_file[data_name] = h_data
@@ -589,9 +626,7 @@ class DatacardWriter(object):
 
         lengths = {min(len(line), 1e9 if end < 0 else end) for line in lines}
         if len(lengths) > 1:
-            raise Exception(
-                f"line alignment cannot be performed with lines of varying lengths: {lengths}",
-            )
+            raise Exception(f"line alignment cannot be performed with lines of varying lengths: {lengths}")
 
         # convert to columns and get the maximum width per column
         n_cols = lengths.pop()

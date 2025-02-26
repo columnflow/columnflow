@@ -7,7 +7,6 @@ Lightweight mixins task classes.
 from __future__ import annotations
 
 import time
-import copy
 import itertools
 from collections import Counter
 
@@ -15,12 +14,8 @@ import luigi
 import law
 import order as od
 
-from columnflow.tasks.framework.base import (
-    AnalysisTask, ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT,
-)
-from columnflow.tasks.framework.parameters import (
-    SettingsParameter, DerivableInstParameter, DerivableInstsParameter,
-)
+from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT
+from columnflow.tasks.framework.parameters import SettingsParameter, DerivableInstParameter, DerivableInstsParameter
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
 from columnflow.production import Producer
@@ -38,10 +33,6 @@ logger = law.logger.get_logger(__name__)
 
 
 class ArrayFunctionInstanceMixin(DatasetTask):
-
-    # def __init__(self, *args, **kwargs) -> None:
-    #     super().__init__(*args, **kwargs)
-    #     self._array_function_post_init()
 
     def _array_function_post_init(self, **kwargs) -> None:
         """
@@ -66,13 +57,13 @@ class CalibratorClassMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default class if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["calibrator"] = cls.resolve_config_default(
-                params,
-                params.get("calibrator"),
-                container=config_inst,
+                param=params.get("calibrator"),
+                task_params=params,
+                container=container,
                 default_str="default_calibrator",
-                multiple=False,
+                multi_strategy="same",
             )
 
         return params
@@ -179,7 +170,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -245,13 +236,14 @@ class CalibratorClassesMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default classes if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["calibrators"] = cls.resolve_config_default_and_groups(
-                params,
-                params.get("calibrators"),
-                container=config_inst,
+                param=params.get("calibrators"),
+                task_params=params,
+                container=container,
                 default_str="default_calibrator",
                 groups_str="calibrator_groups",
+                multi_strategy="same",
             )
 
         return params
@@ -349,7 +341,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -423,28 +415,29 @@ class SelectorClassMixin(ConfigTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             # resolve the default class if necessary
             params["selector"] = cls.resolve_config_default(
-                params,
-                params.get("selector"),
-                container=config_inst,
+                param=params.get("selector"),
+                task_params=params,
+                container=container,
                 default_str="default_selector",
-                multiple=False,
+                multi_strategy="same",
             )
 
             # apply selector_steps_groups and default_selector_steps from config
             if "selector_steps" in params:
                 params["selector_steps"] = cls.resolve_config_default_and_groups(
-                    params,
-                    params.get("selector_steps"),
-                    container=config_inst,
+                    param=params.get("selector_steps"),
+                    task_params=params,
+                    container=container,
                     default_str="default_selector_steps",
                     groups_str="selector_step_groups",
+                    multi_strategy="same",
                 )
 
         # sort selector steps when the order does not matter
-        if "selector_steps" in params and not cls.selector_steps_order_sensitive:
+        if params.get("selector_steps") and not cls.selector_steps_order_sensitive:
             params["selector_steps"] = tuple(sorted(params["selector_steps"]))
 
         return params
@@ -556,7 +549,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -585,6 +578,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         Return a string representation of the selector instance.
         """
         sel_repr = str(self.selector_inst)
+
         # add representation of steps only if this class does not invoke the selector itself
         if not self.invokes_selector:
             steps = self.selector_steps
@@ -592,6 +586,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
                 steps = sorted(steps)
             if steps:
                 sel_repr += "__steps_" + "_".join(steps)
+
         return sel_repr
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
@@ -625,13 +620,13 @@ class ProducerClassMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default class if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["producer"] = cls.resolve_config_default(
-                params,
-                params.get("producer"),
-                container=config_inst,
+                param=params.get("producer"),
+                task_params=params,
+                container=container,
                 default_str="default_producer",
-                multiple=False,
+                multi_strategy="same",
             )
 
         return params
@@ -738,7 +733,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -804,13 +799,14 @@ class ProducerClassesMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default classes if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["producers"] = cls.resolve_config_default_and_groups(
-                params,
-                params.get("producers"),
-                container=config_inst,
+                param=params.get("producers"),
+                task_params=params,
+                container=container,
                 default_str="default_producer",
                 groups_str="producer_groups",
+                multi_strategy="same",
             )
 
         return params
@@ -908,7 +904,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -1202,7 +1198,6 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
 #                 selectors[i],
 #                 container=config_inst,
 #                 default_str="default_selector",
-#                 multiple=False,
 #             )
 #             for i, config_inst in enumerate(ml_model_inst.config_insts)
 #         )
@@ -1421,7 +1416,6 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
 #                 params.get("ml_model"),
 #                 container=config_inst,
 #                 default_str="default_ml_model",
-#                 multiple=False,
 #             )
 
 #             # initialize it once to trigger its set_config hook which might, in turn,
@@ -1599,13 +1593,13 @@ class WeightProducerClassMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve the default class if necessary
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["weight_producer"] = cls.resolve_config_default(
-                params,
-                params.get("weight_producer"),
-                container=config_inst,
+                param=params.get("weight_producer"),
+                task_params=params,
+                container=container,
                 default_str="default_weight_producer",
-                multiple=False,
+                multi_strategy="same",
             )
 
         return params
@@ -1717,7 +1711,7 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -1761,13 +1755,13 @@ class InferenceModelClassMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # add the default inference model when empty
-        if (config_inst := params.get("config_inst")):
+        if (container := cls._get_config_container(params)):
             params["inference_model"] = cls.resolve_config_default(
-                params,
-                params.get("inference_model"),
-                container=config_inst,
+                param=params.get("inference_model"),
+                task_params=params,
+                container=container,
                 default_str="default_inference_model",
-                multiple=False,
+                multi_strategy="same",
             )
 
         return params
@@ -1806,44 +1800,51 @@ class InferenceModelMixin(InferenceModelClassMixin):
     exclude_params_remote_workflow = {"inference_model_inst"}
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
-        # add the weight producer instance
-        if (config_inst := params.get("config_inst")) and not params.get("inference_model_inst"):
-            params["inference_model_inst"] = cls.build_inference_model_inst(
-                params["inference_model"],
-                config_inst,
-            )
-
-        return params
-
-    @classmethod
     def build_inference_model_inst(
         cls,
         inference_model: str,
-        config_inst: od.Config,
-        params: dict[str, Any] | None = None,
+        config_insts: list[od.Config],
+        **kwargs,
     ) -> InferenceModel:
         """
         Instantiate and return the :py:class:`~columnflow.inference.InferenceModel` instance.
 
         :param inference_model: Name of the inference model class to instantiate.
-        :param config_inst: The configuration instance.
-        :param params: Arguments forwarded to the inference model constructor.
+        :param config_insts: List of configuration objects that are passed to the inference model constructor.
+        :param kwargs: Additional keywork arguments forwarded to the inference model constructor.
         :return: The inference model instance.
         """
         inference_model_cls = InferenceModel.get_cls(inference_model)
-        return inference_model_cls(config_inst, **(params or {}))
+        return inference_model_cls(config_insts, **kwargs)
+
+    @classmethod
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
+
+        # add the inference model instance
+        if not params.get("inference_model_inst") and params.get("inference_model"):
+            if cls.has_single_config():
+                if (config_inst := params.get("config_inst")):
+                    params["inference_model_inst"] = cls.build_inference_model_inst(
+                        params["inference_model"],
+                        [config_inst],
+                    )
+            elif (config_insts := params.get("config_insts")):
+                params["inference_model_inst"] = cls.build_inference_model_inst(
+                    params["inference_model"],
+                    config_insts,
+                )
+
+        return params
 
 
 class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(
         default=(),
-        description="comma-separated category names or patterns to select; can also be the key of "
-        "a mapping defined in 'category_groups' auxiliary data of the config; when empty, uses the "
-        "auxiliary data enty 'default_categories' when set; empty default",
+        description="comma-separated category names or patterns to select; can also be the key of a mapping defined in "
+        "'category_groups' auxiliary data of the config; when empty, uses the auxiliary data enty 'default_categories' "
+        "when set; empty default",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1856,23 +1857,33 @@ class CategoriesMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve categories
-        if (config_inst := params.get("config_inst")) and "categories" in params:
-            # when empty, use the config default
-            if not params["categories"] and config_inst.x("default_categories", ()):
-                params["categories"] = tuple(config_inst.x.default_categories)
+        if (categories := params.get("categories", law.no_value)) != law.no_value:
+            # when empty, use the ones defined on class level
+            if not categories and cls.default_categories:
+                categories = tuple(cls.default_categories)
 
-            # when still empty and default categories are defined, use them instead
-            if not params["categories"] and cls.default_categories:
-                params["categories"] = tuple(cls.default_categories)
+            # additional resolution and expansion requires a config
+            if (container := cls._get_config_container(params)):
+                # when still empty, get the config default
+                if not categories:
+                    categories = cls.resolve_config_default_and_groups(
+                        param=params.get("categories"),
+                        task_params=params,
+                        container=container,
+                        default_str="default_categories",
+                        groups_str="category_groups",
+                        multi_strategy="union",
+                    )
 
-            # resolve them
-            categories = cls.find_config_objects(
-                params["categories"],
-                config_inst,
-                od.Category,
-                config_inst.x("category_groups", {}),
-                deep=True,
-            )
+                # resolve them
+                categories = cls.find_config_objects(
+                    names=categories,
+                    container=container,
+                    object_cls=od.Category,
+                    groups_str="category_groups",
+                    deep=True,
+                    multi_strategy="intersection",
+                )
 
             # complain when no categories were found
             if not categories and not cls.allow_empty_categories:
@@ -1893,9 +1904,8 @@ class VariablesMixin(ConfigTask):
 
     variables = law.CSVParameter(
         default=(),
-        description="comma-separated variable names or patterns to select; can also be the key of "
-        "a mapping defined in the 'variable_group' auxiliary data of the config; when empty, uses "
-        "all variables of the config; empty default",
+        description="comma-separated variable names or patterns to select; can also be the key of a mapping defined in "
+        "the 'variable_group' auxiliary data of the config; when empty, uses all variables of the config; empty default",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1904,61 +1914,51 @@ class VariablesMixin(ConfigTask):
     allow_empty_variables = False
     allow_missing_variables = False
 
+    single_config = True
+
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
         # resolve variables
-        if (config_inst := params.get("config_inst")) and "variables" in params:
-            # when empty, use the config default
-            if not params["variables"] and config_inst.x("default_variables", ()):
-                params["variables"] = tuple(config_inst.x.default_variables)
+        if (variables := params.get("variables", law.no_value)) != law.no_value:
+            # when empty, use the ones defined on class level
+            if not variables and cls.default_variables:
+                variables = tuple(cls.default_variables)
 
-            # when still empty and default variables are defined, use them instead
-            if not params["variables"] and cls.default_variables:
-                params["variables"] = tuple(cls.default_variables)
+            # additional resolution and expansion requires a config
+            if (container := cls._get_config_container(params)):
+                # when still empty, get the config default
+                if not variables:
+                    variables = cls.resolve_config_default_and_groups(
+                        param=params.get("variables"),
+                        task_params=params,
+                        container=container,
+                        default_str="default_variables",
+                        groups_str="variable_groups",
+                        multi_strategy="union",
+                    )
 
-            # resolve them
-            if params["variables"]:
-                # first, split into single- and multi-dimensional variables
-                single_vars = []
-                multi_var_parts = []
-                for variable in params["variables"]:
-                    parts = cls.split_multi_variable(variable)
-                    if len(parts) == 1:
-                        single_vars.append(variable)
-                    else:
-                        multi_var_parts.append(parts)
-
-                # resolve single variables
-                variables = cls.find_config_objects(
-                    single_vars,
-                    config_inst,
-                    od.Variable,
-                    config_inst.x("variable_groups", {}),
-                    strict=not cls.allow_missing_variables,
-                )
-
-                # for each multi-variable, resolve each part separately and create the full
-                # combinatorics of all possibly pattern-resolved parts
-                for parts in multi_var_parts:
+                # since there can be multi-dimensional variables, resolve each part separately
+                resolved_variables = set()
+                for variable in variables:
                     resolved_parts = [
                         cls.find_config_objects(
-                            part,
-                            config_inst,
-                            od.Variable,
-                            config_inst.x("variable_groups", {}),
-                            strict=not cls.allow_missing_variables,
+                            names=part,
+                            container=container,
+                            object_cls=od.Variable,
+                            groups_str="variable_groups",
+                            multi_strategy="intersection",
                         )
-                        for part in parts
+                        for part in cls.split_multi_variable(variable)
                     ]
-                    variables.extend([
-                        cls.join_multi_variable(_parts)
-                        for _parts in itertools.product(*resolved_parts)
-                    ])
-            else:
-                # fallback to using all known variables
-                variables = config_inst.variables.names()
+                    # build combinatrics
+                    resolved_variables.update(map(cls.join_multi_variable, itertools.product(*resolved_parts)))
+                variables = resolved_variables
+
+            # when still empty, fallback to using all known variables
+            if not variables:
+                variables = sorted(set.intersection(*(set(c.variables.names()) for c in law.util.make_list(container))))
 
             # complain when no variables were found
             if not variables and not cls.allow_empty_variables:
@@ -2085,7 +2085,7 @@ class DatasetsProcessesMixin(ConfigTask):
         shifts: TaskShifts,
     ) -> None:
         """
-        Updates the set of known *shifts* implemented by *this* and upstream tasks
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
         :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
@@ -2115,9 +2115,8 @@ class ShiftSourcesMixin(ConfigTask):
 
     shift_sources = law.CSVParameter(
         default=(),
-        description="comma-separated shift source names (without direction) or patterns to select; "
-        "can also be the key of a mapping defined in the 'shift_group' auxiliary data of the "
-        "config; default: ()",
+        description="comma-separated shift source names (without direction) or patterns to select; can also be the key "
+        "of a mapping defined in the 'shift_group' auxiliary data of the config; default: ()",
         brace_expand=True,
         parse_empty=True,
     )
@@ -2202,7 +2201,7 @@ class DatasetShiftSourcesMixin(ShiftSourcesMixin, DatasetTask):
     effective_shift = None
     allow_empty_shift = True
 
-    # allow only running on nominal
+    # allow empty sources, i.e., using only nominal
     allow_empty_shift_sources = True
 
 
@@ -2346,24 +2345,37 @@ class HistHookMixin(ConfigTask):
         "default: empty",
     )
 
-    def invoke_hist_hooks(self, hists: dict) -> dict:
+    def invoke_hist_hooks(
+        self,
+        hists: dict[od.Config, dict[od.Process, Any]],
+    ) -> dict[od.Config, dict[od.Process, Any]]:
         """
-        Invoke hooks to update histograms before plotting.
+        Invoke hooks to modify histograms before further processing such as plotting.
         """
         if not self.hist_hooks:
             return hists
 
+        # apply hooks in order
         for hook in self.hist_hooks:
             if hook in {None, "", law.NO_STR}:
                 continue
 
-            # get the hook from the config instance
-            hooks = self.config_inst.x("hist_hooks", {})
-            if hook not in hooks:
+            # get the hook
+            # TODO: is this actually generalizable / provided via functions by @mafrahm?
+            func = None
+            if self.has_single_config():
+                # check the config, fallback to the analysis
+                if not (func := self.config_inst.x("hist_hooks", {}).get(hook)):
+                    func = self.analysis_inst.x("hist_hooks", {}).get(hook)
+            else:
+                # only check the analysis
+                func = self.analysis_inst.x("hist_hooks", {}).get(hook)
+            if not func:
                 raise KeyError(
-                    f"hist hook '{hook}' not found in 'hist_hooks' auxiliary entry of config",
+                    f"hist hook '{hook}' not found in 'hist_hooks' for {self.config_mode()} config task {self!r}",
                 )
-            func = hooks[hook]
+
+            # validate it
             if not callable(func):
                 raise TypeError(f"hist hook '{hook}' is not callable: {func}")
 
@@ -2378,7 +2390,7 @@ class HistHookMixin(ConfigTask):
         """
         Return a string representation of the hist hooks.
         """
-        hooks = [hook for hook in self.hist_hooks if hook not in (None, "", law.NO_STR)]
+        hooks = [hook for hook in self.hist_hooks if hook not in {None, "", law.NO_STR}]
 
         hooks_repr = "__".join(hooks[:5])
         if len(hooks) > 5:
