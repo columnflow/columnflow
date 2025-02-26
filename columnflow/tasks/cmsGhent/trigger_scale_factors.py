@@ -500,12 +500,14 @@ class PlotTriggerEfficiencies1D(
 
 
 class PlotTriggerScaleFactorsHist(
+    OutputBranchWorkflow,
     TrigPlotLabelMixin,
     TriggerDatasetsMixin,
     SelectionEfficiencyHistMixin,
     SelectorMixin,
     CalibratorsMixin,
-    OutputBranchWorkflow,
+    law.LocalWorkflow,
+    RemoteWorkflow,
     PlotBase1D,
 ):
     exclude_index = False
@@ -532,8 +534,8 @@ class PlotTriggerScaleFactorsHist(
 
     @law.decorator.log
     def run(self):
-        hist_name = self.tag_name + "_ref_" + self.ref_trigger.lower() + "_efficiencies"
-        histograms = self.read_hist(self.variable_insts, hist_name)
+        hist_name = self.trigger_config_inst.config_name + "_efficiencies"
+        histograms = self.read_hist(self.trigger_config_inst.variables, hist_name)
 
         trig_label, vr = self.branch_data
         vr = self.trigger_config_inst.get_variable(vr)
