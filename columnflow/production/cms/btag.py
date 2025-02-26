@@ -337,7 +337,7 @@ def btag_weights_requires(
     self: Producer,
     task: law.Task,
     reqs: dict[str, DotDict[str, Any]],
-    *kwargs,
+    **kwargs,
 ) -> None:
     if "external_files" in reqs:
         return

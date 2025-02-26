@@ -237,8 +237,13 @@ def murmuf_envelope_weights_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    # call the super func
-    super(murmuf_envelope_weights, self).setup_func(task, reqs, inputs, reader_targets)
+    super(murmuf_envelope_weights, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
 
     # create a flat list if indices, skipping those for crossed variations
     self.envelope_indices_9 = [

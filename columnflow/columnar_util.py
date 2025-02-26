@@ -2149,12 +2149,12 @@ class ArrayFunction(Derivable):
         """
         # check if the call_func is callable
         if not callable(self.call_func):
-            raise Exception(f"call_func of {self} is not callable")
+            raise Exception(f"call_func of '{self}' is not callable")
 
         # raise in case the call is actually being skipped
         if callable(self.skip_func) and self.skip_func():
             raise Exception(
-                f"skip_func of {self} returned True, cannot invoke call_func; skip_func code:\n\n"
+                f"skip_func of '{self}' returned True, cannot invoke call_func; skip_func code:\n\n"
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
@@ -2589,13 +2589,14 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         # extra warnings for a limited period of time to ensure a smooth transition to the new
         # task array function interface
         if attr in {"task", "global_shift_inst", "local_shift_inst"}:
-            docs_url = get_docs_url("user_guide", "task_array_functions.html")
+            docs_url1 = get_docs_url("user_guide", "task_array_functions.html")
+            docs_url2 = get_docs_url("user_guide", "02_03_transition.html")
             logger.warning_once(
                 f"taf_interface_deprected_{attr}",
                 f"direct access to attribute '{attr}' was removed in favor of a) using the 'task' "
                 "instance passed as an argument to most task array function hooks, or b) using the "
                 "correct task array function hook for the specific use case (e.g. pre_init() or "
-                f"post_init() instead of init()); see {docs_url} for more info",
+                f"post_init() instead of init()); see {docs_url1} and {docs_url2} for more info",
             )
 
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")

@@ -30,6 +30,8 @@ class HistogramsUserBase(
     CategoriesMixin,
     VariablesMixin,
 ):
+    single_config = True
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     def store_parts(self) -> law.util.InsertableDict:

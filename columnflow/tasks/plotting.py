@@ -43,6 +43,10 @@ class PlotVariablesBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+
+    # TODO: testing for now
+    single_config = True
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
