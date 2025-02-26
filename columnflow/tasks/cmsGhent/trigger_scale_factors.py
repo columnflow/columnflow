@@ -520,9 +520,9 @@ class PlotTriggerScaleFactorsHist(
 
     def full_output(self):
         out = {}
-        for tr, vr in product(["ref", "trig"], self.variable_insts):
+        for tr, vr in product(["ref", "trig"], self.trigger_config_inst.variables):
             name = f"proj_{tr}_{vr.name}"
-            out[name] = [self.target(name) for name in self.get_plot_names(name)]
+            out[(tr, vr.name)] = [self.target(name) for name in self.get_plot_names(name)]
         return out
 
     def get_plot_parameters(self):
@@ -536,14 +536,14 @@ class PlotTriggerScaleFactorsHist(
         hist_name = self.tag_name + "_ref_" + self.ref_trigger.lower() + "_efficiencies"
         histograms = self.read_hist(self.variable_insts, hist_name)
 
-        trig_label, vr = re.findall("proj_(.*?)_(.*?)$", self.branch_data)[0]
-        vr = self.config_inst.get_variable(vr)
+        trig_label, vr = self.branch_data
+        vr = self.trigger_config_inst.get_variable(vr)
 
-        p_cat = self.baseline_cat(exclude=[vr])
+        p_cat = self.baseline_cat()
 
         p_cat.label += "\n" + self.ref_trigger
         # reduce all variables but the one considered
-        idx = {ivr.name: self.aux_variable_insts.get(ivr, sum) for ivr in self.variable_insts if ivr != vr}
+        idx = {ivr.name: ivr.x("reduce", sum) for ivr in self.trigger_config_inst.variables if ivr != vr}
         idx[self.ref_trigger] = 1
         if trig_label == "trig":
             p_cat.label += " & " + self.trigger
@@ -558,8 +558,5 @@ class PlotTriggerScaleFactorsHist(
             **self.get_plot_parameters(),
         )
 
-        if (ll := vr.aux.get("lower_limit", None)) is not None:
-            for ax in axes:
-                ax.axvspan(-0.5, ll, color="grey", alpha=0.3)
         for p in self.output():
             p.dump(fig, formatter="mpl")
