@@ -38,7 +38,7 @@ def example(self):
         "ST",
         is_signal=True,
         config_process="st",
-        config_mc_datasets=["st_tchannel_t_powheg"],
+        config_mc_datasets=["st_tchannel_t_4f_powheg"],
     )
     self.add_process(
         "TT",
