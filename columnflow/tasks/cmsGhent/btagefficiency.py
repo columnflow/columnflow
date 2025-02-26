@@ -11,7 +11,7 @@ from columnflow.tasks.framework.mixins import (
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D,
 )
-from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMixin
+from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMixin, CustomDefaultVariablesMixin
 
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.util import dev_sandbox, dict_add_strict, DotDict, maybe_import
@@ -29,6 +29,7 @@ class BTagEfficiencyBase:
 class BTagEfficiency(
     BTagEfficiencyBase,
     SelectionEfficiencyHistMixin,
+    CustomDefaultVariablesMixin,
     VariablesMixin,
     SelectorMixin,
     CalibratorsMixin,

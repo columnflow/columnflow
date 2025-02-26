@@ -8,14 +8,14 @@ from itertools import product
 import luigi
 
 from columnflow.types import Any
-from columnflow.tasks.framework.base import Requirements
+from columnflow.tasks.framework.base import Requirements, ConfigTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorMixin, DatasetsMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D, PlotBase1D,
 )
-from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMixin, CustomDefaultVariablesMixin
+from columnflow.tasks.cmsGhent.selection_hists import SelectionEfficiencyHistMixin
 from columnflow.production.cmsGhent.trigger import TriggerSFConfig
 import columnflow.production.cmsGhent.trigger.util as util
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -28,17 +28,18 @@ hist = maybe_import("hist")
 logger = law.logger.get_logger(__name__)
 
 
-class TriggerScaleFactorsBase(
-    CustomDefaultVariablesMixin,
-    SelectorMixin,
-    CalibratorsMixin,
-    law.LocalWorkflow,
-    RemoteWorkflow,
-):
+class TriggerConfigMixin(ConfigTask):
     exclude_index = True
+
     trigger_config = luigi.Parameter(description="Trigger config to use to measure", default=None)
 
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.trigger_config_inst: TriggerSFConfig = self.get_trigger_config(self.config_inst, self.trigger_config)
+        self.trigger_config = self.trigger_config_inst.config_name
+        self.trigger = self.trigger_config_inst.tag
+        self.ref_trigger = self.trigger_config_inst.ref_tag
 
     @classmethod
     def get_trigger_config(cls, config_inst, trigger_config=None):
@@ -64,31 +65,12 @@ class TriggerScaleFactorsBase(
                 "Available: " + ", ".join([cfg.config_name for cfg in config_inst.x.trigger_sfs]),
             )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.variable_insts: list[od.Variable] = list(map(self.config_inst.get_variable, self.variables))
-
-        # auxiliary variables mapped to how they should be treated for the nominal scale factors
-        # An integer means the nominal is calculated in the corresponding bin.
-        # "sum" means the variable is auxiliary over.
-        self.aux_variable_insts: dict[od.Variable, int | sum] = {
-            v: v.x("auxiliary") for v in self.variable_insts
-            if v.aux.get("auxiliary") is not None
-        }
-
-        # variable in which the nominal variables are binned
-        self.nonaux_variable_insts = [v for v in self.variable_insts if v.aux.get("auxiliary") is None]
-
-        self.trigger_config_inst: TriggerSFConfig = self.get_trigger_config(self.config_inst, self.trigger_config)
-        self.trigger_config = self.trigger_config_inst.config_name
-        self.trigger = self.trigger_config_inst.tag
-        self.ref_trigger = self.trigger_config_inst.ref_tag
-
-    def loop_variables(self) -> Iterator[tuple[str]]:
+    def loop_variables(self, include_1d=True) -> Iterator[tuple[str]]:
         tcfg = self.trigger_config_inst
         for var in tcfg.variable_names:
             # 1d efficiencies and sf
-            yield var
+            if include_1d:
+                yield var
 
             # fully binned efficiency in  main variables with additional variables
             if var in tcfg.main_variables[1:] or len(tcfg.main_variables) == len(tcfg.variables) == 1:
@@ -99,14 +81,9 @@ class TriggerScaleFactorsBase(
                 vrs = sorted({var, *vrs}, key=tcfg.variables.index)
             yield tuple(vrs)
 
-    def data_mc_keys(self, suff=""):
-        """
-        get data and mc key with suffix (omitted if empty)
-        """
-        return [f"{dt_type}{'' if not suff else '_' + suff}" for dt_type in ["data", "mc"]]
-
 
 class TriggerDatasetsMixin(
+    TriggerConfigMixin,
     DatasetsMixin,
 ):
     @property
@@ -133,21 +110,34 @@ class TriggerDatasetsMixin(
         return parts
 
     @classmethod
-    def get_default_variables(self, params):
-        if not (config_inst := params.get("config_inst")):
-            return []
+    def resolve_param_values(cls, params: law.util.InsertableDict[str, Any]) -> law.util.InsertableDict[str, Any]:
+        redo_default_datasets = False
+        # when empty, use the config default
+        if not params.get("variables", None):
+            redo_default_datasets = True
 
-        if (trigger_sf_cfg := config_inst.x("trigger_sf", config_inst.x("trigger_sfs", [None])[0])) is None:
-            return []
-        return trigger_sf_cfg.variable_names
+        params = super().resolve_param_values(params)
+        if not redo_default_datasets:
+            return params
+
+        if not (config_inst := params.get("config_inst")):
+            return params
+
+        tcfg: TriggerSFConfig  = cls.get_trigger_config(config_inst, params.get("trigger_config"))
+        params["datasets"] = tcfg.datasets
+        return params
 
 
 class TriggerScaleFactors(
     TriggerDatasetsMixin,
     SelectionEfficiencyHistMixin,
-    TriggerScaleFactorsBase,
+    SelectorMixin,
+    CalibratorsMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
 ):
     exclude_index = False
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     def output(self):
         out = {
@@ -235,7 +225,9 @@ class TriggerScaleFactors(
         self.output()["json"].dump(cset.dict(exclude_unset=True), indent=4, formatter="json")
 
 
-class TrigPlotLabelMixin():
+class TrigPlotLabelMixin(
+    TriggerConfigMixin,
+):
 
     baseline_label = luigi.Parameter(
         default="",
@@ -243,30 +235,27 @@ class TrigPlotLabelMixin():
     )
 
     def bin_label(self, index: dict[od.Variable | str, int]):
-        index = {self.config_inst.get_variable(vr): bn for vr, bn in index.items()}
+        index = {self.trigger_config_inst.get_variable(vr): bn for vr, bn in index.items()}
         return "\n".join([
             f"{vr.name}: bin {bn}" if vr.x_labels is None else vr.x_labels[bn]
             for vr, bn in index.items()
         ])
 
-    def baseline_cat(self, add: od.Category = None, exclude: list[str] = tuple()):
+    def baseline_cat(self, add: str = None):
         p_cat = od.Category(name=self.baseline_label)
-        if add is not None and add.label:
-            p_cat.label += "\n" + add.label
-        if not hasattr(self, "aux_variable_insts"):
-            return p_cat
-        if aux_label := self.bin_label({
-            v: i
-            for v, i in self.aux_variable_insts.items()
-            if isinstance(i, int) and v.name not in exclude
-        }):
-            p_cat.label += "\n" + aux_label
+        if add is not None:
+            p_cat.label += "\n" + add
         return p_cat
 
 
-class OutputBranchMixin:
-    def full_output(self):
-        return []
+class OutputBranchWorkflow(
+    law.LocalWorkflow,
+    RemoteWorkflow
+):
+    exclude_index = True
+
+    def full_output(self) -> dict:
+        return {}
 
     def create_branch_map(self):
         return list(self.full_output())
@@ -275,18 +264,13 @@ class OutputBranchMixin:
         return self.full_output()[self.branch_data]
 
 
-class TriggerScaleFactorsPlotBase(
-    OutputBranchMixin,
+class PlotTriggerScaleFactorsBase(
     TrigPlotLabelMixin,
     TriggerDatasetsMixin,
-    TriggerScaleFactorsBase,
     SelectorMixin,
     CalibratorsMixin,
-    law.LocalWorkflow,
-    RemoteWorkflow,
+    OutputBranchWorkflow,
 ):
-    exclude_index = True
-
     reqs = Requirements(
         RemoteWorkflow.reqs,
         TriggerScaleFactors=TriggerScaleFactors,
@@ -335,23 +319,6 @@ class TriggerScaleFactorsPlotBase(
         self.var_bin_cats = {}  # for caching
         self.process_inst = self.config_inst.get_process(self.process)
 
-    # def loop_variables(
-    #     self,
-    #     nonaux: slice | bool = True,
-    #     aux: od.Variable | None = None,
-    # ) -> Iterator[od.Category]:
-    #     for index in super().loop_variables(nonaux, aux):
-    #         cat_name = "__".join([f"{vr}_{bn}" for vr, bn in index.items()])
-    #         if not cat_name:
-    #             cat_name = "nominal"
-    #         if cat_name not in self.var_bin_cats:
-    #             self.var_bin_cats[cat_name] = od.Category(
-    #                 name=cat_name,
-    #                 selection=index,
-    #                 label=self.bin_label(index),
-    #             )
-    #         yield self.var_bin_cats[cat_name]
-
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
@@ -359,8 +326,8 @@ class TriggerScaleFactorsPlotBase(
         return params
 
 
-class TriggerScaleFactors2D(
-    TriggerScaleFactorsPlotBase,
+class PlotTriggerScaleFactors2D(
+    PlotTriggerScaleFactorsBase,
     PlotBase2D,
 ):
     exclude_index = False
@@ -373,87 +340,58 @@ class TriggerScaleFactors2D(
     def full_output(self):
         out = {}
         for sys in ["central", "down", "up"]:
-            out |= {
-                sys + "__" + cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name + "_" + sys)]
-                for cat in self.loop_variables(nonaux=slice(2, None))
-            } | {
-                sys + "__" + cat.name: [self.target(name) for name in self.get_plot_names("sf_" + cat.name + "_" + sys)]
-                for aux_var in self.aux_variable_insts
-                for cat in self.loop_variables(nonaux=slice(2, None), aux=aux_var)
-            }
+            for vrs in self.loop_variables(include_1d=False):
+                vr_insts = [self.trigger_config_inst.get_variable(v) for v in vrs]
+                for idx in product(*[range(vr.n_bins) for vr in vr_insts[2:]]):
+                    key = (sys,) + vrs[:2] + tuple([(v, i) for v, i in zip(vrs[2:], idx)])
+                    name = "_".join(vrs[:2]) + "__" + "_".join([f"{v}_{i}" for v, i in zip(vrs[2:], idx)])
+                    out[key] = [self.target(name) for name in self.get_plot_names("sf_2d_" + name + "_" + sys)]
         return out
 
     @law.decorator.log
     def run(self):
-        import hist
         import numpy as np
 
-        def make_plot2d(hist2d: hist.Hist, sys: str, cat: od.Category):
-            label_values = np.round(hist2d.values(), decimals=2)
-            style_config = {
-                "plot2d_cfg": {"cmap": "PiYG", "labels": label_values},
-                "annotate_cfg": {"bbox": dict(alpha=0.5, facecolor="white")},
-            }
-            p_cat = self.baseline_cat(add=cat, exclude=cat.name.split("__"))
-            fig, _ = self.call_plot_func(
-                self.plot_function,
-                hists={self.process_inst: hist2d},
-                config_inst=self.config_inst,
-                category_inst=p_cat,
-                variable_insts=[var_inst.copy_shallow() for var_inst in self.nonaux_variable_insts[:2]],
-                style_config=style_config,
-                **self.get_plot_parameters(),
-            )
-            for p in self.output():
-                p.dump(fig, formatter="mpl")
-
         scale_factors = self.input()["collection"][0]["sf"].load(formatter="pickle")
-        sys, cat_name = self.branch_data.split("__", maxsplit=1)
-        cat = self.var_bin_cats[cat_name]
-        index = cat.selection | {"systematic": sys}
+        sys, vr1, vr2, *other_vars = self.branch_data
 
-        sf_key = "nominal"
-        if any(auxs := [v.name for v in self.aux_variable_insts if v.name in index]):
-            sf_key = auxs[0]
-        # scale factor 2d plot
-        make_plot2d(scale_factors[sf_key][index], sys, cat)
+        index = dict(other_vars) | {"systematic": sys}
+        key = "_".join([vr1, vr2, *dir(other_vars)])
+
+        hist2d = scale_factors[key][index]
+
+        label_values = np.round(hist2d.values(), decimals=2)
+        style_config = {
+            "plot2d_cfg": {"cmap": "PiYG", "labels": label_values},
+            "annotate_cfg": {"bbox": dict(alpha=0.5, facecolor="white")},
+        }
+
+        p_cat = self.baseline_cat(add="\n".join([f"{vr}: bin {i}" for vr, i in other_vars]))
+        fig, _ = self.call_plot_func(
+            self.plot_function,
+            hists={self.process_inst: hist2d},
+            config_inst=self.config_inst,
+            category_inst=p_cat,
+            variable_insts=[self.trigger_config_inst.get_variable(vr).copy_shallow() for vr in [vr1, vr2]],
+            style_config=style_config,
+            **self.get_plot_parameters(),
+        )
+        for p in self.output():
+            p.dump(fig, formatter="mpl")
 
 
 class TriggerScaleFactors1D(
-    TriggerScaleFactorsPlotBase,
+    PlotTriggerScaleFactorsBase,
     PlotBase1D,
 ):
-    make_plots = law.CSVParameter(
-        default=("sf", "eff"),
-        significant=False,
-        description=("which plots to make. Choose from:\n"
-                    "\tsf: scale factor plots\n",
-                    "\teff: efficiency plots,\n"),
-    )
+    exclude_index = False
 
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.cmsGhent.plot_functions_1d.plot_1d_line",
         add_default_to_description=True,
     )
 
-    reqs = Requirements(
-        RemoteWorkflow.reqs,
-        TriggerScaleFactors=TriggerScaleFactors,
-    )
-
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if "all" in self.make_plots:
-            self.make_plots = ("sf", "eff")
-
-    def requires(self):
-        return self.reqs.TriggerScaleFactors.req(
-            self,
-            branch=-1,
-            _exclude={"branches"},
-        )
 
     def full_output(self):
         out = {}
@@ -461,13 +399,11 @@ class TriggerScaleFactors1D(
             is_nominal = set(vrs) == set(self.trigger_config_inst.main_variables)
             vr_name = "nominal" if is_nominal else "_".join(vrs)
             for plot_type in self.make_plots:
-                if not (is_nominal or len(vrs) == 1 or plot_type == "sf"):
-                    continue
-                out[(plot_type, tuple(vrs), "stat" if plot_type == "sf" else "")] = [
+                out[(plot_type, tuple(vrs), "stat")] = [
                     self.target(name) for name in
                     self.get_plot_names(plot_type + "_1d_stat_" + vr_name)
                 ]
-                if plot_type == "sf" and is_nominal:
+                if is_nominal:
                     out[(plot_type, tuple(vrs), "")] = [
                         self.target(name) for name in
                         self.get_plot_names(plot_type + "_1d_full_" + vr_name)
@@ -476,65 +412,112 @@ class TriggerScaleFactors1D(
 
     @law.decorator.log
     def run(self):
-        def plot_1d(hists, syst="", **kwargs):
-            if syst:
-                syst = syst.rstrip("_") + "_"
-            for k, hs in hists.items():
-                hs = [hs[{"systematic": sys}].values() for sys in ["central", f"{syst}down", f"{syst}up"]]
-                # convert down and up variations to up and down errors
-                hists[k] = [hs[0]] + [np.abs(h - hs[0]) for h in hs[1:]]
-
-            fig, axes = self.call_plot_func(
-                self.plot_function,
-                hists=hists,
-                config_inst=self.config_inst,
-                category_inst=self.baseline_cat(),
-                variable_insts=[self.trigger_config_inst.get_variable(v) for v in vrs],
-                skip_ratio=len(hists) == 1,
-                **kwargs,
-            )
-
-            for p in self.output():
-                p.dump(fig, formatter="mpl")
-
         plot_type, vrs, syst = self.branch_data
         main_vrs = tuple(self.trigger_config_inst.main_variables)
         is_nominal = vrs == main_vrs
 
-        if plot_type == "sf":
-            scale_factors = self.input()["collection"][0][plot_type].load(formatter="pickle")
-            sf_hist = scale_factors["_".join(vrs)]
-            if len(vrs) == 1 or is_nominal:
-                return plot_1d({self.process_inst: sf_hist}, syst)
-
+        scale_factors = self.input()["collection"][0][plot_type].load(formatter="pickle")
+        sf_hist = scale_factors["_".join(vrs)]
+        if len(vrs) == 1 or is_nominal:
+            hists = {self.process_inst: sf_hist}
+        else:
             sf_nom = scale_factors["_".join(main_vrs)]
-            extra_var: od.Variable = self.trigger_config_inst.get_variable([vr for vr in vrs if vr not in main_vrs][0])
+            extra_var = self.trigger_config_inst.get_variable([vr for vr in vrs if vr not in main_vrs][0])
             labels = extra_var.x_labels or sf_hist.axes[extra_var.name]
-            plot_1d(
-                {"nominal": sf_nom} | {
-                    lab: sf_hist[{extra_var.name: k}]
-                    for k, lab in enumerate(labels)
-                },
-                syst,
-            )
-        elif plot_type == "eff":
-            efficiencies = self.input()["collection"][0][plot_type].load(formatter="pickle")
-            return plot_1d(efficiencies["_".join(vrs)], syst)
+            hists = {"nominal": sf_nom} | {
+                lab: sf_hist[{extra_var.name: k}]
+                for k, lab in enumerate(labels)
+            }
+
+        if syst:
+            syst = syst.rstrip("_") + "_"
+
+        for k, hs in hists.items():
+            hs = [hs[{"systematic": sys}].values() for sys in ["central", f"{syst}down", f"{syst}up"]]
+            # convert down and up variations to up and down errors
+            hists[k] = [hs[0]] + [np.abs(h - hs[0]) for h in hs[1:]]
+
+        fig, axes = self.call_plot_func(
+            self.plot_function,
+            hists=hists,
+            config_inst=self.config_inst,
+            category_inst=self.baseline_cat(),
+            variable_insts=[self.trigger_config_inst.get_variable(v) for v in vrs],
+            skip_ratio=len(hists) == 1,
+            **self.get_plot_parameters(),
+        )
+
+        for p in self.output():
+            p.dump(fig, formatter="mpl")
+
+
+class TriggerEfficiencies1D(
+    PlotTriggerScaleFactorsBase,
+    PlotBase1D,
+):
+    exclude_index = False
+
+    plot_function = PlotBase.plot_function.copy(
+        default="columnflow.plotting.cmsGhent.plot_functions_1d.plot_1d_line",
+        add_default_to_description=True,
+    )
+
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    def full_output(self):
+        out = {}
+        for vrs in self.loop_variables():
+            is_nominal = set(vrs) == set(self.trigger_config_inst.main_variables)
+            vr_name = "nominal" if is_nominal else "_".join(vrs)
+            for plot_type in self.make_plots:
+                if not (is_nominal or len(vrs) == 1):
+                    continue
+                out[(plot_type, tuple(vrs), "")] = [
+                    self.target(name) for name in
+                    self.get_plot_names(plot_type + "_1d_stat_" + vr_name)
+                ]
+        return out
+
+    @law.decorator.log
+    def run(self):
+        plot_type, vrs, syst = self.branch_data
+
+        efficiencies = self.input()["collection"][0][plot_type].load(formatter="pickle")
+        hists = {}
+        for k, hs in efficiencies["_".join(vrs)].items():
+            hs = [hs[{"systematic": sys}].values() for sys in ["central", f"{syst}down", f"{syst}up"]]
+            # convert down and up variations to up and down errors
+            hists[k] = [hs[0]] + [np.abs(h - hs[0]) for h in hs[1:]]
+
+        fig, axes = self.call_plot_func(
+            self.plot_function,
+            hists=hists,
+            config_inst=self.config_inst,
+            category_inst=self.baseline_cat(),
+            variable_insts=[self.trigger_config_inst.get_variable(v) for v in vrs],
+            skip_ratio=len(hists) == 1,
+            **self.get_plot_parameters(),
+        )
+
+        for p in self.output():
+            p.dump(fig, formatter="mpl")
 
 
 class TriggerScaleFactorsHist(
-    OutputBranchMixin,
     TrigPlotLabelMixin,
-    TriggerScaleFactors,
+    TriggerDatasetsMixin,
+    SelectionEfficiencyHistMixin,
+    SelectorMixin,
+    CalibratorsMixin,
+    OutputBranchWorkflow,
     PlotBase1D,
 ):
+    exclude_index = False
 
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_functions_1d.plot_variable_per_process",
         add_default_to_description=True,
     )
-
-    baseline_label = TriggerScaleFactorsPlotBase.baseline_label.copy()
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
