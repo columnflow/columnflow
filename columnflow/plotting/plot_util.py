@@ -435,6 +435,11 @@ def prepare_style_config(
         variable_inst.x("x_max", variable_inst.x_max),
     )
 
+    ylim = (
+        variable_inst.x("y_min", variable_inst.y_min),
+        variable_inst.x("y_max", variable_inst.y_max),
+    )
+
     # build the label from category and optional variable selection labels
     cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
 
@@ -444,6 +449,7 @@ def prepare_style_config(
     style_config = {
         "ax_cfg": {
             "xlim": xlim,
+            "ylim": ylim,
             # TODO: need to make bin width and unit configurable in future
             "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False, unit_format=unit_format),
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
