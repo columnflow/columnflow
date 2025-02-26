@@ -397,25 +397,24 @@ class PlotTriggerScaleFactors1D(
         for vrs in self.loop_variables():
             is_nominal = set(vrs) == set(self.trigger_config_inst.main_variables)
             vr_name = "nominal" if is_nominal else "_".join(vrs)
-            for plot_type in self.make_plots:
-                out[(plot_type, tuple(vrs), "stat")] = [
+            out[(tuple(vrs), "stat")] = [
+                self.target(name) for name in
+                self.get_plot_names("sf_1d_stat_" + vr_name)
+            ]
+            if is_nominal:
+                out[(tuple(vrs), "")] = [
                     self.target(name) for name in
-                    self.get_plot_names(plot_type + "_1d_stat_" + vr_name)
+                    self.get_plot_names("sf_1d_full_" + vr_name)
                 ]
-                if is_nominal:
-                    out[(plot_type, tuple(vrs), "")] = [
-                        self.target(name) for name in
-                        self.get_plot_names(plot_type + "_1d_full_" + vr_name)
-                    ]
         return out
 
     @law.decorator.log
     def run(self):
-        plot_type, vrs, syst = self.branch_data
+        vrs, syst = self.branch_data
         main_vrs = tuple(self.trigger_config_inst.main_variables)
         is_nominal = vrs == main_vrs
 
-        scale_factors = self.input()["collection"][0][plot_type].load(formatter="pickle")
+        scale_factors = self.input()["collection"][0]["sf"].load(formatter="pickle")
         sf_hist = scale_factors["_".join(vrs)]
         if len(vrs) == 1 or is_nominal:
             hists = {self.process_inst: sf_hist}
@@ -461,25 +460,25 @@ class PlotTriggerEfficiencies1D(
         add_default_to_description=True,
     )
 
+
     def full_output(self):
         out = {}
         for vrs in self.loop_variables():
             is_nominal = set(vrs) == set(self.trigger_config_inst.main_variables)
+            if not (is_nominal or len(vrs) == 1):
+                continue
             vr_name = "nominal" if is_nominal else "_".join(vrs)
-            for plot_type in self.make_plots:
-                if not (is_nominal or len(vrs) == 1):
-                    continue
-                out[(plot_type, tuple(vrs), "")] = [
-                    self.target(name) for name in
-                    self.get_plot_names(plot_type + "_1d_stat_" + vr_name)
-                ]
+            out[(tuple(vrs), "")] = [
+                self.target(name) for name in
+                self.get_plot_names("eff_1d_stat_" + vr_name)
+            ]
         return out
 
     @law.decorator.log
     def run(self):
-        plot_type, vrs, syst = self.branch_data
+        vrs, syst = self.branch_data
 
-        efficiencies = self.input()["collection"][0][plot_type].load(formatter="pickle")
+        efficiencies = self.input()["collection"][0]["eff"].load(formatter="pickle")
         hists = {}
         for k, hs in efficiencies["_".join(vrs)].items():
             hs = [hs[{"systematic": sys}].values() for sys in ["central", f"{syst}down", f"{syst}up"]]
