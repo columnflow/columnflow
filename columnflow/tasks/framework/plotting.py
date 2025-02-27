@@ -10,13 +10,13 @@ import law
 import luigi
 
 from columnflow.types import Any, Callable
-from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT
+from columnflow.tasks.framework.base import ConfigTask, RESOLVE_DEFAULT
 from columnflow.tasks.framework.mixins import VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.util import DotDict, dict_add_strict, ipython_shell
 
 
-class PlotBase(AnalysisTask):
+class PlotBase(ConfigTask):
     """
     Base class for all plotting tasks.
     """

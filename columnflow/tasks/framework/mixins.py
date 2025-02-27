@@ -31,7 +31,7 @@ ak = maybe_import("awkward")
 logger = law.logger.get_logger(__name__)
 
 
-class ArrayFunctionClassMixin(AnalysisTask):
+class ArrayFunctionClassMixin(ConfigTask):
 
     def array_function_cls_repr(self, array_function) -> None:
         """
@@ -1280,7 +1280,7 @@ class MLModelsMixin(AnalysisTask):
                     MLModelMixinBase.get_ml_model_inst(
                         ml_model,
                         analysis_inst,
-                        requested_configs=[params["config"]] if cls.is_single_config else params["configs"],
+                        requested_configs=[params["config"]] if cls.has_single_config() else params["configs"],
                     )
                     for ml_model in params["ml_models"]
                 ]
@@ -1303,7 +1303,7 @@ class MLModelsMixin(AnalysisTask):
                 MLModelMixinBase.get_ml_model_inst(
                     ml_model,
                     self.analysis_inst,
-                    requested_configs=[self.config] if self.is_single_config else self.configs,
+                    requested_configs=[self.config] if self.single_config else self.config,
                 )
                 for ml_model in self.ml_models
             ]
@@ -1498,7 +1498,7 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         return self.array_function_inst_repr(self.weight_producer_inst)
 
 
-class InferenceModelClassMixin(AnalysisTask):
+class InferenceModelClassMixin(ConfigTask):
 
     inference_model = luigi.Parameter(
         default=RESOLVE_DEFAULT,
@@ -1594,7 +1594,7 @@ class InferenceModelMixin(InferenceModelClassMixin):
         return params
 
 
-class CategoriesMixin(AnalysisTask):
+class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(
         default=(),
@@ -1659,7 +1659,7 @@ class CategoriesMixin(AnalysisTask):
         return f"{len(self.categories)}_{law.util.create_hash(sorted(self.categories))}"
 
 
-class VariablesMixin(AnalysisTask):
+class VariablesMixin(ConfigTask):
 
     variables = law.CSVParameter(
         default=(),
@@ -1764,7 +1764,7 @@ class VariablesMixin(AnalysisTask):
 
 
 class DatasetsProcessesMixin(ConfigTask):
-    is_single_config = True
+    single_config = True
     datasets = law.CSVParameter(
         default=(),
         description="comma-separated dataset names or patters to select; can also be the key of a "
@@ -1873,7 +1873,7 @@ class DatasetsProcessesMixin(ConfigTask):
 
 
 class MultiConfigDatasetsProcessesMixin(ConfigTask):
-    is_single_config = False
+    single_config = False
     datasets = law.MultiCSVParameter(
         default=(),
         description="comma-separated dataset names or patters to select; can also be the key of a "
@@ -2040,7 +2040,7 @@ class MultiConfigDatasetsProcessesMixin(ConfigTask):
         return self.get_multi_config_objects_repr(self.processes)
 
 
-class ShiftSourcesMixin(AnalysisTask):
+class ShiftSourcesMixin(ConfigTask):
     shift_sources = law.CSVParameter(
         default=(),
         description="comma-separated shift source names (without direction) or patterns to select; can also be the key "
@@ -2175,7 +2175,7 @@ class MultiConfigDatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, MultiConf
         return False
 
 
-class ChunkedIOMixin(AnalysisTask):
+class ChunkedIOMixin(ConfigTask):
 
     check_finite_output = luigi.BoolParameter(
         default=False,
@@ -2289,7 +2289,7 @@ class ChunkedIOMixin(AnalysisTask):
         del handler
 
 
-class HistHookMixin(AnalysisTask):
+class HistHookMixin(ConfigTask):
 
     hist_hooks = law.CSVParameter(
         default=(),

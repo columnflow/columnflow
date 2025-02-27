@@ -29,7 +29,6 @@ from columnflow.hist_util import add_missing_shifts
 
 
 class PlotVariablesBase(
-    # MultiConfigTask,
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,
@@ -45,7 +44,7 @@ class PlotVariablesBase(
 ):
 
     # TODO: testing for now
-    single_config = True
+    # single_config = False
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 

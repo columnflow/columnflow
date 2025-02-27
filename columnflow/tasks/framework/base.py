@@ -126,8 +126,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     _cfg_versions_dict = None
     _cfg_resources_dict = None
 
-    is_single_config = None
-
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
@@ -148,7 +146,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         analysis_inst_aux = (
             "default_calibrator", "default_selector", "default_selector_steps",
             "default_producer", "default_ml_model",
-            "default_weight_producer", "default_inference_model", "default_categories", "default_variables",
+            "default_weight_producer", "default_inference_model",
         )
 
         # set defaults to the analysis inst if they are set in the config inst
@@ -703,6 +701,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # check if the parameter value is to be resolved
         resolve_default = param in (None, RESOLVE_DEFAULT, (RESOLVE_DEFAULT,))
 
+        return_single_value = True if param is None or isinstance(param, str) else False
+
+        def modify_type(value):
+            value = law.util.make_tuple(value)
+            if return_single_value:
+                return value[0]
+            return value
+
         # interpret missing parameters (e.g. NO_STR) as None
         # (special case: an empty string is usually an active decision, but counts as missing too)
         if law.is_no_param(param) or resolve_default or param == "":
@@ -722,10 +728,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 _param = param
                 # expand default when container is set
                 if _container and default_str:
-                    _param = _container.x(default_str, None)
+                    _param = _container.x(default_str, None if return_single_value else ())
                     # allow default to be a function, taking task parameters as input
                     if isinstance(_param, Callable):
                         _param = _param(cls, _container, task_params)
+                    _param = modify_type(_param)
+
                 params[_container] = _param
         else:
             params = {_container: param for _container in law.util.make_list(container)}
@@ -737,6 +745,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return params
         if multi_strategy == "first":
             return params[container[0]]
+        # NOTE: in there two strategies, we loose all order information
         if multi_strategy == "union":
             return list(set.union(*map(set, params.values())))
         if multi_strategy == "intersection":
@@ -1164,7 +1173,6 @@ class ConfigTask(AnalysisTask):
     # the field in the store parts behind which the new part is inserted
     # added here for subclasses that typically refer to the store part added by _this_ class
     config_store_anchor = "config"
-    is_single_config = True
 
     @classmethod
     def modify_task_attributes(cls) -> None:
@@ -1560,16 +1568,6 @@ class ShiftTask(ConfigTask):
             if self.global_shift_insts:
                 self.global_shift_inst = self.global_shift_insts[self.config_inst]
                 self.local_shift_inst = self.local_shift_insts[self.config_inst]
-
-            if not self.is_single_config:
-                self.global_shift_insts = {
-                    config_inst: config_inst.get_shift(self.shift)
-                    for config_inst in self.config_insts
-                }
-                self.local_shift_insts = {
-                    config_inst: config_inst.get_shift(self.local_shift)
-                    for config_inst in self.config_insts
-                }
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()

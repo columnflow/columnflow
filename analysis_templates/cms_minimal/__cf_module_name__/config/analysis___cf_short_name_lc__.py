@@ -118,8 +118,8 @@ ana.x.default_producer = "example"
 ana.x.default_weight_producer = "example"
 ana.x.default_ml_model = None
 ana.x.default_inference_model = "example"
-ana.x.default_categories = ("incl",)
-ana.x.default_variables = ("n_jet", "jet1_pt")
+cfg.x.default_categories = ("incl",)
+cfg.x.default_variables = ("n_jet", "jet1_pt")
 
 # process groups for conveniently looping over certain processs
 # (used in wrapper_factory and during plotting)
