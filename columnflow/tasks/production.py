@@ -75,7 +75,7 @@ class ProduceColumns(
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet,
+            sorted_ak_to_parquet, attach_coffea_behavior,
         )
 
         # prepare inputs and outputs
@@ -133,6 +133,7 @@ class ProduceColumns(
 
                 # invoke the producer
                 if len(events):
+                    events = attach_coffea_behavior(events)
                     events = self.producer_inst(events)
 
                 # remove columns
