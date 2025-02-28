@@ -271,7 +271,7 @@ class PlotBase(ConfigTask):
         # update style_config
         style_config = kwargs.get("style_config", {})
         if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
-            style_config = law.util.merge_dicts(custom_style_config, style_config)
+            style_config = law.util.merge_dicts(style_config, custom_style_config)
             kwargs["style_config"] = style_config
 
         # update other defaults
