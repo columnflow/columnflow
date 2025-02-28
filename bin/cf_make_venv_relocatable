@@ -42,22 +42,38 @@ cf_make_venv_relocatable() {
     rm -f "${CF_VENV_BASE}/${name}"/bin/activate{.csh,.fish}
 
     # replace absolute paths in the activation file to make it relocatable for bash and zsh
-    sed -i -r \
+    sed -i.bak -r \
         's/(VIRTUAL_ENV)=.+/\1="$( cd "$( dirname "$( [ ! -z "${ZSH_VERSION}" ] \&\& echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )" )" \&\& dirname "$( \/bin\/pwd )" )"/' \
         "${CF_VENV_BASE}/${name}/bin/activate"
+    if [ -f "${CF_VENV_BASE}/${name}/bin/activate.bak" ]; then
+        rm "${CF_VENV_BASE}/${name}/bin/activate.bak"
+    fi
 
     # let the home variable in pyvenv.cfg point to the conda bin directory
-    sed -i -r \
+    sed -i.bak -r \
         "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
         "${CF_VENV_BASE}/${name}/pyvenv.cfg"
+    if [ -f "${CF_VENV_BASE}/${name}/pyvenv.cfg.bak" ]; then
+        rm "${CF_VENV_BASE}/${name}/pyvenv.cfg.bak"
+    fi  
 
     # use /usr/bin/env in shebang's of bin scripts
     local f
     for f in $( find "${CF_VENV_BASE}/${name}/bin" -type f ); do
         # must be readable and executable
         if [ -r "${f}" ] && [ -x "${f}" ]; then
-            sed -i -r "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/" "$f"
+            local LC_ALL=C 
+            args=(
+                sed -i.bak -r 
+                "s/#\!\/.+\/bin\/(python[\\\/]*)/#\!\/usr\/bin\/env \1/"
+                "$f"
+            )
+
+            "${args[@]}"
             [ "$?" != "0" ] && return "5"
+            if [ -f "${f}.bak" ]; then
+                rm "${f}.bak"
+            fi
         fi
     done
 

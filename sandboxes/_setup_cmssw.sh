@@ -181,7 +181,7 @@ setup_cmssw() {
         # checks to be performed if the venv already exists
         if [ -d "${install_path}" ]; then
             # get the current version
-            local current_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
+            local current_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | awk '/version /{print $2}' )"
             if [ -z "${current_version}" ]; then
                 >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
                 clear_pending

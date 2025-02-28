@@ -68,6 +68,8 @@ setup_venv() {
 
     local mode="${1:-}"
     local versioncheck="${2:-warn}"
+    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
+
 
     # default mode
     if [ -z "${mode}" ]; then
@@ -112,9 +114,82 @@ setup_venv() {
         return "12"
     fi
 
+    local SOURCE="$CF_BASE"
+    local EXTRAS=""
+    if [ ! -z "${CF_VENV_EXTRAS}" ]; then
+        for extra in ${CF_VENV_EXTRAS//,/ }; do
+            EXTRAS="${EXTRAS} --extra ${extra}"
+        done
+        SOURCE="'${SOURCE}[${CF_VENV_EXTRAS}]'"
+    fi
+
+    if [[ "${CF_VENV_REQUIREMENTS}" != *"python_${pyv}"* ]]; then
+        local req_dir=`dirname ${CF_VENV_REQUIREMENTS}`
+        local req_file=`basename ${CF_VENV_REQUIREMENTS}`
+        local new_env_reqs="${req_dir}/python_${pyv}_${req_file}"
+        # build requirements if needed
+        # cf_color magenta "updating requirements file '${CF_VENV_REQUIREMENTS}' to '${new_env_reqs}"
+        export CF_VENV_REQUIREMENTS="${new_env_reqs}"
+    fi
+    
+    # cf_color magenta "Checking requirements file ${CF_VENV_REQUIREMENTS}"
+    if [ ! -f $CF_VENV_REQUIREMENTS ] || [[ ${CF_FORCE_RECOMPILE} == "True" ]]; then
+        # delete requirement file if it exists
+        if [ -f $CF_VENV_REQUIREMENTS ]; then rm $CF_VENV_REQUIREMENTS; fi
+
+        # create the pending_flag to express that the requirements are currently compiled
+        local pending_uv_flag_file="${CF_VENV_BASE}/pending_${CF_VENV_NAME}_requirements"
+        if [ ! -f "${CF_VENV_REQUIREMENTS}" ]; then
+            wait_for_setup "${pending_uv_flag_file}"
+        fi
+        
+        if [ ! -f $CF_VENV_REQUIREMENTS ]; then
+            # create directory if it doesn't exist yet
+            mkdir -p "${CF_VENV_BASE}"
+            # create the pending_flag to express that the venv state might be changing
+            touch "${pending_uv_flag_file}"
+            local TMP_REQS="${CF_REQ_OUTPUT_DIR}/${CF_VENV_NAME}_tmp.txt"
+            # compile pip dependencies and clear all caches before evaluating dependencies
+            args=(
+                uv pip compile -n
+                --output-file "${TMP_REQS}"
+                --no-annotate --strip-extras --no-header --unsafe-package ''
+                `echo ${EXTRAS}`
+                --prerelease=allow
+                ${CF_BASE}/pyproject.toml
+                `echo ${CF_VENV_ADDITIONAL_REQUIREMENTS}`
+            )
+
+            echo "${args[@]}"
+            "${args[@]}"
+            if [ "$?" != "0" ]; then
+                rm $TMP_REQS
+                rm ${pending_uv_flag_file}
+                echo "uv command failed"
+                return "24"
+            fi
+            
+            # generate unique hash based on current state of software packages
+            local tmp_hash="$( openssl sha256 "$TMP_REQS" )"
+            if [ "$?" != "0" ]; then
+                rm $TMP_REQS
+                rm ${pending_uv_flag_file}
+                echo "could not generate hash for file ${TMP_REQS}"  
+                return "24"
+            fi
+            # parse hash from openssl output
+            local this_hash="$(echo "${tmp_hash}"| awk '{print $2}')" 
+            # cf_color magenta "Updating ${CF_VENV_REQUIREMENTS} with hash ${this_hash}"
+            echo "# version ${this_hash}" > $CF_VENV_REQUIREMENTS
+            cat ${TMP_REQS} >> ${CF_VENV_REQUIREMENTS}
+            # cf_color magenta "Cleanup ${TMP_REQS}"
+            rm $TMP_REQS
+            # remove the pending_flag
+            rm -f "${pending_uv_flag_file}"
+        fi
+    fi
     # split $CF_VENV_REQUIREMENTS into an array
     local requirement_files
-    local requirement_files_contains_cf="false"
     if ${shell_is_zsh}; then
         requirement_files=(${(@s:,:)CF_VENV_REQUIREMENTS})
     else
@@ -125,9 +200,6 @@ setup_venv() {
             >&2 echo "requirement file '${f}' does not exist"
             return "13"
         fi
-        if [ "${f}" = "${CF_BASE}/sandboxes/cf.txt" ]; then
-            requirement_files_contains_cf="true"
-        fi
     done
     local first_requirement_file="${requirement_files[0]}"
 
@@ -135,14 +207,12 @@ setup_venv() {
     #
     # define variables
     #
-
     local install_hash="$( cf_sandbox_file_hash "${sandbox_file}" )"
     local venv_name_hashed="${CF_VENV_NAME}_${install_hash}"
     local install_path="${CF_VENV_BASE}/${venv_name_hashed}"
     local install_path_repr="\$CF_VENV_BASE/${venv_name_hashed}"
-    local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
+    local venv_version="$( cat "${first_requirement_file}" | awk '/# version /{print $3}' )"
     local pending_flag_file="${CF_VENV_BASE}/pending_${venv_name_hashed}"
-    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
 
     export CF_SANDBOX_FLAG_FILE="${install_path}/cf_flag"
 
@@ -181,25 +251,7 @@ setup_venv() {
         # random amount of seconds between 0 and 10 to further reduce the chance of simultaneously
         # starting processes getting here at the same time
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-            local sleep_counter="0"
-            sleep "$( python3 -c 'import random;print(random.random() * 10)')"
-            # when the file is older than 30 minutes, consider it a dangling leftover from a
-            # previously failed installation attempt and delete it.
-            if [ -f "${pending_flag_file}" ]; then
-                local flag_file_age="$(( $( date +%s ) - $( date +%s -r "${pending_flag_file}" )))"
-                [ "${flag_file_age}" -ge "1800" ] && rm -f "${pending_flag_file}"
-            fi
-            # start the sleep loop
-            while [ -f "${pending_flag_file}" ]; do
-                # wait at most 20 minutes
-                sleep_counter="$(( $sleep_counter + 1 ))"
-                if [ "${sleep_counter}" -ge 120 ]; then
-                    >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
-                    return "22"
-                fi
-                cf_color yellow "venv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 120"
-                sleep 10
-            done
+            wait_for_setup "${pending_flag_file}"
         fi
 
         # create the pending_flag to express that the venv state might be changing
@@ -211,7 +263,7 @@ setup_venv() {
         # checks to be performed if the venv already exists
         if [ -f "${CF_SANDBOX_FLAG_FILE}" ]; then
             # get the current version
-            local current_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | grep -Po "version \K\d+.*" )"
+            local current_version="$( cat "${CF_SANDBOX_FLAG_FILE}" | awk '/version /{print $2}' )"
             if [ -z "${current_version}" ]; then
                 >&2 echo "the flag file ${CF_SANDBOX_FLAG_FILE} does not contain a valid version"
                 return "23"
@@ -269,24 +321,19 @@ setup_venv() {
             }
 
             # update packaging tools
-            add_requirements pip setuptools
-
-            # basic cf requirements
-            if ! ${requirement_files_contains_cf}; then
-                add_requirements -r "${CF_BASE}/sandboxes/cf.txt"
-            fi
-
-            # requirement files
-            local f
-            for f in ${requirement_files[@]}; do
-                add_requirements -r "${f}"
-            done
+            add_requirements pip setuptools -r $CF_VENV_REQUIREMENTS
 
             # actual installation
-            eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
+            pip_command=(
+                python -m pip install
+                --require-virtualenv -I -U --no-cache-dir
+                ${install_reqs}
+            )
+            echo "${pip_command[@]}"
+            "${pip_command[@]}"
+            
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
-
             # make newly installed packages relocatable
             cf_make_venv_relocatable "${venv_name_hashed}"
             [ "$?" != "0" ] && clear_pending && return "28"
@@ -298,6 +345,12 @@ setup_venv() {
 
         # remove the pending_flag
         clear_pending
+
+        # remove the temporary python env file if requested
+        if [[ "${CF_CLEAN_TEMP_ENV_FILES}" == "True" ]]; then
+            # cf_color magenta "Cleaning temporary file ${CF_VENV_REQUIREMENTS}"
+            rm ${CF_VENV_REQUIREMENTS}
+        fi
     fi
 
     # handle remote job environments
@@ -336,9 +389,12 @@ setup_venv() {
         fi
 
         # let the home variable in pyvenv.cfg point to the conda bin directory
-        sed -i -r \
+        sed -i.bak -r \
             "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
             "${install_path}/pyvenv.cfg"
+        if [ -f "${install_path}/pyvenv.cfg.bak" ]; then
+            rm "${install_path}/pyvenv.cfg.bak"
+        fi
 
         # activate it
         source "${install_path}/bin/activate" "" || return "$?"
@@ -357,4 +413,28 @@ setup_venv() {
 
     return "${ret}"
 }
+
+wait_for_setup() {
+    local tmp_pending_flag_file="$1"
+    local sleep_counter="0"
+    sleep "$( python3 -c 'import random;print(random.random() * 10)')"
+    # when the file is older than 30 minutes, consider it a dangling leftover from a
+    # previously failed installation attempt and delete it.
+    if [ -f "${tmp_pending_flag_file}" ]; then
+        local flag_file_age="$(( $( date +%s ) - $( date +%s -r "${tmp_pending_flag_file}" )))"
+        [ "${flag_file_age}" -ge "1800" ] && rm -f "${tmp_pending_flag_file}"
+    fi
+    # start the sleep loop
+    while [ -f "${tmp_pending_flag_file}" ]; do
+        # wait at most 20 minutes
+        sleep_counter="$(( $sleep_counter + 1 ))"
+        if [ "${sleep_counter}" -ge 120 ]; then
+            >&2 echo "venv ${CF_VENV_NAME} is setup in different process, but number of sleeps exceeded"
+            return "22"
+        fi
+        cf_color yellow "venv ${CF_VENV_NAME} already being setup in different process, sleep ${sleep_counter} / 120"
+        sleep 10
+    done
+}
+
 setup_venv "$@"

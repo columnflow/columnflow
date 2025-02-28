@@ -1,134 +1,156 @@
 name: Lint and test
 
 on:
+  # push:
   workflow_dispatch:
-  push:
-  pull_request:
+    inputs:
+      PYVERSION: 
+        description: "Python version to be used for build"
+        required: false
+        type: choice
+        default: "3.10"
+        options:
+          - "3.9"
+          - "3.10"
+          - "3.11"
+      FORCE_COMPILE_ENV: 
+        description: "Force compile environment"
+        type: choice
+        default: "True"
+        required: false
+        options:
+          - "True"
+          - "False"
+  workflow_call:
+    inputs:
+      PYVERSION: 
+        description: "Python version to be used for build"
+        required: false
+        type: string
+        default: "3.10"
+      FORCE_COMPILE_ENV: 
+        description: "Force compile environment"
+        type: string
+        default: "True"
+        required: false
+  # workflow_run:
+  #   workflows:
+  #     - Build Docker Containers
+  #   types:
+  #     - completed
+  # push:
+  # pull_request:
+  #   types: [review_requested, ready_for_review]
+
 
 jobs:
-  lint:
+  parse_env_vars:
+    name: "Initialize file manager"
     runs-on: ubuntu-latest
+    outputs:
+      BASE_HASH_FILES: ${{ steps.file_manager.outputs.BASE_HASH_FILES }}
+      BASE_FILE_HASH: ${{ steps.file_manager.outputs.BASE_FILE_HASH }}
+      BASE_DEV_HASH_FILES: ${{ steps.file_manager.outputs.BASE_DEV_HASH_FILES }}
+      BASE_DEV_FILE_HASH: ${{ steps.file_manager.outputs.BASE_DEV_FILE_HASH }}
+      COLUMNAR_HASH_FILES: ${{ steps.file_manager.outputs.COLUMNAR_HASH_FILES }}
+      COLUMNAR_FILE_HASH: ${{ steps.file_manager.outputs.COLUMNAR_FILE_HASH }}
+      COLUMNAR_DEV_HASH_FILES: ${{ steps.file_manager.outputs.COLUMNAR_DEV_HASH_FILES }}
+      COLUMNAR_DEV_FILE_HASH: ${{ steps.file_manager.outputs.COLUMNAR_DEV_FILE_HASH }}
+      ML_TF_HASH_FILES: ${{ steps.file_manager.outputs.ML_TF_HASH_FILES }}
+      ML_TF_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_FILE_HASH }}
+      ML_TF_DEV_HASH_FILES: ${{ steps.file_manager.outputs.ML_TF_DEV_HASH_FILES }}
+      ML_TF_DEV_FILE_HASH: ${{ steps.file_manager.outputs.ML_TF_DEV_FILE_HASH }}
+      DOCS_HASH_FILES: ${{ steps.file_manager.outputs.DOCS_HASH_FILES }}
+      DOCS_FILE_HASH: ${{ steps.file_manager.outputs.DOCS_FILE_HASH }}
+      TEST_DEV_HASH_FILES: ${{ steps.file_manager.outputs.TEST_DEV_HASH_FILES }}
+      TEST_DEV_FILE_HASH: ${{ steps.file_manager.outputs.TEST_DEV_FILE_HASH }}
     steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: recursive
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        lfs: true
+    - uses: ./.github/actions/file_manager
+      id: file_manager
+      name: "initialize file manager"
+  test_matrix:
+    uses: ./.github/workflows/test_sequence.yaml
+    needs: [parse_env_vars]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - CONTAINER: "software_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
+            NAME: "Lint 🔍"
+            EXECUTABLE: "./tests/run_linting"
+            UPLOAD_FILES: false
+            USER: cf_user
+          - CONTAINER: "testing_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.TEST_DEV_FILE_HASH }}"
+            NAME: Test 🎢
+            EXECUTABLE: "./tests/run_tests"
+            UPLOAD_FILES: false
+            USER: cf_user
+            FORCE_COMPILE_ENV: "False"
+          - CONTAINER: "testing_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.TEST_DEV_FILE_HASH }}"
+            NAME: Run coverage 🎢
+            EXECUTABLE: "./tests/run_coverage"
+            UPLOAD_FILES: true
+            FORCE_COMPILE_ENV: "False"
+            USER: root
+    with:
+      CONTAINER: "ghcr.io/${{ github.repository }}/${{ matrix.CONTAINER }}"
+      EXECUTABLE: ${{ matrix.EXECUTABLE }}
+      UPLOAD_FILES: ${{ matrix.UPLOAD_FILES }}
+      NAME: ${{ matrix.NAME }}
+      USER: ${{ matrix.USER }}
+      FORCE_COMPILE_ENV: ${{ inputs.FORCE_COMPILE_ENV }}
+    secrets: inherit
 
-      - name: Setup python 🐍
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies ☕️
-        run: |
-          source setup.sh ""
-
-      - name: Lint 🔍
-        run: |
-          source setup.sh ""
-          ./tests/run_linting
-
-  lint_docs:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - name: Setup python 🐍
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies ☕️
-        run: |
-          source setup.sh ""
-
-      - name: Lint 🔍
-        run: |
-          source setup.sh ""
-          ./tests/run_docs lint
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - name: Setup python 🐍
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies ☕️
-        run: |
-          source setup.sh ""
-
-      - name: Test 🎢
-        run: |
-          source setup.sh ""
-          ./tests/run_tests
 
   pypi:
     runs-on: ubuntu-latest
+    # only upload to pypi if tests ran successfully
+    needs: [parse_env_vars, test_matrix]
+    environment: Pypi tests
+    container: 
+      image: "ghcr.io/${{ github.repository }}/software_base:python${{ inputs.PYVERSION || 3.10 }}-${{ needs.parse_env_vars.outputs.BASE_FILE_HASH }}"
+      options: --user root
     steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - name: Setup python 🐍
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
+      - name: Prepare session
+        run: |
+          shopt -s expand_aliases
+          echo "I am $(whoami) and I am in $(pwd)"
+          
+          if [[ $(whoami) == "root" ]]; then
+            echo "Setting /columnflow as safe repository"
+            git config --global --add safe.directory /columnflow
+          fi
+          
+          cd $CF_BASE
+          source setup.sh
+          
+          git fetch
+          git checkout $GITHUB_SHA
+          git submodule update --recursive
+          # source the setup and execute the test
+        shell: bash
       - name: Install dependencies ☕️
         run: |
+          cd $CF_BASE
+          source setup.sh
           pip install -U pip
           pip install twine
+        shell: bash
 
       - name: Check bundling 📦
-        run: python setup.py sdist
+        run: |
+          cd $CF_BASE
+          source setup.sh
+          python setup.py sdist
+        shell: bash
 
       - name: Check setup 🚦
-        run: twine check "dist/$( python setup.py --fullname ).tar.gz"
-
-  coverage:
-    runs-on: ubuntu-latest
-    env:
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-    steps:
-      - name: Checkout ⬇️
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: recursive
-
-      - name: Setup python 🐍
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies ☕️
         run: |
-          source setup.sh ""
-
-      - name: Run coverage test 🎢
-        run: |
-          source setup.sh ""
-          ./tests/run_coverage
-          ls -al
-
-      - name: Upload report 🔝
-        uses: codecov/codecov-action@v4
-        with:
-          flags: unittests
-          files: coverage_test_util.xml,coverage_test_columnar_util.xml
-          verbose: true
+          cd $CF_BASE
+          source setup.sh
+          twine check "dist/$( python setup.py --fullname ).tar.gz"
+        shell: bash
