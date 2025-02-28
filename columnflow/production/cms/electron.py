@@ -54,7 +54,7 @@ class ElectronSFConfig:
     # function to determine the electron weight config
     get_electron_config=(lambda self: ElectronSFConfig.new(self.config_inst.x.electron_sf_names)),
     # choose if the eta variable should be the electron eta (triggerSF) or the super cluster eta (IDSF)
-    eta_variable_from_supercluster=True,
+    use_supercluster_eta=True,
     weight_name="electron_weight",
     supported_versions=(1, 2, 3),
 )
@@ -95,7 +95,7 @@ def electron_weights(
     based only on a subset of electrons.
     """
     # flat super cluster eta/flat eta and pt views
-    if self.eta_variable_from_supercluster:
+    if self.use_supercluster_eta:
         sc_eta = flat_np_view((
             events.Electron.eta[electron_mask] +
             events.Electron.deltaEtaSC[electron_mask]
@@ -183,7 +183,7 @@ electron_trigger_weights = electron_weights.derive(
     cls_dict={
         "get_electron_file": (lambda self, external_files: external_files.electron_trigger_sf),
         "get_electron_config": (lambda self: self.config_inst.x.electron_trigger_sf_names),
-        "eta_variable_from_supercluster": False,
+        "use_supercluster_eta": False,
         "weight_name": "electron_trigger_weight",
     },
 )
