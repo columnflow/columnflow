@@ -320,6 +320,17 @@ class PlotBase1D(PlotBase):
         significant=False,
         description="when True, no error bars/bands on histograms are drawn; default: None",
     )
+    rotate_xticks = luigi.OptionalFloatParameter(
+        default=None,
+        significant=False,
+        description="The number of degree to rotate the x ticks); ",
+    )
+    equal_bin_width = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="when True, bin widths are set to equal width; "
+        "default: None",
+    )
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
