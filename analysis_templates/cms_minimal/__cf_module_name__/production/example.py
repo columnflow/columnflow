@@ -20,14 +20,8 @@ ak = maybe_import("awkward")
 
 
 @producer(
-    uses={
-        # nano columns
-        "Jet.pt",
-    },
-    produces={
-        # new columns
-        "ht", "n_jet",
-    },
+    uses={"Jet.{pt,phi}"},
+    produces={"ht", "n_jet"},
 )
 def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1))
@@ -37,16 +31,8 @@ def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @producer(
-    uses={
-        mc_weight, category_ids,
-        # nano columns
-        "Jet.pt",
-    },
-    produces={
-        mc_weight, category_ids,
-        # new columns
-        "cutflow.jet1_pt",
-    },
+    uses={mc_weight, category_ids, "Jet.{pt,phi}"},
+    produces={mc_weight, category_ids, "cutflow.jet1_pt"},
 )
 def cutflow_features(
     self: Producer,

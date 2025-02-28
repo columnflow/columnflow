@@ -203,7 +203,7 @@ setup_venv() {
         fi
 
         # create the pending_flag to express that the venv state might be changing
-        touch "${pending_flag_file}"
+        [ ! -f "${pending_flag_file}" ] && touch "${pending_flag_file}"
         clear_pending() {
             rm -f "${pending_flag_file}"
         }

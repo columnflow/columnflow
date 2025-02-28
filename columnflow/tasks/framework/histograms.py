@@ -11,30 +11,30 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
-    VariablesMixin, DatasetsProcessesMixin, CategoriesMixin,
-    ShiftSourcesMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, DatasetsProcessesShiftSourcesMixin,
 )
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox, maybe_import
 
-ak = maybe_import("awkward")
 hist = maybe_import("hist")
 
 
 class HistogramsUserBase(
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
+    WeightProducerClassMixin,
+    # MLModelsMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
     VariablesMixin,
-    MLModelsMixin,
-    WeightProducerMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
 ):
+    single_config = True
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
-    def store_parts(self):
+    def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
         return parts
@@ -136,10 +136,9 @@ class HistogramsUserBase(
 
 
 class HistogramsUserSingleShiftBase(
-    HistogramsUserBase,
     ShiftTask,
+    HistogramsUserBase,
 ):
-
     # upstream requirements
     reqs = Requirements(
         MergeHistograms=MergeHistograms,
@@ -163,9 +162,12 @@ class HistogramsUserSingleShiftBase(
 
 
 class HistogramsUserMultiShiftBase(
+    DatasetsProcessesShiftSourcesMixin,
     HistogramsUserBase,
-    ShiftSourcesMixin,
 ):
+    # use the MergeHistograms task to validate shift sources against the requested dataset
+    shift_validation_task_cls = MergeHistograms
+
     # upstream requirements
     reqs = Requirements(
         MergeShiftedHistograms=MergeShiftedHistograms,
