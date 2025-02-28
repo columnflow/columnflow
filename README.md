@@ -35,6 +35,20 @@ Original source hosted at [GitHub](https://github.com/columnflow/columnflow).
 
 <!-- marker-before-note -->
 
+## ❗️ Note on 0.2 → 0.3 transition
+
+The 0.3 release introduces many performance fixes and new features such as
+
+- a new interface for all *task array functions* (calibrators, selectors, producers, etc.),
+- support for plotting data of multiple data taking campaigns at once,
+- a simplified machine learning interface, and
+- statistical inference models with support for merging data of different campaigns.
+
+However, some of these changes are potentially breaking existing code.
+Checkout the [0.2 → 0.3 transition guide](https://columnflow.readthedocs.io/en/latest/user_guide/02_03_transition.html) as well as the [release notes](https://github.com/columnflow/columnflow/releases/tag/v0.3.0) for a detailed overview of the changes and how to adapt your code.
+
+Version 0.2 continues to be available via the [`legacy/v0.2`](https://github.com/columnflow/columnflow/tree/legacy/v0.2) branch, with the latest release being [v0.2.5](https://github.com/columnflow/columnflow/releases/tag/v0.2.5).
+
 ## 🚧 Note on current development
 
 This project is in an advanced beta phase.

@@ -1087,9 +1087,9 @@ class ConfigTask(AnalysisTask):
 
         # single/multi config adjustments in case the switch has been specified
         if isinstance(cls.single_config, bool):
-            attr = "configs" if cls.single_config else "config"
-            if getattr(cls, attr, law.no_value) != law.no_value:
-                setattr(cls, attr, None)
+            remove_attr = "configs" if cls.has_single_config() else "config"
+            if getattr(cls, remove_attr, law.no_value) != law.no_value:
+                setattr(cls, remove_attr, None)
 
     @abc.abstractproperty
     def single_config(cls) -> bool:
