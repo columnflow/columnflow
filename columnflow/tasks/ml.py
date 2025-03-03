@@ -15,12 +15,14 @@ from columnflow.tasks.framework.mixins import (
     CalibratorsMixin,
     SelectorMixin,
     ProducersMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
     MLModelDataMixin,
     MLModelTrainingMixin,
     MLModelMixin,
     ChunkedIOMixin,
     CategoriesMixin,
-    SelectorStepsMixin,
 )
 from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -36,9 +38,9 @@ ak = maybe_import("awkward")
 
 class PrepareMLEvents(
     ReducedEventsUser,
-    ChunkedIOMixin,
     ProducersMixin,
     MLModelDataMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -81,13 +83,13 @@ class PrepareMLEvents(
             # producer has already been cached
             return self._preparation_producer_inst
 
-        producer = self.ml_model_inst.preparation_producer(self.config_inst)
+        producer = self.ml_model_inst.preparation_producer(self.analysis_inst)
 
         if not producer:
             # set producer inst to None when no producer is requested
             self._preparation_producer_inst = None
             return self._preparation_producer_inst
-        self._preparation_producer_inst = self.get_producer_insts([producer], {"task": self})[0]
+        self._preparation_producer_inst = self.build_producer_insts([producer], {"task": self})[0]
 
         # overwrite the sandbox when set
         sandbox = self._preparation_producer_inst.get_sandbox()
@@ -107,7 +109,7 @@ class PrepareMLEvents(
 
         # add producer dependent requirements
         if self.preparation_producer_inst:
-            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
+            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
 
         # add producers to requirements
         if not self.pilot and self.producer_insts:
@@ -123,7 +125,7 @@ class PrepareMLEvents(
         reqs = {"events": self.reqs.ProvideReducedEvents.req(self)}
 
         if self.preparation_producer_inst:
-            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
+            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -168,8 +170,9 @@ class PrepareMLEvents(
         reader_targets = {}
         if self.preparation_producer_inst:
             reader_targets = self.preparation_producer_inst.run_setup(
-                reqs["preparation_producer"],
-                inputs["preparation_producer"],
+                task=self,
+                reqs=reqs["preparation_producer"],
+                inputs=inputs["preparation_producer"],
             )
 
         # create a temp dir for saving intermediate files
@@ -231,6 +234,7 @@ class PrepareMLEvents(
                 if len(events) and self.preparation_producer_inst:
                     events = self.preparation_producer_inst(
                         events,
+                        task=self,
                         stats=stats,
                         fold_indices=events.fold_indices,
                         ml_model_inst=self.ml_model_inst,
@@ -300,7 +304,6 @@ PrepareMLEventsWrapper = wrapper_factory(
 
 
 class MergeMLStats(
-    DatasetTask,
     CalibratorsMixin,
     SelectorMixin,
     ProducersMixin,
@@ -311,6 +314,7 @@ class MergeMLStats(
 
     # upstream requirements
     reqs = Requirements(
+        RemoteWorkflow.reqs,
         PrepareMLEvents=PrepareMLEvents,
     )
 
@@ -369,7 +373,6 @@ MergeMLStatsWrapper = wrapper_factory(
 
 
 class MergeMLEvents(
-    DatasetTask,
     CalibratorsMixin,
     SelectorMixin,
     ProducersMixin,
@@ -502,21 +505,13 @@ class MLTraining(
                         self,
                         config=config_inst.name,
                         dataset=dataset_inst.name,
-                        calibrators=_calibrators,
-                        selector=_selector,
-                        producers=_producers,
                         fold=fold,
                         tree_index=-1)
                     for fold in range(self.ml_model_inst.folds)
                 ]
                 for dataset_inst in dataset_insts
             }
-            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
-                self.ml_model_inst.used_datasets.items(),
-                self.calibrators,
-                self.selectors,
-                self.producers,
-            )
+            for config_inst, dataset_insts in self.ml_model_inst.used_datasets.items()
         }
         reqs["stats"] = {
             config_inst.name: {
@@ -524,18 +519,10 @@ class MLTraining(
                     self,
                     config=config_inst.name,
                     dataset=dataset_inst.name,
-                    calibrators=_calibrators,
-                    selector=_selector,
-                    producers=_producers,
                 )
                 for dataset_inst in dataset_insts
             }
-            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
-                self.ml_model_inst.used_datasets.items(),
-                self.calibrators,
-                self.selectors,
-                self.producers,
-            )
+            for config_inst, dataset_insts in self.ml_model_inst.used_datasets.items()
         }
 
         # ml model requirements
@@ -554,9 +541,6 @@ class MLTraining(
                         self,
                         config=config_inst.name,
                         dataset=dataset_inst.name,
-                        calibrators=_calibrators,
-                        selector=_selector,
-                        producers=_producers,
                         fold=f,
                     )
                     for f in range(self.ml_model_inst.folds)
@@ -564,13 +548,9 @@ class MLTraining(
                 ]
                 for dataset_inst in dataset_insts
             }
-            for (config_inst, dataset_insts), _calibrators, _selector, _producers in zip(
-                self.ml_model_inst.used_datasets.items(),
-                self.calibrators,
-                self.selectors,
-                self.producers,
-            )
+            for config_inst, dataset_insts in self.ml_model_inst.used_datasets.items()
         }
+        # TODO: stats reqs missing here
 
         # ml model requirements
         reqs["model"] = self.ml_model_inst.requires(self)
@@ -594,9 +574,9 @@ class MLTraining(
 
 class MLEvaluation(
     ReducedEventsUser,
-    ChunkedIOMixin,
     ProducersMixin,
     MLModelMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -634,14 +614,14 @@ class MLEvaluation(
         producer = None
         if self.ml_model_inst.preparation_producer_in_ml_evaluation:
             # only consider preparation_producer in MLEvaluation if requested by model
-            producer = self.ml_model_inst.preparation_producer(self.config_inst)
+            producer = self.ml_model_inst.preparation_producer(self.analysis_inst)
 
         if not producer:
             # set producer inst to None when no producer is requested
             self._preparation_producer_inst = None
             return self._preparation_producer_inst
 
-        self._preparation_producer_inst = self.get_producer_insts([producer], {"task": self})[0]
+        self._preparation_producer_inst = self.build_producer_insts([producer], {"task": self})[0]
 
         # check that preparation_producer does not clash with ml_model_inst sandbox
         if (
@@ -661,9 +641,6 @@ class MLEvaluation(
         reqs["models"] = self.reqs.MLTraining.req_different_branching(
             self,
             configs=(self.config_inst.name,),
-            calibrators=(self.calibrators,),
-            selectors=(self.selector,),
-            producers=(self.producers,),
         )
 
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
@@ -686,9 +663,6 @@ class MLEvaluation(
             "models": self.reqs.MLTraining.req_different_branching(
                 self,
                 configs=(self.config_inst.name,),
-                calibrators=(self.calibrators,),
-                selectors=(self.selector,),
-                producers=(self.producers,),
                 branch=-1,
             ),
             "events": self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch),
@@ -735,8 +709,9 @@ class MLEvaluation(
         reader_targets = {}
         if self.preparation_producer_inst:
             reader_targets = self.preparation_producer_inst.run_setup(
-                reqs["preparation_producer"],
-                inputs["preparation_producer"],
+                task=self,
+                reqs=reqs["preparation_producer"],
+                inputs=inputs["preparation_producer"],
             )
 
         # open all model files
@@ -805,6 +780,7 @@ class MLEvaluation(
                 if len(events) and self.preparation_producer_inst:
                     events = self.preparation_producer_inst(
                         events,
+                        task=self,
                         stats=stats,
                         fold_indices=events.fold_indices,
                         ml_model_inst=self.ml_model_inst,
@@ -864,9 +840,9 @@ MLEvaluationWrapper = wrapper_factory(
 
 class MergeMLEvaluation(
     DatasetTask,
-    CalibratorsMixin,
-    SelectorMixin,
-    ProducersMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
     MLModelMixin,
     law.tasks.ForestMerge,
     RemoteWorkflow,
@@ -923,9 +899,9 @@ MergeMLEvaluationWrapper = wrapper_factory(
 
 class PlotMLResultsBase(
     ProcessPlotSettingMixin,
-    CalibratorsMixin,
-    SelectorStepsMixin,
-    ProducersMixin,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ProducerClassesMixin,
     MLModelMixin,
     CategoriesMixin,
     law.LocalWorkflow,

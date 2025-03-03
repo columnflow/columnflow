@@ -90,9 +90,9 @@ class CreateDatacards(SerializeInferenceModelBase):
                 # select relevant categories
                 h_proc = h_proc[{
                     "category": [
-                        hist.loc(c.id)
+                        hist.loc(c.name)
                         for c in leaf_category_insts
-                        if c.id in h_proc.axes["category"]
+                        if c.name in h_proc.axes["category"]
                     ],
                 }][{"category": sum}]
 
