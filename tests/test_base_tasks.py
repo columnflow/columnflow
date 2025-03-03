@@ -75,6 +75,8 @@ class AnalysisTaskTests(unittest.TestCase):
             default_str="default_calibrator",
             multi_strategy="first",
         )
+        self.assertEqual(resolved_calibrator, ("calib",))
+
         resolved_selector = AnalysisTask.resolve_config_default(
             param=RESOLVE_DEFAULT,
             task_params=self.base_params,
@@ -82,6 +84,8 @@ class AnalysisTaskTests(unittest.TestCase):
             default_str="default_selector",
             multi_strategy="first",
         )
+        self.assertEqual(resolved_selector, "sel")
+
         resolved_selector_steps = AnalysisTask.resolve_config_default(
             param=(RESOLVE_DEFAULT,),
             task_params=self.base_params,
@@ -89,6 +93,8 @@ class AnalysisTaskTests(unittest.TestCase):
             default_str="default_selector_steps",  # does note exist --> should resolve to empty tuple
             multi_strategy="first",
         )
+        self.assertEqual(resolved_selector_steps, ())
+
         resolved_producer = AnalysisTask.resolve_config_default(
             param=RESOLVE_DEFAULT,
             task_params=self.base_params,
@@ -96,6 +102,8 @@ class AnalysisTaskTests(unittest.TestCase):
             default_str="default_producer",
             multi_strategy="first",
         )
+        self.assertEqual(resolved_producer, "A")
+
         resolved_producers = AnalysisTask.resolve_config_default(
             param=(RESOLVE_DEFAULT,),
             task_params=self.base_params,
@@ -103,6 +111,8 @@ class AnalysisTaskTests(unittest.TestCase):
             default_str="default_producer",
             multi_strategy="first",
         )
+        self.assertEqual(resolved_producers, ("A", "B", "C"))
+
         resolved_producer_groups = AnalysisTask.resolve_config_default_and_groups(
             param=(RESOLVE_DEFAULT,),
             task_params=self.base_params,
@@ -111,12 +121,6 @@ class AnalysisTaskTests(unittest.TestCase):
             groups_str="producer_groups",
             multi_strategy="first",
         )
-
-        self.assertEqual(resolved_calibrator, ("calib",))
-        self.assertEqual(resolved_selector, "sel")
-        self.assertEqual(resolved_selector_steps, ())
-        self.assertEqual(resolved_producer, "A")
-        self.assertEqual(resolved_producers, ("A", "B", "C"))
         self.assertEqual(resolved_producer_groups, ("b", "a", "B", "d", "c"))  # TODO: order reversed
 
         # multi config
@@ -133,6 +137,7 @@ class AnalysisTaskTests(unittest.TestCase):
                 default_str="default_producer",
                 multi_strategy=multi_strategy,
             )
+            # TODO: remove set() when order is fixed
             self.assertEqual(set(resolved_producer), set(expected_producer))
 
         # "same" strategy
@@ -182,36 +187,43 @@ class AnalysisTaskTests(unittest.TestCase):
         )
         self.assertEqual(categories, ["cat1", "cat1_1", "cat1_2", "cat2", "cat3"])
 
+        categories = AnalysisTask.find_config_objects(
+            names=("cat1", "cat1_1", "cat1_2", "cat2", "cat3", "not_existing"),
+            container=self.config_inst1,
+            object_cls=od.Category,
+            deep=False,
+        )
+        self.assertEqual(categories, ["cat1", "cat2", "cat3"])
+
     def test_resolve_categories(self):
         # TODO: order of resolved categories is still messed up
         # testing with single config
         CategoriesMixin.single_config = True
-        resolved_params = CategoriesMixin.resolve_param_values(params={
-            **self.base_params,
-            "categories": (RESOLVE_DEFAULT,),
-        })
-        self.assertEqual(set(resolved_params["categories"]), set(("cat0", "cat1_1", "cat1_2")))
 
-        resolved_params = CategoriesMixin.resolve_param_values(params={
-            **self.base_params,
-            "categories": ("cg1", "cg2", "cat4", "not_existing"),
-        })
-        self.assertEqual(set(resolved_params["categories"]), set(("cat0", "cat1_1", "cat2", "cat3", "cat4")))
+        for input_categories, expected_categories in (
+            ((RESOLVE_DEFAULT,), ("cat0", "cat1_1", "cat1_2")),
+            (("cg1", "cg2", "cat4", "not_existing"), ("cat0", "cat1_1", "cat2", "cat3", "cat4")),
+        ):
+            input_params = {
+                **self.base_params,
+                "categories": input_categories,
+            }
+            resolved_params = CategoriesMixin.resolve_param_values(params=input_params)
+            # TODO: remove set() when order is fixed
+            self.assertEqual(set(resolved_params["categories"]), set(expected_categories))
 
     def test_resolve_variables(self):
         # testing with single config
         VariablesMixin.single_config = True
-        resolved_params = VariablesMixin.resolve_param_values(params={
-            **self.base_params,
-            "variables": (RESOLVE_DEFAULT,),
-        })
-        self.assertEqual(
-            set(resolved_params["variables"]),
-            set(("var0", "var0-var2", "var1", "var3", "var1-var2", "var4", "var0-var1")),
-        )
 
-        resolved_params = VariablesMixin.resolve_param_values(params={
-            **self.base_params,
-            "variables": ("vg1", "vg2", "var4-var1"),
-        })
-        self.assertEqual(set(resolved_params["variables"]), set(("var3", "var1", "var4-var1", "var2", "var0")))
+        for input_variables, expected_variables in (
+            ((RESOLVE_DEFAULT,), ("var0", "var1", "var0-var1", "var0-var2", "var1-var2", "var3", "var4")),
+            (("vg1", "vg2", "var4-var1", "var4-missing"), ("var0", "var1", "var2", "var3", "var4-var1")),
+        ):
+            input_params = {
+                **self.base_params,
+                "variables": input_variables,
+            }
+            resolved_params = VariablesMixin.resolve_param_values(params=input_params)
+            # TODO: remove set() when order is fixed
+            self.assertEqual(set(resolved_params["variables"]), set(expected_variables))
