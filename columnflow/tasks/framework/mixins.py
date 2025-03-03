@@ -1598,6 +1598,7 @@ class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(
         default=(),
+        # default=(RESOLVE_DEFAULT,),
         description="comma-separated category names or patterns to select; can also be the key of a mapping defined in "
         "'category_groups' auxiliary data of the config; when empty, uses the auxiliary data enty 'default_categories' "
         "when set; empty default",
@@ -1624,15 +1625,14 @@ class CategoriesMixin(ConfigTask):
             # additional resolution and expansion requires a config
             if (container := cls._get_config_container(params)):
                 # when still empty, get the config default
-                if not categories:
-                    categories = cls.resolve_config_default_and_groups(
-                        param=params.get("categories"),
-                        task_params=params,
-                        container=container,
-                        default_str="default_categories",
-                        groups_str="category_groups",
-                        multi_strategy="union",
-                    )
+                categories = cls.resolve_config_default(
+                    param=params.get("categories"),
+                    task_params=params,
+                    container=container,
+                    default_str="default_categories",
+                    # groups_str="category_groups",
+                    multi_strategy="union",
+                )
 
                 # resolve them
                 categories = cls.find_config_objects(
@@ -1662,7 +1662,7 @@ class CategoriesMixin(ConfigTask):
 class VariablesMixin(ConfigTask):
 
     variables = law.CSVParameter(
-        default=(),
+        default=(RESOLVE_DEFAULT,),
         description="comma-separated variable names or patterns to select; can also be the key "
         "of a mapping defined in the 'variable_group' auxiliary data of the config; when empty, "
         "uses all variables of the config; empty default",
@@ -1690,16 +1690,14 @@ class VariablesMixin(ConfigTask):
             # additional resolution and expansion requires a config
             if (container := cls._get_config_container(params)):
                 # when still empty, get the config default
-                if not variables:
-                    variables = cls.resolve_config_default_and_groups(
-                        param=params.get("variables"),
-                        task_params=params,
-                        container=container,
-                        default_str="default_variables",
-                        groups_str="variable_groups",
-                        multi_strategy="union",
-                    )
-
+                variables = cls.resolve_config_default_and_groups(
+                    param=params.get("variables"),
+                    task_params=params,
+                    container=container,
+                    default_str="default_variables",
+                    groups_str="variable_groups",
+                    multi_strategy="union",
+                )
                 # since there can be multi-dimensional variables, resolve each part separately
                 resolved_variables = set()
                 for variable in variables:
