@@ -138,8 +138,6 @@ def trigger_efficiency_hists_init(self: Producer):
 
 
 @producer(
-    # only run on mc
-    mc_only=True,
     # lepton config bundle, function to determine the location of a list of LeptonWeightConfig's
     trigger_configs=lambda self: self.config_inst.x.trigger_sfs,
     config_naming=lambda self, cfg: "hist_" + cfg.sf_name,
