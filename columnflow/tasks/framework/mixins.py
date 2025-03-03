@@ -2004,18 +2004,35 @@ class DatasetsProcessesMixin(ConfigTask):
 
     datasets = law.CSVParameter(
         default=(),
-        description="comma-separated dataset names or patters to select; can also be the key of a "
-        "mapping defined in the 'dataset_groups' auxiliary data of the config; when empty, uses "
-        "all datasets registered in the config that contain any of the selected --processes; empty "
-        "default",
+        description="comma-separated dataset names or patters to select; can also be the key of a mapping defined in "
+        "the 'dataset_groups' auxiliary data of the config; when empty, uses all datasets registered in the config "
+        "that contain any of the selected --processes; empty default",
+        brace_expand=True,
+        parse_empty=True,
+    )
+    datasets_multi = law.MultiCSVParameter(
+        default=(),
+        description="multiple comma-separated dataset names or patters to select per config object, each separated by "
+        "a colon; when only one sequence is passed, it is applied to all configs; values can also be the key of a "
+        "mapping defined in " "the 'dataset_groups' auxiliary data of the specific config; when empty, uses all "
+        "datasets registered in the config that contain any of the selected --processes; empty default",
         brace_expand=True,
         parse_empty=True,
     )
     processes = law.CSVParameter(
         default=(),
-        description="comma-separated process names or patterns for filtering processes; can also "
-        "be the key of a mapping defined in the 'process_groups' auxiliary data of the config; "
-        "uses all processes of the config when empty; empty default",
+        description="comma-separated process names or patterns for filtering processes; can also be the key of a "
+        "mapping defined in the 'process_groups' auxiliary data of the config; uses all processes of the config when "
+        "empty; empty default",
+        brace_expand=True,
+        parse_empty=True,
+    )
+    processes_multi = law.MultiCSVParameter(
+        default=(),
+        description="multiple comma-separated process names or patters for filtering processing per config object, "
+        "each separated by a colon; when only one sequence is passed, it is applied to all configs; values can also be "
+        "the key of a mapping defined in the 'process_groups' auxiliary data of the specific config; uses all "
+        "processes of the config when empty; empty default",
         brace_expand=True,
         parse_empty=True,
     )
@@ -2024,56 +2041,105 @@ class DatasetsProcessesMixin(ConfigTask):
     allow_empty_processes = False
 
     @classmethod
+    def modify_task_attributes(cls) -> None:
+        super().modify_task_attributes()
+
+        # single/multi config adjustments in case the switch has been specified
+        if isinstance(cls.single_config, bool) and getattr(cls, "datasets_multi", law.no_value) != law.no_value:
+            if not cls.has_single_config():
+                cls.datasets = cls.datasets_multi
+                cls.processes = cls.processes_multi
+            cls.datasets_multi = None
+            cls.processes_multi = None
+
+    @classmethod
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
-        # resolve processes
-        if (config_inst := params.get("config_inst")) and "processes" in params:
-            if params["processes"]:
-                processes = cls.find_config_objects(
-                    params["processes"],
+        # helper to resolve processes and datasets for one config
+        def resolve(config_inst: od.Config, processes: Any, datasets: Any) -> tuple[list[str], list[str]]:
+            if processes != law.no_value:
+                processes_orig = processes
+                if processes:
+                    processes = cls.find_config_objects(
+                        names=processes,
+                        container=config_inst,
+                        object_cls=od.Process,
+                        groups_str="process_groups",
+                        deep=True,
+                    )
+                else:
+                    processes = config_inst.processes.names()
+                if not processes and not cls.allow_empty_processes:
+                    raise ValueError(f"no processes found matching {processes_orig}")
+
+            if datasets != law.no_value:
+                datasets_orig = datasets
+                if datasets:
+                    datasets = cls.find_config_objects(
+                        names=datasets,
+                        container=config_inst,
+                        object_cls=od.Dataset,
+                        groups_str="dataset_groups",
+                    )
+                elif processes and processes != law.no_value:
+                    # pick all datasets that contain any of the requested (sub)processes
+                    sub_process_insts = sum((
+                        [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
+                        for process_inst in map(config_inst.get_process, processes)
+                    ), [])
+                    datasets = [
+                        dataset_inst.name for dataset_inst in config_inst.datasets
+                        if any(map(dataset_inst.has_process, sub_process_insts))
+                    ]
+                if not datasets and not cls.allow_empty_datasets:
+                    raise ValueError(f"no datasets found matching {datasets_orig}")
+
+            return (processes, datasets)
+
+        if cls.has_single_config():
+            if (config_inst := params.get("config_inst")):
+                # resolve
+                processes, datasets = resolve(
                     config_inst,
-                    od.Process,
-                    config_inst.x("process_groups", {}),
-                    deep=True,
+                    params.get("processes", law.no_value),
+                    params.get("datasets", law.no_value),
                 )
-            else:
-                processes = config_inst.processes.names()
 
-            # complain when no processes were found
-            if not processes and not cls.allow_empty_processes:
-                raise ValueError(f"no processes found matching {params['processes']}")
+                # store in params
+                if processes != law.no_value:
+                    params["processes"] = tuple(processes)
+                    params["process_insts"] = list(map(config_inst.get_process, processes))
+                if datasets != law.no_value:
+                    params["datasets"] = tuple(datasets)
+                    params["dataset_insts"] = list(map(config_inst.get_dataset, datasets))
+        else:
+            if (config_insts := params.get("config_insts")):
+                # "broadcast" single sequences to number of configs
+                processes = cls.broadcast_to_configs(params, "processes", len(config_insts))
+                datasets = cls.broadcast_to_configs(params, "datasets", len(config_insts))
 
-            params["processes"] = tuple(processes)
-            params["process_insts"] = [config_inst.get_process(p) for p in params["processes"]]
+                # perform resolution per config
+                multi_processes = []
+                multi_datasets = []
+                for config_inst, _processes, _datasets in zip(config_insts, processes, datasets):
+                    _processes, _datasets = resolve(config_inst, _processes, _datasets)
+                    multi_processes.append(tuple(_processes) if _processes != law.no_value else None)
+                    multi_datasets.append(tuple(_datasets) if _datasets != law.no_value else None)
 
-        # resolve datasets
-        if config_inst and "datasets" in params:
-            if params["datasets"]:
-                datasets = cls.find_config_objects(
-                    params["datasets"],
-                    config_inst,
-                    od.Dataset,
-                    config_inst.x("dataset_groups", {}),
-                )
-            elif "processes" in params:
-                # pick all datasets that contain any of the requested (sub) processes
-                sub_process_insts = sum((
-                    [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
-                    for process_inst in map(config_inst.get_process, params["processes"])
-                ), [])
-                datasets = [
-                    dataset_inst.name
-                    for dataset_inst in config_inst.datasets
-                    if any(map(dataset_inst.has_process, sub_process_insts))
-                ]
-
-            # complain when no datasets were found
-            if not datasets and not cls.allow_empty_datasets:
-                raise ValueError(f"no datasets found matching {params['datasets']}")
-
-            params["datasets"] = tuple(datasets)
-            params["dataset_insts"] = [config_inst.get_dataset(d) for d in params["datasets"]]
+                # store in params
+                if any(multi_processes):
+                    params["processes"] = tuple(multi_processes)
+                    params["process_insts"] = {
+                        config_inst: list(map(config_inst.get_process, processes))
+                        for config_inst, processes in zip(config_insts, multi_processes)
+                    }
+                if any(multi_datasets):
+                    params["datasets"] = tuple(multi_datasets)
+                    params["dataset_insts"] = {
+                        config_inst: list(map(config_inst.get_dataset, datasets))
+                        for config_inst, datasets in zip(config_insts, multi_datasets)
+                    }
 
         return params
 
@@ -2100,15 +2166,11 @@ class DatasetsProcessesMixin(ConfigTask):
 
     @property
     def datasets_repr(self) -> str:
-        if len(self.datasets) == 1:
-            return self.datasets[0]
-        return f"{len(self.datasets)}_{law.util.create_hash(sorted(self.datasets))}"
+        return self._multi_sequence_repr(self.datasets, sort=True)
 
     @property
     def processes_repr(self) -> str:
-        if len(self.processes) == 1:
-            return self.processes[0]
-        return f"{len(self.processes)}_{law.util.create_hash(self.processes)}"
+        return self._multi_sequence_repr(self.processes, sort=True)
 
 
 class ShiftSourcesMixin(ConfigTask):
@@ -2129,30 +2191,32 @@ class ShiftSourcesMixin(ConfigTask):
         params = super().resolve_param_values(params)
 
         # resolve shift sources
-        if (config_inst := params.get("config_inst")) and "shift_sources" in params:
-            # convert to full shift first to do the object finding
+        if (container := cls._get_config_container(params)) and "shift_sources" in params:
             shifts = cls.find_config_objects(
-                cls.expand_shift_sources(params["shift_sources"]),
-                config_inst,
-                od.Shift,
-                config_inst.x("shift_groups", {}),
+                names=cls.expand_shift_sources(params["shift_sources"]),
+                container=container,
+                object_cls=od.Shift,
+                groups_str="shift_groups",
+                multi_strategy="union",  # or "intersection"?
             )
 
-            # convert back to sources
-            sources = cls.reduce_shifts(shifts)
+            # convert back to sources and validate
+            sources = []
+            if shifts:
+                sources = cls.reduce_shifts(shifts)
 
-            # when a validation task is set, is it to validate and reduce the requested shifts
-            if cls.shift_validation_task_cls:
-                sources = [
-                    source for source in sources
-                    if cls.validate_shift_source(params, source)
-                ]
+                # when a validation task is set, is it to validate and reduce the requested shifts
+                if cls.shift_validation_task_cls:
+                    sources = [
+                        source for source in sources
+                        if cls.validate_shift_source(params, source)
+                    ]
 
-            # complain when no shifts were found
-            if not shifts and not cls.allow_empty_shift_sources:
+            # complain when no sources were found
+            if not sources and not cls.allow_empty_shift_sources:
                 raise ValueError(f"no shifts found matching {params['shift_sources']}")
 
-            # convert back to sources
+            # store them
             params["shift_sources"] = tuple(sources)
 
         return params

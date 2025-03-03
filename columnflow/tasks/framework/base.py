@@ -1172,6 +1172,67 @@ class ConfigTask(AnalysisTask):
         return params
 
     @classmethod
+    def _multi_sequence_repr(
+        cls,
+        values: Sequence[str] | Sequence[Sequence[str]],
+        sort: bool = False,
+    ) -> str:
+        """
+        Returns a string representation of a singly (for single config) or doubly (for multi config) nested sequence of
+        string *values*. In the former case, the values are sorted if *sort* is *True* and formed into a representation.
+        The behavior of the latter case depends on whether values are identical between configs. If they are, handle
+        them as a single sequence. Otherwise, the representation consists of the number of values per config and a hash
+        of the combined, flat values.
+
+        :param values: Nested values.
+        :param sort: Whether to sort the values.
+        :return: A string representation.
+        """
+        # empty case
+        if not values:
+            return "none"
+
+        # optional sorting helper
+        maybe_sort = (lambda vals: sorted(vals)) if sort else (lambda vals: vals)
+
+        # helper to perform the single representation, assuming already sorted values
+        def single_repr(values: Sequence[str]) -> str:
+            if not values:
+                return None
+            if len(values) == 1:
+                return values[0]
+            return f"{len(values)}_{law.util.create_hash(values)}"
+
+        # single case
+        if not isinstance(values[0], (list, tuple)):
+            return single_repr(maybe_sort(values))
+        # multi case with a single sequence
+        if len(values) == 1:
+            return single_repr(maybe_sort(values[0]))
+        # multi case with identical sequences
+        values = [maybe_sort(_values) for _values in values]
+        if all(_values == values[0] for _values in values[1:]):
+            return single_repr(values[0])
+        # build full representation
+        _repr = "_".join(map(str, map(len, values)))
+        all_values = sum(values, [])
+        return _repr + f"_{law.util.create_hash(all_values)}"
+
+    @classmethod
+    def broadcast_to_configs(cls, params: dict[str, Any], param: str, n_config_insts: int) -> tuple[Any]:
+        value = params.get(param, law.no_value)
+        if not isinstance(value, tuple):
+            value = (value,)
+        if len(value) == 1:
+            value *= n_config_insts
+        elif len(value) != n_config_insts:
+            raise ValueError(
+                f"number of {param} sequences ({len(value)}) does not match number of configs "
+                f"({n_config_insts})",
+            )
+        return value
+
+    @classmethod
     def _get_default_version(
         cls,
         inst: AnalysisTask,
