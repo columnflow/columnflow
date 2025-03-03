@@ -1674,8 +1674,6 @@ class VariablesMixin(ConfigTask):
     allow_empty_variables = False
     allow_missing_variables = False
 
-    single_config = True
-
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)

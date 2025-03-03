@@ -42,9 +42,7 @@ class PlotVariablesBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-
-    # TODO: testing for now
-    # single_config = False
+    # single_config = True set via MultiConfigDatasetsProcessesMixin
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
