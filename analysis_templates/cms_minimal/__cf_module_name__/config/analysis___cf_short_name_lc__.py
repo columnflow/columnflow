@@ -168,15 +168,15 @@ cfg.x.selector_step_groups = {
 
 # calibrator groups for conveniently looping over certain calibrators
 # (used during calibration)
-cfg.x.calibrator_groups = {}
+ana.x.calibrator_groups = {}
 
 # producer groups for conveniently looping over certain producers
 # (used during the ProduceColumns task)
-cfg.x.producer_groups = {}
+ana.x.producer_groups = {}
 
 # ml_model groups for conveniently looping over certain ml_models
 # (used during the machine learning tasks)
-cfg.x.ml_model_groups = {}
+ana.x.ml_model_groups = {}
 
 # custom method and sandbox for determining dataset lfns
 cfg.x.get_dataset_lfns = None
