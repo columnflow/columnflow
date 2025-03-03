@@ -1597,8 +1597,7 @@ class InferenceModelMixin(InferenceModelClassMixin):
 class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(
-        default=(),
-        # default=(RESOLVE_DEFAULT,),
+        default=(RESOLVE_DEFAULT,),
         description="comma-separated category names or patterns to select; can also be the key of a mapping defined in "
         "'category_groups' auxiliary data of the config; when empty, uses the auxiliary data enty 'default_categories' "
         "when set; empty default",
@@ -1619,7 +1618,7 @@ class CategoriesMixin(ConfigTask):
         # resolve categories
         if (categories := params.get("categories", law.no_value)) != law.no_value:
             # when empty, use the ones defined on class level
-            if not categories and cls.default_categories:
+            if categories in ((), (RESOLVE_DEFAULT,)) and cls.default_categories:
                 categories = tuple(cls.default_categories)
 
             # additional resolution and expansion requires a config
@@ -1684,7 +1683,7 @@ class VariablesMixin(ConfigTask):
         # resolve variables
         if (variables := params.get("variables", law.no_value)) != law.no_value:
             # when empty, use the ones defined on class level
-            if not variables and cls.default_variables:
+            if variables in ((), (RESOLVE_DEFAULT,)) and cls.default_variables:
                 variables = tuple(cls.default_variables)
 
             # additional resolution and expansion requires a config
@@ -2052,37 +2051,33 @@ class ShiftSourcesMixin(ConfigTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        if "config_insts" not in params:
-            return params
-
-        config_insts = params["config_insts"]
-
         # resolve shift sources
-        if "shift_sources" in params:
-            # convert to full shift first to do the object finding
-            # NOTE: at the moment, shifts need to be found in all configs to be considered
-            shifts = cls.find_config_objects_multi_container(
-                cls.expand_shift_sources(params["shift_sources"]),
-                config_insts,
-                od.Shift,
-                "shift_groups",
+        if (container := cls._get_config_container(params)) and "shift_sources" in params:
+            shifts = cls.find_config_objects(
+                names=cls.expand_shift_sources(params["shift_sources"]),
+                container=container,
+                object_cls=od.Shift,
+                groups_str="shift_groups",
+                multi_strategy="union",  # or "intersection"?
             )
 
-            # convert back to sources
-            sources = cls.reduce_shifts(shifts)
+            # convert back to sources and validate
+            sources = []
+            if shifts:
+                sources = cls.reduce_shifts(shifts)
 
-            # when a validation task is set, is it to validate and reduce the requested shifts
-            if cls.shift_validation_task_cls:
-                sources = [
-                    source for source in sources
-                    if cls.validate_shift_source(params, source)
-                ]
+                # when a validation task is set, is it to validate and reduce the requested shifts
+                if cls.shift_validation_task_cls:
+                    sources = [
+                        source for source in sources
+                        if cls.validate_shift_source(params, source)
+                    ]
 
-            # complain when no shifts were found
-            if not shifts and not cls.allow_empty_shift_sources:
+            # complain when no sources were found
+            if not sources and not cls.allow_empty_shift_sources:
                 raise ValueError(f"no shifts found matching {params['shift_sources']}")
 
-            # convert back to sources
+            # store them
             params["shift_sources"] = tuple(sources)
 
         return params
