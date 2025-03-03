@@ -118,8 +118,6 @@ def trigger_scale_factors_setup(
 
 
 @producer(
-    # only run on mc
-    mc_only=True,
     # lepton config bundle, function to determine the location of a list of LeptonWeightConfig's
     trigger_configs=lambda self: self.config_inst.x.trigger_sfs,
     config_naming=lambda self, cfg: cfg.sf_name,
