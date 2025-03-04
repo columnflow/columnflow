@@ -339,7 +339,7 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
       1) Compute the recoil vector U (Upara, Uperp) from the PuppiMET and the boson information.
       2) Apply the nominal recoil correction to recoil vector U.
       3) Recompute the corrected MET from the corrected U components.
-      4) Compute systematic variations (Recoil uncertainties) by recalculating MET variations using the 
+      4) Compute systematic variations (Recoil uncertainties) by recalculating MET variations using the
          Recoil_correction_Uncertainty correction.
     """
     # Retrieve inputs as numpy arrays.
