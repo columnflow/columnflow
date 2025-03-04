@@ -7,8 +7,10 @@ import unittest
 
 import order as od
 
-from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT
-from columnflow.tasks.framework.mixins import VariablesMixin, CategoriesMixin, MultiConfigDatasetsProcessesMixin
+from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT, ShiftTask, DatasetTask
+from columnflow.tasks.framework.mixins import (
+    VariablesMixin, CategoriesMixin, MultiConfigDatasetsProcessesMixin,
+)
 
 
 class AnalysisTaskTests(unittest.TestCase):
@@ -34,11 +36,15 @@ class AnalysisTaskTests(unittest.TestCase):
         }
 
         # setup categories and variables
+        cfg1.add_shift("nominal", id=0)
         for i in range(5):
             cfg1.add_category(name=f"cat{i}", id=i)
             cfg1.add_variable(name=f"var{i}", id=i)
             p = cfg1.add_process(name=f"proc{i}", id=i)
-            cfg1.add_dataset(name=f"ds{i}", processes=[p], id=i)
+            cfg1.add_shift(name=f"shift{i}_up", id=2 * i + 1)
+            cfg1.add_shift(name=f"shift{i}_down", id=2 * i + 2)
+            cfg1.add_dataset(name=f"ds{i}", processes=[p], id=i, info={
+                "nominal": [], f"shift{i}_up": [], f"shift{i}_down": []})
 
         cat1 = cfg1.get_category("cat1")
         cat1.add_category(name="cat1_1", id=11)
@@ -58,11 +64,23 @@ class AnalysisTaskTests(unittest.TestCase):
         }
 
         # setup for MultiConfig
+        cfg2.add_shift("nominal", id=0)
         for i in range(3, 7):
             cfg2.add_category(name=f"cat{i}", id=i)
             cfg2.add_variable(name=f"var{i}", id=i)
+            cfg2.add_shift(name=f"shift{i}_up", id=2 * i + 1)
+            cfg2.add_shift(name=f"shift{i}_down", id=2 * i + 2)
             p = cfg2.add_process(name=f"proc{i}", id=i)
-            cfg2.add_dataset(name=f"ds{i}", processes=[p], id=i)
+            cfg2.add_dataset(name=f"ds{i}", processes=[p], id=i, info={
+                "nominal": [], f"shift{i}_up": [], f"shift{i}_down": []})
+
+        # same proess group, different processes
+        cfg1.x.process_groups = {
+            "pg1": ("proc1", "proc2"),
+        }
+        cfg2.x.process_groups = {
+            "pg1": ("proc3", "proc4"),
+        }
 
         # same calibrator, different producer
         cfg1.x.default_calibrator = ("calib",)
@@ -238,6 +256,9 @@ class AnalysisTaskTests(unittest.TestCase):
             ((("proc4",), ("proc5")), (("proc4",), ("proc5",))),
             ((("proc4", "proc5", "proc6"),), (("proc4",), ("proc4", "proc5", "proc6"))),
             ((("proc1", "proc2"), ("proc5", "proc6")), (("proc1", "proc2"), ("proc5", "proc6"))),
+            ((("pg1"),), (("proc1", "proc2"), ("proc3", "proc4"))),
+            # default (empty tuple) is resolved to all processes
+            ((), tuple(tuple(proc.name for proc in cfg.processes) for cfg in self.analysis_inst.configs)),
         ):
             input_params = {
                 **self.base_params,
@@ -252,3 +273,104 @@ class AnalysisTaskTests(unittest.TestCase):
                 resolved_params["datasets"],
                 tuple(tuple(proc_name.replace("proc", "ds") for proc_name in inner) for inner in expected_processes),
             )
+
+    def test_resolve_dataset(self):
+        DatasetTask.single_config = True
+
+        base_params = {
+            **self.base_params,
+            "shift": "nominal",
+        }
+
+        resolved_params = DatasetTask.modify_param_values(params={**base_params, "dataset": "ds0"})
+        self.assertEqual(resolved_params["dataset"], "ds0")
+
+        with self.assertRaises(ValueError):
+            DatasetTask.modify_param_values({**base_params, "dataset": "not_existing"})
+
+    def test_resolve_shifts(self):
+        # single config
+
+        for input_shift, input_dataset, expected_shift in (
+            ("nominal", "ds0", "nominal"),
+            ("shift0_up", "ds0", "shift0_up"),  # implemented upstream from dataset "ds0"
+            ("shift1_up", "ds0", "nominal"),  # not implemented upstream --> fallback to "nominal"
+            ("shift1_up", "ds1", "shift1_up"),  # implemented upstream from dataset "ds0"
+        ):
+            input_params = {
+                **self.base_params,
+                "dataset": input_dataset,
+                "shift": input_shift,
+            }
+            resolved_params = DatasetTask.modify_param_values(params=input_params)
+            self.assertEqual(resolved_params["shift"], expected_shift)
+
+        with self.assertRaises(ValueError):
+            DatasetTask.modify_param_values({
+                **self.base_params,
+                "dataset": "ds0",
+                "shift": "not_existing",
+            })
+
+    def test_modify_shifts_multi_config(self):
+        # multi config
+        class ShiftTaskAllUpstream(ShiftTask):
+            """
+            Exemplary shift declaration task that collects all known shifts
+            from all config instances as upstream shifts.
+            """
+            single_config = False
+            @classmethod
+            def get_known_shifts(
+                cls,
+                params: dict,
+                shifts,
+            ) -> None:
+                super().get_known_shifts(params, shifts)
+                for config_inst in params.get("config_insts", {}):
+                    shifts.upstream.update(config_inst.shifts.names())
+
+        class ShiftTaskAllLocal(ShiftTask):
+            """
+            Exemplary shift declaration task that collects all known shifts
+            from all config instances as local shifts.
+            """
+            single_config = False
+            @classmethod
+            def get_known_shifts(
+                cls,
+                params: dict,
+                shifts,
+            ) -> None:
+                super().get_known_shifts(params, shifts)
+                for config_inst in params.get("config_insts", {}):
+                    shifts.local.update(config_inst.shifts.names())
+
+        for input_shift, expected_shift in (
+            ("nominal", "nominal"),
+            ("shift1_up", "shift1_up"),  # known to cfg1
+            ("shift3_up", "shift3_up"),  # known to cfg1 and cfg2
+            ("shift6_up", "shift6_up"),  # known to cfg2
+        ):
+            # upstream shifts (local shifts should always resolve to "nominal")
+            input_params = {
+                **self.base_params,
+                "shift": input_shift,
+            }
+            resolved_params_upstream = ShiftTaskAllUpstream.modify_param_values(params=input_params)
+            self.assertEqual(resolved_params_upstream["local_shift"], "nominal")
+            self.assertEqual(resolved_params_upstream["shift"], expected_shift)
+
+            # local shifts (upstream shifts should be identical to local shifts)
+            input_params = {
+                **self.base_params,
+                "shift": input_shift,
+            }
+            resolved_params_local = ShiftTaskAllLocal.modify_param_values(params=input_params)
+            self.assertEqual(resolved_params_local["local_shift"], expected_shift)
+            self.assertEqual(resolved_params_local["shift"], expected_shift)
+
+        # resolving non-existing shifts should raise an error
+        for task in (ShiftTaskAllUpstream, ShiftTaskAllLocal):
+            with self.assertRaises(ValueError):
+                task.modify_param_values({**self.base_params, "shift": "not_existing"})

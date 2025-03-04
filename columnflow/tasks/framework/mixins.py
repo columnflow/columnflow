@@ -1919,14 +1919,14 @@ class MultiConfigDatasetsProcessesMixin(ConfigTask):
                 for i, _processes in enumerate(processes):
                     config_inst = config_insts[i]
                     processes[i] = tuple(cls.find_config_objects(
-                        _processes,
-                        config_inst,
-                        od.Process,
-                        config_inst.x("process_groups", {}),
+                        names=_processes,
+                        container=config_inst,
+                        object_cls=od.Process,
+                        groups_str="process_groups",
                         deep=True,
                     ))
             else:
-                processes = [config_inst.processes.names() for config_inst in config_insts]
+                processes = tuple(tuple(config_inst.processes.names()) for config_inst in config_insts)
 
             # complain when no processes were found
             if not processes and not cls.allow_empty_processes:
@@ -1953,10 +1953,10 @@ class MultiConfigDatasetsProcessesMixin(ConfigTask):
                 for i, _datasets in enumerate(datasets):
                     config_inst = config_insts[i]
                     datasets[i] = tuple(cls.find_config_objects(
-                        _datasets,
-                        config_inst,
-                        od.Dataset,
-                        config_inst.x("dataset_groups", {}),
+                        names=_datasets,
+                        container=config_inst,
+                        object_cls=od.Dataset,
+                        groups_str="dataset_groups",
                     ))
 
             elif "processes" in params:
