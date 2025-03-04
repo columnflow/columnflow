@@ -10,10 +10,6 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-# from columnflow.tasks.framework.mixins import (
-#     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-#     ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
-# )
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, CalibratorsMixin, SelectorClassMixin, SelectorMixin,
     ProducerClassesMixin, ProducersMixin, VariablesMixin, DatasetShiftSourcesMixin,
@@ -25,7 +21,7 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 # from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
-from columnflow.hist_util import create_hist_from_variables
+from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_to_strcat
 
 
 class _CreateHistograms(
@@ -142,6 +138,12 @@ class CreateHistograms(_CreateHistograms):
         # prepare inputs
         inputs = self.input()
 
+        # get IDs and names of all leaf categories
+        category_map = {
+            cat.id: cat.name
+            for cat in self.config_inst.get_leaf_categories()
+        }
+
         # declare output: dict of histograms
         histograms = {}
 
@@ -236,6 +238,19 @@ class CreateHistograms(_CreateHistograms):
                 else:
                     weight = ak.Array(np.ones(len(events), dtype=np.float32))
 
+                # merge category ids and check that they are defined as leaf categories
+                category_ids = ak.concatenate(
+                    [Route(c).apply(events) for c in self.category_id_columns],
+                    axis=-1,
+                )
+                unique_category_ids = np.unique(ak.flatten(category_ids))
+                if any(cat_id not in category_map for cat_id in unique_category_ids):
+                    undefined_category_ids = set(unique_category_ids) - set(category_map)
+                    raise ValueError(
+                        f"Category ids {', '.join(undefined_category_ids)} in category id column "
+                        "are not defined as leaf categories in the config_inst",
+                    )
+
                 # define and fill histograms, taking into account multiple axes
                 for var_key, var_names in self.variable_tuples.items():
                     # get variable instances
@@ -243,14 +258,14 @@ class CreateHistograms(_CreateHistograms):
 
                     if var_key not in histograms:
                         # create the histogram in the first chunk
-                        histograms[var_key] = create_hist_from_variables(
+                        histograms[var_key] = create_columnflow_hist(
                             *variable_insts,
-                            int_cat_axes=("category", "process", "shift"),
                         )
 
                     # mask events and weights when selection expressions are found
                     masked_events = events
                     masked_weights = weight
+                    masked_category_ids = category_ids
                     for variable_inst in variable_insts:
                         sel = variable_inst.selection
                         if sel == "1":
@@ -262,18 +277,12 @@ class CreateHistograms(_CreateHistograms):
                         mask = sel(masked_events)
                         masked_events = masked_events[mask]
                         masked_weights = masked_weights[mask]
-
-                    # merge category ids
-                    category_ids = ak.concatenate(
-                        [Route(c).apply(masked_events) for c in self.category_id_columns],
-                        axis=-1,
-                    )
+                        masked_category_ids = masked_category_ids[mask]
 
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
-                        "category": category_ids,
+                        "category": masked_category_ids,
                         "process": masked_events.process_id,
-                        "shift": np.ones(len(masked_events), dtype=np.int32) * self.global_shift_inst.id,
                         "weight": masked_weights,
                     }
                     for variable_inst in variable_insts:
@@ -293,7 +302,16 @@ class CreateHistograms(_CreateHistograms):
                         histograms[var_key],
                         fill_data,
                         last_edge_inclusive=self.last_edge_inclusive,
+                        fill_kwargs={"shift": self.global_shift_inst.name},
                     )
+
+        # change category axis from int to str
+        for var_key in self.variable_tuples.keys():
+            histograms[var_key] = translate_hist_intcat_to_strcat(
+                histograms[var_key],
+                "category",
+                category_map,
+            )
 
         # teardown the weight producer
         if not skip_weight_producer:
