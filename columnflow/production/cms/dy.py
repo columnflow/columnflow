@@ -32,19 +32,6 @@ class DrellYanConfig:
         if not self.era or not self.order or not self.correction or not self.unc_correction:
             raise ValueError("Incomplete dy_weight_config: missing era, order, correction or unc_correction.")  # noqa
 
-
-@dataclass
-class DrellYanConfig:
-    era: str
-    order: str
-    correction: str
-    unc_correction: str
-
-    def __post_init__(self) -> None:
-        if not self.era or not self.order or not self.correction or not self.unc_correction:
-            raise ValueError("Incomplete dy_weight_config: missing era, order, correction or unc_correction.")  # noqa
-
-
 @producer(
     uses={"GenPart.*"},
     produces={
