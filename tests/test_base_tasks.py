@@ -8,7 +8,7 @@ import unittest
 import order as od
 
 from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT
-from columnflow.tasks.framework.mixins import VariablesMixin, CategoriesMixin
+from columnflow.tasks.framework.mixins import VariablesMixin, CategoriesMixin, MultiConfigDatasetsProcessesMixin
 
 
 class AnalysisTaskTests(unittest.TestCase):
@@ -18,6 +18,7 @@ class AnalysisTaskTests(unittest.TestCase):
 
         self.analysis_inst = ana = od.Analysis("analysis", 1)
         self.config_inst1 = cfg1 = ana.add_config(name="config", id=1)
+        self.config_inst2 = cfg2 = ana.add_config(name="config2", id=2)
         self.base_params = {
             "analysis_inst": ana,
             "config_inst": cfg1,
@@ -36,6 +37,8 @@ class AnalysisTaskTests(unittest.TestCase):
         for i in range(5):
             cfg1.add_category(name=f"cat{i}", id=i)
             cfg1.add_variable(name=f"var{i}", id=i)
+            p = cfg1.add_process(name=f"proc{i}", id=i)
+            cfg1.add_dataset(name=f"ds{i}", processes=[p], id=i)
 
         cat1 = cfg1.get_category("cat1")
         cat1.add_category(name="cat1_1", id=11)
@@ -55,10 +58,11 @@ class AnalysisTaskTests(unittest.TestCase):
         }
 
         # setup for MultiConfig
-        self.config_inst2 = cfg2 = ana.add_config(name="config2", id=2)
         for i in range(3, 7):
             cfg2.add_category(name=f"cat{i}", id=i)
             cfg2.add_variable(name=f"var{i}", id=i)
+            p = cfg2.add_process(name=f"proc{i}", id=i)
+            cfg2.add_dataset(name=f"ds{i}", processes=[p], id=i)
 
         # same calibrator, different producer
         cfg1.x.default_calibrator = ("calib",)
@@ -227,3 +231,24 @@ class AnalysisTaskTests(unittest.TestCase):
             resolved_params = VariablesMixin.resolve_param_values(params=input_params)
             # TODO: remove set() when order is fixed
             self.assertEqual(set(resolved_params["variables"]), set(expected_variables))
+
+    def test_resolve_datasets_processes(self):
+        for input_processes, expected_processes in (
+            ((("proc4",),), (("proc4",), ("proc4",))),
+            ((("proc4",), ("proc5")), (("proc4",), ("proc5",))),
+            ((("proc4", "proc5", "proc6"),), (("proc4",), ("proc4", "proc5", "proc6"))),
+            ((("proc1", "proc2"), ("proc5", "proc6")), (("proc1", "proc2"), ("proc5", "proc6"))),
+        ):
+            input_params = {
+                **self.base_params,
+                "processes": input_processes,
+                "datasets": (),
+            }
+            resolved_params = MultiConfigDatasetsProcessesMixin.resolve_param_values(params=input_params)
+            self.assertEqual(resolved_params["processes"], expected_processes)
+
+            # since there is a 1-to-1 mapping between processes and datasets, we can infer the datasets as well
+            self.assertEqual(
+                resolved_params["datasets"],
+                tuple(tuple(proc_name.replace("proc", "ds") for proc_name in inner) for inner in expected_processes),
+            )
