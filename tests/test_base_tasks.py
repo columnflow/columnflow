@@ -346,20 +346,31 @@ class AnalysisTaskTests(unittest.TestCase):
                 for config_inst in params.get("config_insts", {}):
                     shifts.local.update(config_inst.shifts.names())
 
-        for input_shift, expected_shift in (
-            ("nominal", "nominal"),
-            ("shift1_up", "shift1_up"),  # known to cfg1
-            ("shift3_up", "shift3_up"),  # known to cfg1 and cfg2
-            ("shift6_up", "shift6_up"),  # known to cfg2
+        for input_shift, expected_shift, expected_shift_cfg1, expected_shift_cfg2 in (
+            ("nominal", "nominal", "nominal", "nominal"),
+            ("shift1_up", "shift1_up", "shift1_up", "nominal"),  # known to cfg1
+            ("shift3_up", "shift3_up", "shift3_up", "shift3_up"),  # known to cfg1 and cfg2
+            ("shift6_up", "shift6_up", "nominal", "shift6_up"),  # known to cfg2
         ):
             # upstream shifts (local shifts should always resolve to "nominal")
             input_params = {
                 **self.base_params,
                 "shift": input_shift,
             }
+
+            expected_shift_insts = {
+                self.config_inst1: self.config_inst1.get_shift(expected_shift_cfg1),
+                self.config_inst2: self.config_inst2.get_shift(expected_shift_cfg2),
+            }
+
             resolved_params_upstream = ShiftTaskAllUpstream.modify_param_values(params=input_params)
             self.assertEqual(resolved_params_upstream["local_shift"], "nominal")
+            self.assertEqual(
+                resolved_params_upstream["local_shift_insts"],
+                {cfg: cfg.get_shift("nominal") for cfg in self.analysis_inst.configs},
+            )
             self.assertEqual(resolved_params_upstream["shift"], expected_shift)
+            self.assertEqual(resolved_params_upstream["global_shift_insts"], expected_shift_insts)
 
             # local shifts (upstream shifts should be identical to local shifts)
             input_params = {
@@ -368,7 +379,9 @@ class AnalysisTaskTests(unittest.TestCase):
             }
             resolved_params_local = ShiftTaskAllLocal.modify_param_values(params=input_params)
             self.assertEqual(resolved_params_local["local_shift"], expected_shift)
+            self.assertEqual(resolved_params_local["local_shift_insts"], expected_shift_insts)
             self.assertEqual(resolved_params_local["shift"], expected_shift)
+            self.assertEqual(resolved_params_local["global_shift_insts"], expected_shift_insts)
 
         # resolving non-existing shifts should raise an error
         for task in (ShiftTaskAllUpstream, ShiftTaskAllLocal):
