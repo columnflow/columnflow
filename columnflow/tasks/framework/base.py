@@ -133,6 +133,37 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return params
 
     @classmethod
+    def switch_to_analysis_inst_aux(cls, params: dict):
+        """
+        This function switches the default values from the config insts to the analysis inst to help
+        with the transition to the MultiConfigTask, for which the defaults need to be set in the
+        analysis inst.
+        """
+        if "config_insts" not in params:
+            return params
+
+        # TaskArrayFunctions that should be set via the analysis inst aux values
+        analysis_inst_aux = (
+            "default_calibrator", "default_selector", "default_selector_steps",
+            "default_producer", "default_ml_model",
+            "default_weight_producer", "default_inference_model",
+        )
+
+        # set defaults to the analysis inst if they are set in the config inst
+        # (assuming defaults are the same in all configs)
+        config_inst = params.get("config_insts")[0]
+        for default in analysis_inst_aux:
+            if config_inst.has_aux(default) and not params["analysis_inst"].has_aux(default):
+                law.logger.get_logger(cls.task_family).warning(
+                    f"The {default} aux value is set in the config, but not in the analysis. "
+                    "It is recommended to set this value in the analysis instead. The value in the "
+                    f"analysis inst will be set to '{config_inst.x(default)}'.",
+                )
+                params["analysis_inst"].set_aux(default, config_inst.x(default))
+
+        return params
+
+    @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         # store a reference to the analysis inst
         if "analysis_inst" not in params and "analysis" in params:
@@ -615,6 +646,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # check if the parameter value is to be resolved
         resolve_default = param in (None, RESOLVE_DEFAULT, (RESOLVE_DEFAULT,))
 
+        return_single_value = True if param is None or isinstance(param, str) else False
+
+        def modify_type(value):
+            value = law.util.make_tuple(value)
+            if return_single_value:
+                return value[0]
+            return value
+
         # interpret missing parameters (e.g. NO_STR) as None
         # (special case: an empty string is usually an active decision, but counts as missing too)
         if law.is_no_param(param) or resolve_default or param == "":
@@ -634,10 +673,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 _param = param
                 # expand default when container is set
                 if _container and default_str:
-                    _param = _container.x(default_str, None)
+                    _param = _container.x(default_str, None if return_single_value else ())
                     # allow default to be a function, taking task parameters as input
                     if isinstance(_param, Callable):
                         _param = _param(cls, _container, task_params)
+                    _param = modify_type(_param)
+
                 params[_container] = _param
         else:
             params = {_container: param for _container in law.util.make_list(container)}
@@ -649,6 +690,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return params
         if multi_strategy == "first":
             return params[container[0]]
+        # NOTE: in there two strategies, we loose all order information
         if multi_strategy == "union":
             return list(set.union(*map(set, params.values())))
         if multi_strategy == "intersection":
@@ -1169,6 +1211,9 @@ class ConfigTask(AnalysisTask):
                 if "config_insts" not in params and "configs" in params:
                     params["config_insts"] = list(map(analysis_inst.get_config, params["configs"]))
 
+            # for backwards compatibility, we automatically switch the defaults from config to analysis inst
+            params = cls.switch_to_analysis_inst_aux(params)
+
         return params
 
     @classmethod
@@ -1407,7 +1452,6 @@ class ShiftTask(ConfigTask):
                     )
                 # at least one shift pair must be known
                 if unique_shifts == {None}:
-                    configs_repr = ", ".join(map(repr, config_insts))
                     raise ValueError(f"shift {params['shift']} unknown to configs {configs_repr()}")
                 # fill unknown shifts with the nominal one
                 if None in unique_shifts:
@@ -1450,6 +1494,7 @@ class ShiftTask(ConfigTask):
             if not cls.allow_empty_shift:
                 raise Exception(f"no shift found in params: {params}")
             return (law.NO_STR, law.NO_STR)
+
         if requested_shift not in config_inst.shifts:
             return None
 
@@ -1461,7 +1506,7 @@ class ShiftTask(ConfigTask):
         if (local_shift := params.get("local_shift")) in {None, law.NO_STR}:
             # determine the known shifts for this class
             shifts = TaskShifts()
-            cls.get_known_shifts(config_inst, params, shifts)
+            cls.get_known_shifts(params, shifts)
             # check cases
             if requested_shift in shifts.local:
                 local_shift = requested_shift
@@ -1476,7 +1521,6 @@ class ShiftTask(ConfigTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
@@ -1484,7 +1528,6 @@ class ShiftTask(ConfigTask):
         Adjusts the local and upstream fields of the *shifts* object to include shifts implemented
         by _this_ task, and dependent shifts that are implemented by upstream tasks.
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -1566,12 +1609,11 @@ class DatasetTask(ShiftTask):
     @classmethod
     def get_known_shifts(
         cls,
-        config_inst: od.Config,
         params: dict[str, Any],
         shifts: TaskShifts,
     ) -> None:
         # dataset can have shifts, that are considered as upstream shifts
-        super().get_known_shifts(config_inst, params, shifts)
+        super().get_known_shifts(params, shifts)
 
         if (dataset_inst := params.get("dataset_inst")):
             if dataset_inst.is_data:

@@ -22,6 +22,7 @@ from columnflow.util import dev_sandbox, try_int
 
 
 class _CreateYieldTable(
+    # ConfigTask,
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,
@@ -201,9 +202,9 @@ class CreateYieldTable(_CreateYieldTable):
                     leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
                     h_cat = h[{"category": [
-                        hist.loc(c.id)
+                        hist.loc(c.name)
                         for c in leaf_category_insts
-                        if c.id in h.axes["category"]
+                        if c.name in h.axes["category"]
                     ]}]
                     h_cat = h_cat[{"category": sum}]
 

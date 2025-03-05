@@ -285,6 +285,10 @@ def btag_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
     #      method-intrinsic shifts are produced
     #   3. when any other shift is requested, only create the central weight column
 
+    # NOTE: we currently setup the produced columns only during the post_init. This means
+    # that the `produces` of this Producer will be empty during task initialization, meaning
+    # that this Producer would be skipped if one would directly request it on command line
+
     # gather info
     self.btag_config = self.get_btag_config()
     shift_inst = task.global_shift_inst

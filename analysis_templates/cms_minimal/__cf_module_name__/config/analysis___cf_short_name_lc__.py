@@ -112,12 +112,12 @@ for dataset_name in dataset_names:
 verify_config_processes(cfg, warn=True)
 
 # default objects, such as calibrator, selector, producer, ml model, inference model, etc
-cfg.x.default_calibrator = "example"
-cfg.x.default_selector = "example"
-cfg.x.default_producer = "example"
-cfg.x.default_weight_producer = "example"
-cfg.x.default_ml_model = None
-cfg.x.default_inference_model = "example"
+ana.x.default_calibrator = "example"
+ana.x.default_selector = "example"
+ana.x.default_producer = "example"
+ana.x.default_weight_producer = "example"
+ana.x.default_ml_model = None
+ana.x.default_inference_model = "example"
 cfg.x.default_categories = ("incl",)
 cfg.x.default_variables = ("n_jet", "jet1_pt")
 
@@ -168,15 +168,15 @@ cfg.x.selector_step_groups = {
 
 # calibrator groups for conveniently looping over certain calibrators
 # (used during calibration)
-cfg.x.calibrator_groups = {}
+ana.x.calibrator_groups = {}
 
 # producer groups for conveniently looping over certain producers
 # (used during the ProduceColumns task)
-cfg.x.producer_groups = {}
+ana.x.producer_groups = {}
 
 # ml_model groups for conveniently looping over certain ml_models
 # (used during the machine learning tasks)
-cfg.x.ml_model_groups = {}
+ana.x.ml_model_groups = {}
 
 # custom method and sandbox for determining dataset lfns
 cfg.x.get_dataset_lfns = None
