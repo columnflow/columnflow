@@ -65,17 +65,15 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
 
     # lepton masks for recoil corrections
     # -> https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
-    lepton_vis_mask = (
-        # e, mu, taus, neutrinos
-        (((pdg_id == 11) | (pdg_id <= 13)| (pdg_id <= 15)) & (status == 1) & events.GenPart.hasFlags("fromHardProcess")) |
-        # tau decay products
-        events.GenPart.hasFlags("isDirectHardProcessTauDecayProduct")
-    )
     lepton_all_mask = (
         # e, mu, taus, neutrinos
         ((pdg_id >= 11) & (pdg_id <= 16) & (status == 1) & events.GenPart.hasFlags("fromHardProcess")) |
         # tau decay products
         events.GenPart.hasFlags("isDirectHardProcessTauDecayProduct")
+    )
+    lepton_vis_mask = lepton_all_mask & (
+        # no e neutrinos, mu neutrinos, or taus neutrinos
+        (pdg_id != 12) & (pdg_id != 14)| (pdg_id != 16)
     )
 
     # combine the masks
