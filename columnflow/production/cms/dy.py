@@ -36,7 +36,7 @@ class DrellYanConfig:
             not self.unc_correction
         ):
             raise ValueError(
-                "Incomplete dy_weight_config: missing era, order, correction or unc_correction."
+                "Incomplete dy_weight_config: missing era, order, correction or unc_correction.",
             )  # noqa
 
 
@@ -396,13 +396,13 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     # 3) Recompute the corrected MET from the corrected U components.
     met_pt_corr, met_phi_corr = GetMETfromU(
-        upara_corr, uperp_corr, full_pt, full_phi, vis_pt, vis_phi
+        upara_corr, uperp_corr, full_pt, full_phi, vis_pt, vis_phi,
     )
     events = set_ak_column(
-        events, "RecoilCorrMET.pt", met_pt_corr, value_type=np.float32
+        events, "RecoilCorrMET.pt", met_pt_corr, value_type=np.float32,
     )
     events = set_ak_column(
-        events, "RecoilCorrMET.phi", met_phi_corr, value_type=np.float32
+        events, "RecoilCorrMET.phi", met_phi_corr, value_type=np.float32,
     )
 
     # -------------------------------------------------------------------------
@@ -433,13 +433,13 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             syst,
         )
         met_pt_var, met_phi_var = GetMETfromH(
-            hpara_var, hperp_var, full_pt, full_phi, vis_pt, vis_phi
+            hpara_var, hperp_var, full_pt, full_phi, vis_pt, vis_phi,
         )
         events = set_ak_column(
-            events, f"RecoilCorrMET.pt_{syst}", met_pt_var, value_type=np.float32
+            events, f"RecoilCorrMET.pt_{syst}", met_pt_var, value_type=np.float32,
         )
         events = set_ak_column(
-            events, f"RecoilCorrMET.phi_{syst}", met_phi_var, value_type=np.float32
+            events, f"RecoilCorrMET.phi_{syst}", met_phi_var, value_type=np.float32,
         )
 
     return events
@@ -472,7 +472,7 @@ def recoil_corrections_requires(self: Producer, reqs: dict) -> None:
 
 @recoil_corrections.setup
 def recoil_corrections_setup(
-    self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict
+    self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict,
 ) -> None:
     """
     Setup the recoil corrections by loading the CorrectionSet via correctionlib.
@@ -488,7 +488,7 @@ def recoil_corrections_setup(
 
     # Load the correction set from the external file.
     correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_dy_recoil_file(bundle.files).load(formatter="gzip").decode("utf-8")
+        self.get_dy_recoil_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
 
     # check number of fetched correctors
