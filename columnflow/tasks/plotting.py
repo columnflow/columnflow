@@ -16,7 +16,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
-    CategoriesMixin, MultiConfigDatasetsProcessesShiftSourcesMixin, HistHookMixin, MultiConfigDatasetsProcessesMixin,
+    CategoriesMixin, DatasetsProcessesMixin, DatasetsProcessesShiftSourcesMixin, HistHookMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -36,7 +36,7 @@ class PlotVariablesBase(
     WeightProducerClassMixin,
     CategoriesMixin,
     ProcessPlotSettingMixin,
-    MultiConfigDatasetsProcessesMixin,
+    DatasetsProcessesMixin,
     VariablePlotSettingMixin,
     HistHookMixin,
     law.LocalWorkflow,
@@ -438,7 +438,7 @@ class PlotVariablesPerProcess2D(
 
 
 class PlotVariablesBaseMultiShifts(
-    MultiConfigDatasetsProcessesShiftSourcesMixin,
+    DatasetsProcessesShiftSourcesMixin,
     PlotVariablesBase,
 ):
     legend_title = luigi.Parameter(
