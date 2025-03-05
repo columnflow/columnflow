@@ -29,15 +29,23 @@ class DrellYanConfig:
     unc_correction: str
 
     def __post_init__(self) -> None:
-        if not self.era or not self.order or not self.correction or not self.unc_correction:
-            raise ValueError("Incomplete dy_weight_config: missing era, order, correction or unc_correction.")  # noqa
+        if (
+            not self.era
+            or not self.order
+            or not self.correction
+            or not self.unc_correction
+        ):
+            raise ValueError(
+                "Incomplete dy_weight_config: missing era, order, correction or unc_correction."
+            )  # noqa
+
 
 @producer(
     uses={"GenPart.*"},
     produces={
         "gen_dilepton_pt",
         "gen_dilepton_vis.{pt,phi}",
-        "gen_dilepton_all.{pt,phi}"
+        "gen_dilepton_all.{pt,phi}",
     },
 )
 def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
@@ -52,28 +60,33 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     # lepton masks for DY ptll reweighting corrections
     # -> https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
     ele_mu_mask = (
-        ((pdg_id == 11) | (pdg_id == 13)) &
-        (status == 1) &
-        events.GenPart.hasFlags("fromHardProcess")
+        ((pdg_id == 11) | (pdg_id == 13))
+        & (status == 1)
+        & events.GenPart.hasFlags("fromHardProcess")
     )
     # taus need to have status == 2,
     tau_mask = (
-        (pdg_id == 15) &
-        (status == 2) &
-        events.GenPart.hasFlags("fromHardProcess")
+        (pdg_id == 15) & (status == 2) & events.GenPart.hasFlags("fromHardProcess")
     )
 
     # lepton masks for recoil corrections
     # -> https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
     lepton_all_mask = (
         # e, mu, taus, neutrinos
-        ((pdg_id >= 11) & (pdg_id <= 16) & (status == 1) & events.GenPart.hasFlags("fromHardProcess")) |
+        (
+            (pdg_id >= 11)
+            & (pdg_id <= 16)
+            & (status == 1)
+            & events.GenPart.hasFlags("fromHardProcess")
+        )
+        |
         # tau decay products
         events.GenPart.hasFlags("isDirectHardProcessTauDecayProduct")
     )
     lepton_vis_mask = lepton_all_mask & (
         # no e neutrinos, mu neutrinos, or taus neutrinos
-        (pdg_id != 12) & (pdg_id != 14)| (pdg_id != 16)
+        (pdg_id != 12) & (pdg_id != 14)
+        | (pdg_id != 16)
     )
 
     # combine the masks
@@ -95,6 +108,7 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column(events, "gen_dilepton_all.phi", lepton_pair_momenta_all.phi)
 
     return events
+
 
 @producer(
     uses={"gen_dilepton_pt"},
@@ -189,6 +203,7 @@ def dy_weights_requires(self: Producer, reqs: dict) -> None:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
+
     reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
@@ -209,7 +224,10 @@ def dy_weights_setup(
 
     # import all correctors from the external file
     import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
+
+    correctionlib.highlevel.Correction.__call__ = (
+        correctionlib.highlevel.Correction.evaluate
+    )
     correction_set = correctionlib.CorrectionSet.from_string(
         self.get_dy_weight_file(bundle.files).load(formatter="gzip").decode("utf-8"),
     )
@@ -230,6 +248,7 @@ def dy_weights_setup(
             f"Expected {self.n_unc} uncertainties, got {dy_n_unc}",
         )
 
+
 #
 # Helper functions for kinematics.
 #
@@ -237,11 +256,13 @@ def GetXYfromPTPHI(pt, phi):
     """Convert (pt, phi) to (x, y)."""
     return pt * np.cos(phi), pt * np.sin(phi)
 
+
 def GetPTPHIfromXY(x, y):
     """Convert (x, y) to (pt, phi)."""
     pt = np.sqrt(x * x + y * y)
     phi = np.arctan2(y, x)
     return pt, phi
+
 
 def GetU(met_pt, met_phi, full_pt, full_phi, vis_pt, vis_phi):
     """
@@ -261,6 +282,7 @@ def GetU(met_pt, met_phi, full_pt, full_phi, vis_pt, vis_phi):
     Uperp = U_pt * np.sin(U_phi - full_phi)
     return Upara, Uperp
 
+
 def GetMETfromU(upara, uperp, full_pt, full_phi, vis_pt, vis_phi):
     """
     Reconstruct MET from the corrected U components.
@@ -276,23 +298,25 @@ def GetMETfromU(upara, uperp, full_pt, full_phi, vis_pt, vis_phi):
     met_pt, met_phi = GetPTPHIfromXY(met_x, met_y)
     return met_pt, met_phi
 
+
 def GetH(METpt, METphi, FullVPt, FullVPhi, VisVPt, VisVPhi):
-    METx,METy = GetXYfromPTPHI(METpt,METphi)
-    VisVx,VisVy = GetXYfromPTPHI(VisVPt,VisVPhi)
+    METx, METy = GetXYfromPTPHI(METpt, METphi)
+    VisVx, VisVy = GetXYfromPTPHI(VisVPt, VisVPhi)
     Hx = -METx - VisVx
     Hy = -METy - VisVy
-    Hpt,Hphi = GetPTPHIfromXY(Hx,Hy)
-    Hpara,Hperp = GetXYfromPTPHI(Hpt, Hphi-FullVPhi)
+    Hpt, Hphi = GetPTPHIfromXY(Hx, Hy)
+    Hpara, Hperp = GetXYfromPTPHI(Hpt, Hphi - FullVPhi)
     return Hpara, Hperp
 
+
 def GetMETfromH(Hpara, Hperp, FullVPt, FullVPhi, VisVPt, VisVPhi):
-    VisVx,VisVy = GetXYfromPTPHI(VisVPt,VisVPhi)
-    Hpt,HphiMinusFullVPhi = GetPTPHIfromXY(Hpara,Hperp)
+    VisVx, VisVy = GetXYfromPTPHI(VisVPt, VisVPhi)
+    Hpt, HphiMinusFullVPhi = GetPTPHIfromXY(Hpara, Hperp)
     Hphi = HphiMinusFullVPhi + FullVPhi
-    Hx,Hy = GetXYfromPTPHI(Hpt,Hphi)
+    Hx, Hy = GetXYfromPTPHI(Hpt, Hphi)
     METx = -Hx - VisVx
     METy = -Hy - VisVy
-    METpt,METphi = GetPTPHIfromXY(METx,METy)
+    METpt, METphi = GetPTPHIfromXY(METx, METy)
     return METpt, METphi
 
 
@@ -328,25 +352,24 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
          Recoil_correction_Uncertainty correction.
     """
     # Retrieve inputs as numpy arrays.
-    met_pt    = np.asarray(events.PuppiMET.pt)
-    met_phi   = np.asarray(events.PuppiMET.phi)
+    met_pt = np.asarray(events.PuppiMET.pt)
+    met_phi = np.asarray(events.PuppiMET.phi)
 
-    full_pt   = np.asarray(events.gen_dilepton_all.pt)
-    full_phi  = np.asarray(events.gen_dilepton_all.phi)
+    full_pt = np.asarray(events.gen_dilepton_all.pt)
+    full_phi = np.asarray(events.gen_dilepton_all.phi)
 
-    vis_pt    = np.asarray(events.gen_dilepton_vis.pt)
-    vis_phi   = np.asarray(events.gen_dilepton_vis.phi)
+    vis_pt = np.asarray(events.gen_dilepton_vis.pt)
+    vis_phi = np.asarray(events.gen_dilepton_vis.phi)
 
     # nJet is expected to be a per-event scalar; convert to float for the correction functions.
     # number of of jets with pT>30 GeV at |eta|<2.5, plus jets with pT>50 GeV outside of tracker region
-    jet_selection = (
-        ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) |
-        ((events.Jet.pt > 50) & (np.abs(events.Jet.eta) >= 2.5))
+    jet_selection = ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) | (
+        (events.Jet.pt > 50) & (np.abs(events.Jet.eta) >= 2.5)
     )
     selected_jets = events.Jet[jet_selection]
     njet = np.asarray(ak.num(selected_jets, axis=1), dtype=np.float32)
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Nominal recoil correction:
     # (see here: https://cms-higgs-leprare.docs.cern.ch/htt-common/V_recoil/#example-snippet)
     # 1) Compute Upara and Uperp from the original MET and boson information.
@@ -355,15 +378,35 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # 2) Apply the nominal recoil correction using the QuantileMapHist method.
     #    Correction function signature:
     #      (era: str, njet: float, ptll: float, var: "Upara"/"Uperp", value: real)
-    upara_corr = self.recoil_corrector.evaluate(self.dy_recoil_config.era, self.dy_recoil_config.order, njet, events.gen_dilepton_all.pt, "Upara", upara)
-    uperp_corr = self.recoil_corrector.evaluate(self.dy_recoil_config.era, self.dy_recoil_config.order, njet, events.gen_dilepton_all.pt, "Uperp", uperp)
+    upara_corr = self.recoil_corrector.evaluate(
+        self.dy_recoil_config.era,
+        self.dy_recoil_config.order,
+        njet,
+        events.gen_dilepton_all.pt,
+        "Upara",
+        upara,
+    )
+    uperp_corr = self.recoil_corrector.evaluate(
+        self.dy_recoil_config.era,
+        self.dy_recoil_config.order,
+        njet,
+        events.gen_dilepton_all.pt,
+        "Uperp",
+        uperp,
+    )
 
     # 3) Recompute the corrected MET from the corrected U components.
-    met_pt_corr, met_phi_corr = GetMETfromU(upara_corr, uperp_corr, full_pt, full_phi, vis_pt, vis_phi)
-    events = set_ak_column(events, "RecoilCorrMET.pt", met_pt_corr, value_type=np.float32)
-    events = set_ak_column(events, "RecoilCorrMET.phi", met_phi_corr, value_type=np.float32)
+    met_pt_corr, met_phi_corr = GetMETfromU(
+        upara_corr, uperp_corr, full_pt, full_phi, vis_pt, vis_phi
+    )
+    events = set_ak_column(
+        events, "RecoilCorrMET.pt", met_pt_corr, value_type=np.float32
+    )
+    events = set_ak_column(
+        events, "RecoilCorrMET.phi", met_phi_corr, value_type=np.float32
+    )
 
-    #-------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Recoil uncertainty variations:
     # First, derive H components from the nominal corrected MET.
     hpara, hperp = GetH(met_pt_corr, met_phi_corr, full_pt, full_phi, vis_pt, vis_phi)
@@ -372,13 +415,36 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     for syst in self.systematics:
         # The recoil uncertainty correction for H components expects:
         #   (era: str, njet: float, ptll: float, var: "Hpara"/"Hperp", value: real, syst: string)
-        hpara_var = self.recoil_unc_corrector.evaluate(self.dy_recoil_config.era, self.dy_recoil_config.order, njet, events.gen_dilepton_all.pt, "Hpara", hpara, syst)
-        hperp_var = self.recoil_unc_corrector.evaluate(self.dy_recoil_config.era, self.dy_recoil_config.order, njet, events.gen_dilepton_all.pt, "Hperp", hperp, syst)
-        met_pt_var, met_phi_var = GetMETfromH(hpara_var, hperp_var, full_pt, full_phi, vis_pt, vis_phi)
-        events = set_ak_column(events, f"RecoilCorrMET.pt_{syst}", met_pt_var, value_type=np.float32)
-        events = set_ak_column(events, f"RecoilCorrMET.phi_{syst}", met_phi_var, value_type=np.float32)
+        hpara_var = self.recoil_unc_corrector.evaluate(
+            self.dy_recoil_config.era,
+            self.dy_recoil_config.order,
+            njet,
+            events.gen_dilepton_all.pt,
+            "Hpara",
+            hpara,
+            syst,
+        )
+        hperp_var = self.recoil_unc_corrector.evaluate(
+            self.dy_recoil_config.era,
+            self.dy_recoil_config.order,
+            njet,
+            events.gen_dilepton_all.pt,
+            "Hperp",
+            hperp,
+            syst,
+        )
+        met_pt_var, met_phi_var = GetMETfromH(
+            hpara_var, hperp_var, full_pt, full_phi, vis_pt, vis_phi
+        )
+        events = set_ak_column(
+            events, f"RecoilCorrMET.pt_{syst}", met_pt_var, value_type=np.float32
+        )
+        events = set_ak_column(
+            events, f"RecoilCorrMET.phi_{syst}", met_phi_var, value_type=np.float32
+        )
 
     return events
+
 
 @recoil_corrections.init
 def recoil_corrections_init(self: Producer) -> None:
@@ -394,17 +460,21 @@ def recoil_corrections_init(self: Producer) -> None:
         self.produces.add(f"RecoilCorrMET.pt_{syst}")
         self.produces.add(f"RecoilCorrMET.phi_{syst}")
 
+
 @recoil_corrections.requires
 def recoil_corrections_requires(self: Producer, reqs: dict) -> None:
     # Ensure that external files are bundled.
     if "external_files" in reqs:
         return
     from columnflow.tasks.external import BundleExternalFiles
+
     reqs["external_files"] = BundleExternalFiles.req(self.task)
 
 
 @recoil_corrections.setup
-def recoil_corrections_setup(self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+def recoil_corrections_setup(
+    self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict
+) -> None:
     """
     Setup the recoil corrections by loading the CorrectionSet via correctionlib.
     The external recoil correction file should be provided as external_files.recoil.
@@ -412,7 +482,10 @@ def recoil_corrections_setup(self: Producer, reqs: dict, inputs: dict, reader_ta
     bundle = reqs["external_files"]
 
     import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
+
+    correctionlib.highlevel.Correction.__call__ = (
+        correctionlib.highlevel.Correction.evaluate
+    )
 
     # Load the correction set from the external file.
     correction_set = correctionlib.CorrectionSet.from_string(
@@ -426,4 +499,4 @@ def recoil_corrections_setup(self: Producer, reqs: dict, inputs: dict, reader_ta
     # Retrieve the corrections used for the nominal correction and for uncertainties.
     self.dy_recoil_config: DrellYanConfig = self.get_dy_recoil_config()
     self.recoil_corrector = correction_set[self.dy_recoil_config.correction]
-    self.recoil_unc_corrector  = correction_set[self.dy_recoil_config.unc_correction]
+    self.recoil_unc_corrector = correction_set[self.dy_recoil_config.unc_correction]
