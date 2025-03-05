@@ -81,6 +81,7 @@ def jet_selection(
         },
     )
 
+
 @jet_selection.init
 def jet_selection_init(self: Selector) -> None:
     # register shifts
@@ -94,6 +95,7 @@ def jet_selection_init(self: Selector) -> None:
 # exposed selectors
 # (those that can be invoked from the command line)
 #
+
 
 @selector(
     uses={
