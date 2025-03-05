@@ -2197,20 +2197,32 @@ class ShiftSourcesMixin(ConfigTask):
                 container=container,
                 object_cls=od.Shift,
                 groups_str="shift_groups",
-                multi_strategy="union",  # or "intersection"?
+                multi_strategy="all",
             )
 
-            # convert back to sources and validate
-            sources = []
+            # per config, convert back to sources and validate
+            sources = {}
             if shifts:
-                sources = cls.reduce_shifts(shifts)
+                for config_inst, _shifts in shifts.items():
+                    if not _shifts:
+                        sources[config_inst] = []
+                        continue
 
-                # when a validation task is set, is it to validate and reduce the requested shifts
-                if cls.shift_validation_task_cls:
-                    sources = [
-                        source for source in sources
-                        if cls.validate_shift_source(params, source)
-                    ]
+                    _sources = cls.reduce_shifts(_shifts)
+
+                    # when a validation task is set, is it to validate and reduce the requested shifts
+                    if cls.shift_validation_task_cls:
+                        if not cls.shift_validation_task_cls.has_single_config():
+                            raise ValueError("shift_validation_task_cls must have a single config")
+                        _sources = [
+                            source for source in _sources
+                            if cls.validate_shift_source(config_inst, source, params)
+                        ]
+
+                    sources[config_inst] = _sources
+
+            # union over shifts of all configs
+            sources = tuple(set.union(*sources.values()))
 
             # complain when no sources were found
             if not sources and not cls.allow_empty_shift_sources:
@@ -2222,12 +2234,12 @@ class ShiftSourcesMixin(ConfigTask):
         return params
 
     @classmethod
-    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
+    def validate_shift_source(cls, config_inst: od.Config, source: str, params: dict[str, Any]) -> bool:
         if not cls.shift_validation_task_cls:
             return True
 
         # run the task's parameter validation using the up shift
-        _params = params | {"shift": f"{source}_up"}
+        _params = params | {"config": config_inst.name, "config_inst": config_inst, "shift": f"{source}_up"}
         cls.shift_validation_task_cls.modify_param_values(_params)
         return _params["global_shift_inst"].source == source
 
@@ -2272,13 +2284,18 @@ class DatasetShiftSourcesMixin(ShiftSourcesMixin, DatasetTask):
 class DatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, DatasetsProcessesMixin):
 
     @classmethod
-    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
+    def validate_shift_source(cls, config_inst: od.Config, source: str, params: dict[str, Any]) -> bool:
         if not cls.shift_validation_task_cls:
             return True
 
         # run the task's parameter validation using the up shift and all datasets
         for dataset in params["datasets"]:
-            _params = params | {"shift": f"{source}_up", "dataset": dataset}
+            _params = params | {
+                "config": config_inst.name,
+                "config_inst": config_inst,
+                "shift": f"{source}_up",
+                "dataset": dataset,
+            }
             cls.shift_validation_task_cls.modify_param_values(_params)
             if _params["global_shift_inst"].source == source:
                 return True

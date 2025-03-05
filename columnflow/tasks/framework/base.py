@@ -1406,7 +1406,6 @@ class ShiftTask(ConfigTask):
                         f"found invalid combination of resolved shifts {unique_shifts} in configs {configs_repr()}",
                     )
                 # at least one shift pair must be known
-                unique_shifts = set(shifts.values())
                 if unique_shifts == {None}:
                     configs_repr = ", ".join(map(repr, config_insts))
                     raise ValueError(f"shift {params['shift']} unknown to configs {configs_repr()}")
