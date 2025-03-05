@@ -177,15 +177,10 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         return params
 
     @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
+    def get_known_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
-        :param config_inst: Config instance.
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
@@ -347,11 +342,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         return params
 
     @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
+    def get_known_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
@@ -553,11 +544,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         return params
 
     @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
+    def get_known_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
@@ -734,11 +721,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         return params
 
     @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
+    def get_known_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
@@ -903,11 +886,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         return params
 
     @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
+    def get_known_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
@@ -1462,11 +1441,7 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         return params
 
     @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
+    def get_known_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
@@ -1759,7 +1734,7 @@ class VariablesMixin(ConfigTask):
 
 
 class DatasetsProcessesMixin(ConfigTask):
-    single_config = True
+
     datasets = law.CSVParameter(
         default=(),
         description="comma-separated dataset names or patters to select; can also be the key of a mapping defined in "
@@ -1867,10 +1842,10 @@ class DatasetsProcessesMixin(ConfigTask):
                 # store in params
                 if processes != law.no_value:
                     params["processes"] = tuple(processes)
-                    params["process_insts"] = list(map(config_inst.get_process, processes))
+                    params["process_insts"] = {config_inst: list(map(config_inst.get_process, processes))}
                 if datasets != law.no_value:
                     params["datasets"] = tuple(datasets)
-                    params["dataset_insts"] = list(map(config_inst.get_dataset, datasets))
+                    params["dataset_insts"] = {config_inst: list(map(config_inst.get_dataset, datasets))}
         else:
             if (config_insts := params.get("config_insts")):
                 # "broadcast" single sequences to number of configs
@@ -1902,11 +1877,7 @@ class DatasetsProcessesMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
+    def get_known_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> None:
         """
         Updates the set of known *shifts* implemented by *this* and upstream tasks.
 
@@ -2049,11 +2020,7 @@ class MultiConfigDatasetsProcessesMixin(ConfigTask):
         return params
 
     @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
+    def get_known_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> None:
         # add shifts of all datasets to upstream ones
         for _dataset_insts in params["dataset_insts"]:
             for dataset_inst in _dataset_insts:
@@ -2098,6 +2065,7 @@ class MultiConfigDatasetsProcessesMixin(ConfigTask):
 
 
 class ShiftSourcesMixin(ConfigTask):
+
     shift_sources = law.CSVParameter(
         default=(),
         description="comma-separated shift source names (without direction) or patterns to select; can also be the key "
@@ -2123,29 +2091,28 @@ class ShiftSourcesMixin(ConfigTask):
                 multi_strategy="all",
             )
 
-            # per config, convert back to sources and validate
-            sources = {}
-            if shifts:
-                for config_inst, _shifts in shifts.items():
-                    if not _shifts:
-                        sources[config_inst] = []
-                        continue
+            # validate per config
+            validated_shifts = {}
+            for config_inst, _shifts in (shifts or {}).items():
+                if not _shifts:
+                    validated_shifts[config_inst] = []
+                    continue
 
-                    _sources = cls.reduce_shifts(_shifts)
+                # check the validation task
+                if cls.shift_validation_task_cls:
+                    if not cls.shift_validation_task_cls.has_single_config():
+                        raise ValueError(
+                            f"shift_validation_task_cls '{cls.shift_validation_task_cls}' must support a single config",
+                        )
+                    _shifts = [
+                        shift for shift in _shifts
+                        if cls._validate_upstream_shift(config_inst, shift, params)
+                    ]
 
-                    # when a validation task is set, is it to validate and reduce the requested shifts
-                    if cls.shift_validation_task_cls:
-                        if not cls.shift_validation_task_cls.has_single_config():
-                            raise ValueError("shift_validation_task_cls must have a single config")
-                        _sources = [
-                            source for source in _sources
-                            if cls.validate_shift_source(config_inst, source, params)
-                        ]
+                validated_shifts[config_inst] = _shifts
 
-                    sources[config_inst] = _sources
-
-            # union over shifts of all configs
-            sources = tuple(set.union(*sources.values()))
+            # union over all configs, then convert back to sources
+            sources = cls.reduce_shifts(sum(validated_shifts.values(), []))
 
             # complain when no sources were found
             if not sources and not cls.allow_empty_shift_sources:
@@ -2157,14 +2124,14 @@ class ShiftSourcesMixin(ConfigTask):
         return params
 
     @classmethod
-    def validate_shift_source(cls, config_inst: od.Config, source: str, params: dict[str, Any]) -> bool:
+    def _validate_upstream_shift(cls, config_inst: od.Config, shift_name: str, params: dict[str, Any]) -> bool:
         if not cls.shift_validation_task_cls:
             return True
 
         # run the task's parameter validation using the up shift
-        _params = params | {"config": config_inst.name, "config_inst": config_inst, "shift": f"{source}_up"}
+        _params = params | {"config": config_inst.name, "config_inst": config_inst, "shift": shift_name}
         cls.shift_validation_task_cls.modify_param_values(_params)
-        return _params["global_shift_inst"].source == source
+        return _params["global_shift_inst"].name == shift_name
 
     @classmethod
     def expand_shift_sources(cls, sources: Sequence[str] | set[str]) -> list[str]:
@@ -2207,20 +2174,17 @@ class DatasetShiftSourcesMixin(ShiftSourcesMixin, DatasetTask):
 class DatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, DatasetsProcessesMixin):
 
     @classmethod
-    def validate_shift_source(cls, config_inst: od.Config, source: str, params: dict[str, Any]) -> bool:
-        if not cls.shift_validation_task_cls:
-            return True
-
-        # run the task's parameter validation using the up shift and all datasets
+    def _validate_upstream_shift(cls, config_inst: od.Config, shift_name: str, params: dict[str, Any]) -> bool:
+        # run the task's parameter validation for all datasets
         for dataset in params["datasets"]:
             _params = params | {
                 "config": config_inst.name,
                 "config_inst": config_inst,
-                "shift": f"{source}_up",
+                "shift": shift_name,
                 "dataset": dataset,
             }
             cls.shift_validation_task_cls.modify_param_values(_params)
-            if _params["global_shift_inst"].source == source:
+            if _params["global_shift_inst"].name == shift_name:
                 return True
 
         return False
