@@ -8,7 +8,7 @@ from collections import defaultdict
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.selection.stats import increment_stats
-from columnflow.selection.util import sorted_indices_from_mask
+from columnflow.columnar_util import sorted_indices_from_mask
 from columnflow.production.processes import process_ids
 from columnflow.production.cms.mc_weight import mc_weight
 from columnflow.util import maybe_import
@@ -53,7 +53,7 @@ def muon_selection(
 
 
 @selector(
-    uses={"Muon.{pt,eta,phi,mass}"},
+    uses={"Jet.{pt,eta,phi,mass}"},
 )
 def jet_selection(
     self: Selector,
