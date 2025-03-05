@@ -30,10 +30,10 @@ class DrellYanConfig:
 
     def __post_init__(self) -> None:
         if (
-            not self.era
-            or not self.order
-            or not self.correction
-            or not self.unc_correction
+            not self.era or
+            not self.order or
+            not self.correction or
+            not self.unc_correction
         ):
             raise ValueError(
                 "Incomplete dy_weight_config: missing era, order, correction or unc_correction."
@@ -50,7 +50,8 @@ class DrellYanConfig:
 )
 def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Reconstruct the di-lepton pair from generator level info. This considers only visible final-state particles. In addition it provides the four-momenta of all leptons (including neutrinos) from the hard process.
+    Reconstruct the di-lepton pair from generator level info. This considers only visible final-state particles.
+    In addition it provides the four-momenta of all leptons (including neutrinos) from the hard process.
     """
 
     # get the absolute pdg id (to account for anti-particles) and status of the particles
@@ -60,9 +61,9 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     # lepton masks for DY ptll reweighting corrections
     # -> https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
     ele_mu_mask = (
-        ((pdg_id == 11) | (pdg_id == 13))
-        & (status == 1)
-        & events.GenPart.hasFlags("fromHardProcess")
+        ((pdg_id == 11) | (pdg_id == 13)) &
+        (status == 1) &
+        events.GenPart.hasFlags("fromHardProcess")
     )
     # taus need to have status == 2,
     tau_mask = (
@@ -75,18 +76,16 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
         # e, mu, taus, neutrinos
         (
             (pdg_id >= 11)
-            & (pdg_id <= 16)
-            & (status == 1)
-            & events.GenPart.hasFlags("fromHardProcess")
-        )
-        |
+            (pdg_id <= 16) &
+            (status == 1) &
+            events.GenPart.hasFlags("fromHardProcess")
+        ) |
         # tau decay products
         events.GenPart.hasFlags("isDirectHardProcessTauDecayProduct")
     )
     lepton_vis_mask = lepton_all_mask & (
         # no e neutrinos, mu neutrinos, or taus neutrinos
-        (pdg_id != 12) & (pdg_id != 14)
-        | (pdg_id != 16)
+        (pdg_id != 12) & (pdg_id != 14) | (pdg_id != 16)
     )
 
     # combine the masks
