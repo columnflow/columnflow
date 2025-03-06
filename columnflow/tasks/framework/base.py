@@ -70,6 +70,8 @@ class TaskShifts:
     """
     Container for *local* and *upstream* shifts at a point in the task graph.
     """
+    # NOTE: maybe these should be a dict of sets (one set per config) to allow for different shifts
+    # per config
 
     local: set[str] = field(default_factory=set)
     upstream: set[str] = field(default_factory=set)
@@ -1388,7 +1390,6 @@ class ConfigTask(AnalysisTask):
 
 
 class ShiftTask(ConfigTask):
-
     shift = luigi.Parameter(
         default="nominal",
         description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
@@ -1412,111 +1413,68 @@ class ShiftTask(ConfigTask):
 
     @classmethod
     def resolve_shifts(cls, params: dict[str, Any]) -> dict:
-        if cls.has_single_config():
-            if (config_inst := params.get("config_inst")):
-                # evaluate shifts
-                shifts = cls._resolve_shifts(config_inst, params)
-                if shifts is None:
-                    raise ValueError(f"shift {params['shift']} unknown to config {config_inst}")
+        # get configs
+        config_insts = params.get("config_insts")
 
-                # store parameters
-                params["shift"], params["local_shift"] = shifts
-
-                # store references to shift instances
-                if (
-                    params["shift"] != law.NO_STR and
-                    params["local_shift"] != law.NO_STR and
-                    (not params.get("global_shift_inst") or not params.get("local_shift_inst"))
-                ):
-                    params["global_shift_inst"] = config_inst.get_shift(params["shift"])
-                    params["local_shift_inst"] = config_inst.get_shift(params["local_shift"])
-                    # also store as dict for consistency with multi-config implementation
-                    params["global_shift_insts"] = {config_inst: params["global_shift_inst"]}
-                    params["local_shift_insts"] = {config_inst: params["local_shift_inst"]}
-
-        else:
-            if (config_insts := params.get("config_insts")):
-                configs_repr = lambda: ", ".join(map(repr, config_insts))
-                empty_pair = (law.NO_STR, law.NO_STR)
-                nominal_pair = ("nominal", "nominal")
-                # evaluate shifts per config
-                shifts = {
-                    config_inst: cls._resolve_shifts(config_inst, params)
-                    for config_inst in config_insts
-                }
-                unique_shifts = set(shifts.values())
-                # when one shift pair is empty, all must be empty
-                if len(unique_shifts) > 1 and empty_pair in unique_shifts:
-                    raise ValueError(
-                        f"found invalid combination of resolved shifts {unique_shifts} in configs {configs_repr()}",
-                    )
-                # at least one shift pair must be known
-                if unique_shifts == {None}:
-                    raise ValueError(f"shift {params['shift']} unknown to configs {configs_repr()}")
-                # fill unknown shifts with the nominal one
-                if None in unique_shifts:
-                    shifts = {
-                        config_inst: _shifts or nominal_pair
-                        for config_inst, _shifts in shifts.items()
-                    }
-                    unique_shifts = set(shifts.values())
-
-                # determine the overall shift pair for this multi-config task and store parameters
-                non_nominal_shifts = unique_shifts - {nominal_pair}
-                if len(non_nominal_shifts) > 1:
-                    raise ValueError(
-                        f"found multiple different shift pairs {non_nominal_shifts} in configs {configs_repr()}",
-                    )
-                params["shift"], params["local_shift"] = (
-                    non_nominal_shifts.pop()
-                    if non_nominal_shifts
-                    else nominal_pair
-                )
-
-                # store references to shift instances
-                if (
-                    params["shift"] != law.NO_STR and
-                    params["local_shift"] != law.NO_STR and
-                    (not params.get("global_shift_insts") or not params.get("local_shift_insts"))
-                ):
-                    params["global_shift_insts"] = {}
-                    params["local_shift_insts"] = {}
-                    for config_inst, (gs, ls) in shifts.items():
-                        params["global_shift_insts"][config_inst] = config_inst.get_shift(gs)
-                        params["local_shift_insts"][config_inst] = config_inst.get_shift(ls)
-
-        return params
-
-    @classmethod
-    def _resolve_shifts(cls, config_inst: od.Config, params: dict) -> tuple[str, str] | None:
         # require that the shift is set and known
         if (requested_shift := params.get("shift")) in (None, law.NO_STR):
             if not cls.allow_empty_shift:
                 raise Exception(f"no shift found in params: {params}")
-            return (law.NO_STR, law.NO_STR)
+            global_shift = local_shift = law.NO_STR
+        else:
+            # check if the shift is known to one of the configs
+            shift_defined_in_config = False
+            for config_inst in config_insts:
+                if requested_shift not in config_inst.shifts:
+                    logger.warning(f"shift {requested_shift} unknown to config {config_inst}")
+                else:
+                    shift_defined_in_config = True
+            if not shift_defined_in_config:
+                raise Exception(f"shift {requested_shift} unknown to all configs")
 
-        if requested_shift not in config_inst.shifts:
-            return None
+            # actual shift resolution: compare the requested shift to known ones
+            # local_shift -> the requested shift if implemented by the task itself, else nominal
+            # shift       -> the requested shift if implemented by this task
+            #                or an upsteam task (== global shift), else nominal
+            global_shift = requested_shift
+            if (local_shift := params.get("local_shift")) in {None, law.NO_STR}:
+                # determine the known shifts for this class
+                shifts = TaskShifts()
+                cls.get_known_shifts(params, shifts)
+                # check cases
+                if requested_shift in shifts.local:
+                    local_shift = requested_shift
+                elif requested_shift in shifts.upstream:
+                    local_shift = "nominal"
+                else:
+                    global_shift = "nominal"
+                    local_shift = "nominal"
 
-        # actual shift resolution: compare the requested shift to known ones
-        # local_shift -> the requested shift if implemented by the task itself, else nominal
-        # shift       -> the requested shift if implemented by this task
-        #                or an upsteam task (== global shift), else nominal
-        global_shift = requested_shift
-        if (local_shift := params.get("local_shift")) in {None, law.NO_STR}:
-            # determine the known shifts for this class
-            shifts = TaskShifts()
-            cls.get_known_shifts(params, shifts)
-            # check cases
-            if requested_shift in shifts.local:
-                local_shift = requested_shift
-            elif requested_shift in shifts.upstream:
-                local_shift = "nominal"
-            else:
-                global_shift = "nominal"
-                local_shift = "nominal"
+        # store parameters
+        params["shift"] = global_shift
+        params["local_shift"] = local_shift
 
-        return global_shift, local_shift
+        # store references to shift instances
+        if (
+            params["shift"] != law.NO_STR and
+            params["local_shift"] != law.NO_STR and
+            (not params.get("global_shift_insts") or not params.get("local_shift_insts"))
+        ):
+            params["global_shift_insts"] = {}
+            params["local_shift_insts"] = {}
+
+            get_shift_or_nominal = lambda config, shift: config.get_shift(shift, default=config.get_shift("nominal"))
+
+            for config_inst in config_insts:
+                params["global_shift_insts"][config_inst] = get_shift_or_nominal(config_inst, params["shift"])
+                params["local_shift_insts"][config_inst] = get_shift_or_nominal(config_inst, params["local_shift"])
+
+            if cls.has_single_config():
+                config_inst = params["config_inst"]
+                params["global_shift_inst"] = get_shift_or_nominal(config_inst, params["shift"])
+                params["local_shift_inst"] = get_shift_or_nominal(config_inst, params["local_shift"])
+
+        return params
 
     @classmethod
     def get_known_shifts(
