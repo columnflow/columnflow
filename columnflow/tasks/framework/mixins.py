@@ -2201,7 +2201,6 @@ class DatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, DatasetsProcessesMix
 
         # run the task's parameter validation using the up shift and all datasets
         for dataset in params["datasets"]:
-            print("!!!!!!!!!!!!!!!", dataset)
             _params = params | {"shift": f"{source}_up", "dataset": dataset}
             cls.shift_validation_task_cls.modify_param_values(_params)
             if _params["global_shift_inst"].source == source:
