@@ -1460,15 +1460,6 @@ class ShiftTask(ConfigTask):
                     params["local_shift_insts"] = {config_inst: params["local_shift_inst"]}
 
         elif (config_insts := params.get("config_insts")):
-            # a shift validatio task supporting a single config must be set
-            if cls.shift_validation_task_cls is None:
-                raise AttributeError(
-                    f"shift resolution of multi-config task '{cls}' requires 'shift_validation_task_cls' to be set",
-                )
-            if not cls.shift_validation_task_cls.has_single_config():
-                raise ValueError(
-                    f"shift_validation_task_cls '{cls.shift_validation_task_cls}' must have a single config",
-                )
             configs_repr = lambda: ", ".join(map(repr, config_insts))
             missing_pair = (None, None)
             empty_pair = (law.NO_STR, law.NO_STR)
