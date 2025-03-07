@@ -1809,8 +1809,8 @@ class DatasetsProcessesMixin(ConfigTask):
             cls.processes_multi = None
 
     @classmethod
-    def resolve_param_values(cls, params):
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params):
+        params = super().resolve_pre_taf_init_params(params)
 
         # helper to resolve processes and datasets for one config
         def resolve(config_inst: od.Config, processes: Any, datasets: Any) -> tuple[list[str], list[str]]:
@@ -1896,6 +1896,34 @@ class DatasetsProcessesMixin(ConfigTask):
                         config_inst: list(map(config_inst.get_dataset, datasets))
                         for config_inst, datasets in zip(config_insts, multi_datasets)
                     }
+
+        return params
+
+    @classmethod
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
+        if not cls.upstream_task_cls:
+            raise ValueError(f"upstream_task_cls must be set for multi-config task {cls.task_family}")
+
+        if shifts is None:
+            shifts = TaskShifts()
+        # we loop over all configs/datasets, but return initial params
+        for i, config_inst in enumerate(params["config_insts"]):
+            if cls.has_single_config():
+                datasets = params["datasets"]
+            else:
+                datasets = params["datasets"][i]
+
+            for dataset in datasets:
+                # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
+                _params = params.copy()
+                _params["config_inst"] = config_inst
+                _params["config"] = config_inst.name
+                _params["dataset"] = dataset
+                logger.warning(f"building taf insts for {config_inst.name}, {dataset}")
+                cls.upstream_task_cls.build_taf_insts(_params, shifts)
+                cls.upstream_task_cls.get_known_shifts(_params, shifts)
+
+        params["known_shifts"] = shifts
 
         return params
 
@@ -2129,7 +2157,6 @@ class ShiftSourcesMixin(ConfigTask):
     )
 
     allow_empty_shift_sources = False
-    shift_validation_task_cls = None
 
     @classmethod
     def resolve_post_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -2161,13 +2188,6 @@ class ShiftSourcesMixin(ConfigTask):
                     )
                 ]
 
-                # # when a validation task is set, is it to validate and reduce the requested shifts
-                # if cls.shift_validation_task_cls:
-                #     sources = [
-                #         source for source in sources
-                #         if cls.validate_shift_source(params, source)
-                #     ]
-
             # complain when no sources were found
             if not sources and not cls.allow_empty_shift_sources:
                 raise ValueError(f"no shifts found matching {params['shift_sources']}")
@@ -2176,16 +2196,6 @@ class ShiftSourcesMixin(ConfigTask):
             params["shift_sources"] = tuple(sources)
 
         return params
-
-    @classmethod
-    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
-        if not cls.shift_validation_task_cls:
-            return True
-
-        # run the task's parameter validation using the up shift
-        _params = params | {"shift": f"{source}_up"}
-        cls.shift_validation_task_cls.modify_param_values(_params)
-        return _params["global_shift_inst"].source == source
 
     @classmethod
     def expand_shift_sources(cls, sources: Sequence[str] | set[str]) -> list[str]:
@@ -2226,39 +2236,13 @@ class DatasetShiftSourcesMixin(ShiftSourcesMixin, DatasetTask):
 
 
 class DatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, DatasetsProcessesMixin):
-
-    @classmethod
-    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
-        if not cls.shift_validation_task_cls:
-            return True
-
-        # run the task's parameter validation using the up shift and all datasets
-        for dataset in params["datasets"]:
-            _params = params | {"shift": f"{source}_up", "dataset": dataset}
-            cls.shift_validation_task_cls.modify_param_values(_params)
-            if _params["global_shift_inst"].source == source:
-                return True
-
-        return False
+    # not needed anymore
+    pass
 
 
 class MultiConfigDatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, MultiConfigDatasetsProcessesMixin):
-
-    @classmethod
-    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
-        if not cls.shift_validation_task_cls:
-            return True
-
-        # run the task's parameter validation using the up shift and all configs and datasets
-        for i, config in enumerate(params["configs"]):
-            datasets = params["datasets"][i]
-            for dataset in datasets:
-                _params = params | {"config": config, "shift": f"{source}_up", "dataset": dataset}
-                cls.shift_validation_task_cls.modify_param_values(_params)
-                if _params["global_shift_inst"].source == source:
-                    return True
-
-        return False
+    # not needed anymore
+    pass
 
 
 class ChunkedIOMixin(ConfigTask):

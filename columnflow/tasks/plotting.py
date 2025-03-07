@@ -17,6 +17,7 @@ from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
     CategoriesMixin, MultiConfigDatasetsProcessesShiftSourcesMixin, HistHookMixin, MultiConfigDatasetsProcessesMixin,
+    # MLModelsMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -46,12 +47,6 @@ class PlotVariablesBase(
     single_config = False
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
-
-    # upstream requirements
-    reqs = Requirements(
-        RemoteWorkflow.reqs,
-        MergeHistograms=MergeHistograms,
-    )
 
     exclude_index = True
 
@@ -299,6 +294,7 @@ class PlotVariablesBaseSingleShift(
     ShiftTask,
     PlotVariablesBase,
 ):
+    # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
     upstream_task_cls = MergeHistograms
     exclude_index = True
 
@@ -444,8 +440,6 @@ class PlotVariablesBaseMultiShifts(
     MultiConfigDatasetsProcessesShiftSourcesMixin,
     PlotVariablesBase,
 ):
-    # NOTE: use MergeShiftedHistograms? it is no ProducersMixin, but otherwise should not matter
-    upstream_task_cls = MergeHistograms
     legend_title = luigi.Parameter(
         default=law.NO_STR,
         significant=False,
@@ -453,8 +447,8 @@ class PlotVariablesBaseMultiShifts(
         "the plot, the process_inst label is used; empty default",
     )
 
-    # use the MergeHistograms task to validate shift sources against the requested dataset
-    shift_validation_task_cls = MergeHistograms
+    # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
+    upstream_task_cls = MergeHistograms
 
     exclude_index = True
 

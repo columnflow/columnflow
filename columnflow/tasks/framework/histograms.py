@@ -140,6 +140,9 @@ class HistogramsUserSingleShiftBase(
     ShiftTask,
     HistogramsUserBase,
 ):
+    # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
+    upstream_task_cls = MergeHistograms
+
     # upstream requirements
     reqs = Requirements(
         MergeHistograms=MergeHistograms,
@@ -166,8 +169,8 @@ class HistogramsUserMultiShiftBase(
     DatasetsProcessesShiftSourcesMixin,
     HistogramsUserBase,
 ):
-    # use the MergeHistograms task to validate shift sources against the requested dataset
-    shift_validation_task_cls = MergeHistograms
+    # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
+    upstream_task_cls = MergeHistograms
 
     # upstream requirements
     reqs = Requirements(
