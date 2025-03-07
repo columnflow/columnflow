@@ -241,6 +241,7 @@ class PlotVariablesBase(
             # axis selections and reductions
             _hists = OrderedDict()
             for process_inst in hists.keys():
+                expected_shifts = set(plot_shifts) & process_shift_map[process_inst.name]
                 h = hists[process_inst]
                 # selections
                 h = h[{
@@ -251,7 +252,7 @@ class PlotVariablesBase(
                     ],
                     "shift": [
                         hist.loc(s_name)
-                        for s_name in process_shift_map[process_inst.name]
+                        for s_name in expected_shifts
                         if s_name in h.axes["shift"]
                     ],
                 }]
@@ -515,6 +516,11 @@ class PlotVariablesBaseMultiShifts(
         return parts
 
     def get_plot_shifts(self):
+        # return (
+        #     ["nominal"] +
+        #     [f"{shift_source}_up" for shift_source in self.shift_sources] +
+        #     [f"{shift_source}_down" for shift_source in self.shift_sources]
+        # )
         return [
             "nominal",
             f"{self.branch_data.shift_source}_up",
