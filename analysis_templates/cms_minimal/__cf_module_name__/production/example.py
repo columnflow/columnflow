@@ -4,6 +4,7 @@
 Column production methods related to higher-level features.
 """
 
+from functools import partial
 
 from columnflow.production import Producer, producer
 from columnflow.production.categories import category_ids
@@ -14,24 +15,43 @@ from columnflow.production.cms.muon import muon_weights
 from columnflow.selection.util import create_collections_from_masks
 from columnflow.util import maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT, Route, set_ak_column
+from columnflow.production.util import attach_coffea_behavior
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
+# helper
+set_ak_f32 = partial(set_ak_column, value_type=np.float32)
+
+
 @producer(
     uses={
         # nano columns
-        "Jet.pt",
+        attach_coffea_behavior, "Jet.{pt,eta,phi,mass}",
     },
     produces={
         # new columns
-        "ht", "n_jet",
+        attach_coffea_behavior, "ht", "n_jet", "dijet.{pt,mass,dr}",
     },
 )
-def features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def jet_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+
+    # event observables
     events = set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1))
     events = set_ak_column(events, "n_jet", ak.num(events.Jet.pt, axis=1), value_type=np.int32)
+
+    # attach coffea behaviour
+    events = self[attach_coffea_behavior](events, collections={}, **kwargs)
+    # object padding (Note that after padding, ak.num(events.Jet.pt, axis=1) would always be >= 2)
+    events = set_ak_column(events, "Jet", ak.pad_none(events.Jet, 2))
+
+    # dijet features
+    dijet = ak.with_name(events.Jet[:, 0] + events.Jet[:, 1], "Jet")
+    dijet = set_ak_f32(dijet, "dr", events.Jet[:, 0].delta_r(events.Jet[:, 1]))
+    dijet_columns = ("pt", "mass", "dr")
+    for col in dijet_columns:
+        events = set_ak_f32(events, f"dijet.{col}", ak.fill_none(getattr(dijet, col), EMPTY_FLOAT))
 
     return events
 
@@ -75,15 +95,15 @@ def cutflow_features(
 
 @producer(
     uses={
-        features, category_ids, normalization_weights, muon_weights, deterministic_seeds,
+        jet_features, category_ids, normalization_weights, muon_weights, deterministic_seeds,
     },
     produces={
-        features, category_ids, normalization_weights, muon_weights, deterministic_seeds,
+        jet_features, category_ids, normalization_weights, muon_weights, deterministic_seeds,
     },
 )
 def example(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
-    # features
-    events = self[features](events, **kwargs)
+    # jet_features
+    events = self[jet_features](events, **kwargs)
 
     # category ids
     events = self[category_ids](events, **kwargs)
