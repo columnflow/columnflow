@@ -1216,7 +1216,86 @@ class ConfigTask(AnalysisTask):
             # for backwards compatibility, we automatically switch the defaults from config to analysis inst
             params = cls.switch_to_analysis_inst_aux(params)
 
+        params = cls.resolve_pre_taf_init_params(params)
+        params = cls.build_taf_insts(params)
+        params = cls.resolve_post_taf_init_params(params)
+
         return params
+
+    @classmethod
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None) -> dict[str, Any]:
+        """
+        Build the array function instances.
+        For single-config/dataset tasks, build_taf_insts is implemented by mixin classes such as the ProducersMixin.
+        For multi-config tasks, build_taf_insts from the upstream task is called for each config instance.
+        If the build_taf_insts function needs to be called for other combinations of parameters (e.g. per dataset),
+        it can be overwritten by the task class.
+
+        :param params: Dictionary of task parameters.
+        :param shifts: Collection of local and global shifts.
+        :return: Updated dictionary of task parameters.
+        """
+        if shifts is None:
+            shifts = TaskShifts()
+        if cls.has_single_config():
+            if cls.upstream_task_cls is not None:
+                _params = cls.upstream_task_cls.build_taf_insts(params, shifts)
+                cls.upstream_task_cls.get_known_shifts(params, shifts)
+        else:
+            if cls.upstream_task_cls is None:
+                raise ValueError(f"upstream_task_cls must be set for multi-config task {cls.task_family}")
+
+            for config_inst in params["config_insts"]:
+                _params = params.copy()
+                _params["config_inst"] = config_inst
+                _params["config"] = config_inst.name
+                _params = cls.upstream_task_cls.build_taf_insts(_params, shifts)
+                cls.upstream_task_cls.get_known_shifts(_params, shifts)
+
+            params["known_shifts"] = shifts
+
+        if not cls.upstream_task_cls:
+            cls.get_known_shifts(params, shifts)
+            params["known_shifts"] = shifts
+
+        return params
+
+    @classmethod
+    def resolve_pre_taf_init_params(cls, params):
+        """
+        Resolve parameters before the array function instances have been initialized.
+
+        :param params: Dictionary of task parameters.
+        :return: Updated dictionary of task parameters.
+        """
+        return params
+
+    @classmethod
+    def resolve_post_taf_init_params(cls, params):
+        """
+        Resolve parameters after the array function instances have been initialized.
+
+        :param params: Dictionary of task parameters.
+        :return: Updated dictionary of task parameters.
+        """
+        return params
+
+    @classmethod
+    def get_known_shifts(
+        cls,
+        params: dict[str, Any],
+        shifts: TaskShifts,
+    ) -> None:
+        """
+        Adjusts the local and upstream fields of the *shifts* object to include shifts implemented
+        by _this_ task, and dependent shifts that are implemented by upstream tasks.
+
+        :param params: Dictionary of task parameters.
+        :param shifts: TaskShifts object to adjust.
+        """
+        return params
+
+    upstream_task_cls = None
 
     @classmethod
     def _multi_sequence_repr(
@@ -1430,7 +1509,7 @@ class ShiftTask(ConfigTask):
                 else:
                     shift_defined_in_config = True
             if not shift_defined_in_config:
-                raise Exception(f"shift {requested_shift} unknown to all configs")
+                raise ValueError(f"shift {requested_shift} unknown to all configs")
 
             # actual shift resolution: compare the requested shift to known ones
             # local_shift -> the requested shift if implemented by the task itself, else nominal
@@ -1439,8 +1518,11 @@ class ShiftTask(ConfigTask):
             global_shift = requested_shift
             if (local_shift := params.get("local_shift")) in {None, law.NO_STR}:
                 # determine the known shifts for this class
-                shifts = TaskShifts()
-                cls.get_known_shifts(params, shifts)
+                if "known_shifts" in params:
+                    shifts = params["known_shifts"]
+                else:
+                    shifts = TaskShifts()
+                    cls.get_known_shifts(params, shifts)
                 # check cases
                 if requested_shift in shifts.local:
                     local_shift = requested_shift
@@ -1475,21 +1557,6 @@ class ShiftTask(ConfigTask):
                 params["local_shift_inst"] = get_shift_or_nominal(config_inst, params["local_shift"])
 
         return params
-
-    @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
-        """
-        Adjusts the local and upstream fields of the *shifts* object to include shifts implemented
-        by _this_ task, and dependent shifts that are implemented by upstream tasks.
-
-        :param params: Dictionary of task parameters.
-        :param shifts: TaskShifts object to adjust.
-        """
-        return None
 
     @classmethod
     def get_config_lookup_keys(

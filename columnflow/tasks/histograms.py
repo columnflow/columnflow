@@ -481,6 +481,7 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # use the MergeHistograms task to validate shift sources against the requested dataset
+    upstream_task_cls = MergeHistograms
     shift_validation_task_cls = MergeHistograms
 
     # upstream requirements

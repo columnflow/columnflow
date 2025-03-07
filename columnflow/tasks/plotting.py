@@ -42,7 +42,8 @@ class PlotVariablesBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    # single_config = True set via MultiConfigDatasetsProcessesMixin
+    # single_config = False set via MultiConfigDatasetsProcessesMixin
+    single_config = False
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -297,7 +298,7 @@ class PlotVariablesBaseSingleShift(
     ShiftTask,
     PlotVariablesBase,
 ):
-
+    upstream_task_cls = MergeHistograms
     exclude_index = True
 
     # upstream requirements
@@ -328,6 +329,7 @@ class PlotVariablesBaseSingleShift(
                     req[config_inst.name][d] = self.reqs.MergeHistograms.req(
                         self,
                         config=config_inst.name,
+                        # shift=self.global_shift_insts[config_inst.name],
                         dataset=d,
                         branch=-1,
                         _exclude={"branches"},
@@ -441,6 +443,8 @@ class PlotVariablesBaseMultiShifts(
     MultiConfigDatasetsProcessesShiftSourcesMixin,
     PlotVariablesBase,
 ):
+    # NOTE: use MergeShiftedHistograms? it is no ProducersMixin, but otherwise should not matter
+    upstream_task_cls = MergeHistograms
     legend_title = luigi.Parameter(
         default=law.NO_STR,
         significant=False,

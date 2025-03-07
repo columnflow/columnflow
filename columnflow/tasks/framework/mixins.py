@@ -67,8 +67,8 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default class if necessary
         if (analysis_inst := params.get("analysis_inst")):
@@ -167,12 +167,12 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         return calibrator_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
         # add the calibrator instance
         if not params.get("calibrator_inst"):
             params["calibrator_inst"] = cls.build_calibrator_inst(params["calibrator"], params)
+
+        params = super().build_taf_insts(params, shifts)
 
         return params
 
@@ -242,11 +242,11 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(
+    def resolve_pre_taf_init_params(
         cls,
         params: law.util.InsertableDict[str, Any],
     ) -> law.util.InsertableDict[str, Any]:
-        params = super().resolve_param_values(params)
+        params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default classes if necessary
         if (analysis_inst := params.get("analysis_inst")):
@@ -337,12 +337,12 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         return insts
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
         # add the calibrator instances
         if not params.get("calibrator_insts"):
             params["calibrator_insts"] = cls.build_calibrator_insts(params["calibrators"], params)
+
+        params = super().build_taf_insts(params, shifts)
 
         return params
 
@@ -423,8 +423,8 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
     exclude_params_repr_empty = {"selector_steps"}
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_pre_taf_init_params(params)
 
         if (analysis_inst := params.get("analysis_inst")):
             # resolve the default class if necessary
@@ -543,12 +543,12 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         return selector_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
         # add the selector instance
         if not params.get("selector_inst"):
             params["selector_inst"] = cls.build_selector_inst(params["selector"], params)
+
+        params = super().build_taf_insts(params, shifts)
 
         return params
 
@@ -624,8 +624,8 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default class if necessary
         if (analysis_inst := params.get("analysis_inst")):
@@ -724,12 +724,12 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         return producer_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
         # add the producer instance
         if not params.get("producer_inst"):
             params["producer_inst"] = cls.build_producer_inst(params["producer"], params)
+
+        params = super().build_taf_insts(params, shifts)
 
         return params
 
@@ -798,11 +798,11 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(
+    def resolve_pre_taf_init_params(
         cls,
         params: law.util.InsertableDict[str, Any],
     ) -> law.util.InsertableDict[str, Any]:
-        params = super().resolve_param_values(params)
+        params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default classes if necessary
         if (analysis_inst := params.get("analysis_inst")):
@@ -893,12 +893,12 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         return insts
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
         # add the producer instances
         if not params.get("producer_insts"):
             params["producer_insts"] = cls.build_producer_insts(params["producers"], params)
+
+        params = super().build_taf_insts(params, shifts)
 
         return params
 
@@ -1347,8 +1347,8 @@ class WeightProducerClassMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default class if necessary
         if (analysis_inst := params.get("analysis_inst")):
@@ -1449,15 +1449,15 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         return weight_producer_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
         # add the weight producer instance
         if not params.get("weight_producer_inst"):
             params["weight_producer_inst"] = cls.build_weight_producer_inst(
                 params["weight_producer"],
                 params,
             )
+
+        params = super().build_taf_insts(params, shifts)
 
         return params
 
@@ -1507,8 +1507,8 @@ class InferenceModelClassMixin(ConfigTask):
     )
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_pre_taf_init_params(params)
 
         # add the default inference model when empty
         if (analysis_inst := params.get("analysis_inst")):
@@ -1609,9 +1609,8 @@ class CategoriesMixin(ConfigTask):
     allow_empty_categories = False
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def resolve_post_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_post_taf_init_params(params)
         if "analysis_inst" not in params or "config_insts" not in params:
             return params
 
@@ -1632,7 +1631,6 @@ class CategoriesMixin(ConfigTask):
                     # groups_str="category_groups",
                     multi_strategy="union",
                 )
-
                 # resolve them
                 categories = cls.find_config_objects(
                     names=categories,
@@ -1674,8 +1672,8 @@ class VariablesMixin(ConfigTask):
     allow_missing_variables = False
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_post_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_post_taf_init_params(params)
 
         if "analysis_inst" not in params or "config_insts" not in params:
             return params
@@ -1955,8 +1953,8 @@ class MultiConfigDatasetsProcessesMixin(ConfigTask):
     allow_empty_processes = False
 
     @classmethod
-    def resolve_param_values(cls, params):
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params):
+        params = super().resolve_pre_taf_init_params(params)
 
         config_insts = params.get("config_insts", ())
 
@@ -2049,6 +2047,30 @@ class MultiConfigDatasetsProcessesMixin(ConfigTask):
         return params
 
     @classmethod
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
+        if not cls.upstream_task_cls:
+            raise ValueError(f"upstream_task_cls must be set for multi-config task {cls.task_family}")
+
+        if shifts is None:
+            shifts = TaskShifts()
+        # we loop over all configs/datasets, but return initial params
+        for i, config_inst in enumerate(params["config_insts"]):
+            datasets = params["datasets"][i]
+            for dataset in datasets:
+                # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
+                _params = params.copy()
+                _params["config_inst"] = config_inst
+                _params["config"] = config_inst.name
+                _params["dataset"] = dataset
+                logger.debug(f"building taf insts for {config_inst.name}, {dataset}")
+                cls.upstream_task_cls.build_taf_insts(_params, shifts)
+                cls.upstream_task_cls.get_known_shifts(_params, shifts)
+
+        params["known_shifts"] = shifts
+
+        return params
+
+    @classmethod
     def get_known_shifts(
         cls,
         params: dict[str, Any],
@@ -2110,8 +2132,8 @@ class ShiftSourcesMixin(ConfigTask):
     shift_validation_task_cls = None
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_post_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_post_taf_init_params(params)
 
         # resolve shift sources
         if (container := cls._get_config_container(params)) and "shift_sources" in params:
@@ -2128,12 +2150,23 @@ class ShiftSourcesMixin(ConfigTask):
             if shifts:
                 sources = cls.reduce_shifts(shifts)
 
-                # when a validation task is set, is it to validate and reduce the requested shifts
-                if cls.shift_validation_task_cls:
-                    sources = [
-                        source for source in sources
-                        if cls.validate_shift_source(params, source)
-                    ]
+                # # reduce shifts based on known shifts
+                if "known_shifts" not in params:
+                    raise ValueError("known_shifts must be set before resolving shift sources")
+                sources = [
+                    source for source in sources
+                    if (
+                        f"{source}_up" in params["known_shifts"].upstream and
+                        f"{source}_down" in params["known_shifts"].upstream
+                    )
+                ]
+
+                # # when a validation task is set, is it to validate and reduce the requested shifts
+                # if cls.shift_validation_task_cls:
+                #     sources = [
+                #         source for source in sources
+                #         if cls.validate_shift_source(params, source)
+                #     ]
 
             # complain when no sources were found
             if not sources and not cls.allow_empty_shift_sources:
