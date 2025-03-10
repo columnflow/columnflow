@@ -12,7 +12,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin
+    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
@@ -297,6 +297,17 @@ class MergeHistograms(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    only_missing = luigi.BoolParameter(
+        default=False,
+        description="when True, identify missing variables first and only require histograms of "
+        "missing ones; default: False",
+    )
+    remove_previous = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, remove particular input histograms after merging; default: False",
+    )
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -323,7 +334,7 @@ class MergeHistograms(
 
         # optional dynamic behavior: determine not yet created variables and require only those
         if self.only_missing:
-            missing = self.output().count(existing=False, keys=True)[1]
+            missing = self.output()["hists"].count(existing=False, keys=True)[1]
             variables = sorted(missing, key=variables.index)
 
         return variables

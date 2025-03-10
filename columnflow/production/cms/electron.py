@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, InsertableDict, load_correction_set
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
 
 np = maybe_import("numpy")
@@ -37,12 +37,11 @@ class ElectronSFConfig:
         # purely for backwards compatibility with the old tuple format
         if isinstance(obj, cls):
             return obj
-        elif isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
+        if isinstance(obj, list) or isinstance(obj, tuple) or isinstance(obj, set):
             return cls(*obj)
-        elif isinstance(obj, dict):
+        if isinstance(obj, dict):
             return cls(**obj)
-        else:
-            raise ValueError(f"cannot convert {obj} to ElectronSFConfig")
+        raise ValueError(f"cannot convert {obj} to ElectronSFConfig")
 
 
 @producer(
@@ -54,6 +53,8 @@ class ElectronSFConfig:
     get_electron_file=(lambda self, external_files: external_files.electron_sf),
     # function to determine the electron weight config
     get_electron_config=(lambda self: ElectronSFConfig.new(self.config_inst.x.electron_sf_names)),
+    # choose if the eta variable should be the electron eta or the super cluster eta
+    use_supercluster_eta=True,
     weight_name="electron_weight",
     supported_versions=(1, 2, 3),
 )
@@ -93,11 +94,14 @@ def electron_weights(
     Optionally, an *electron_mask* can be supplied to compute the scale factor weight
     based only on a subset of electrons.
     """
-    # flat super cluster eta and pt views
-    sc_eta = flat_np_view((
-        events.Electron.eta[electron_mask] +
-        events.Electron.deltaEtaSC[electron_mask]
-    ), axis=1)
+    # flat super cluster eta/flat eta and pt views
+    if self.use_supercluster_eta:
+        eta = flat_np_view((
+            events.Electron.eta[electron_mask] +
+            events.Electron.deltaEtaSC[electron_mask]
+        ), axis=1)
+    else:
+        eta = flat_np_view(events.Electron.eta[electron_mask], axis=1)
     pt = flat_np_view(events.Electron.pt[electron_mask], axis=1)
     phi = flat_np_view(events.Electron.phi[electron_mask], axis=1)
 
@@ -106,16 +110,12 @@ def electron_weights(
         "WorkingPoint": self.electron_config.working_point,
         "Path": self.electron_config.hlt_path,
         "pt": pt,
-        "eta": sc_eta,
+        "eta": eta,
         "phi": phi,
     }
 
     # loop over systematics
-    for syst, postfix in [
-        ("sf", ""),
-        ("sfup", "_up"),
-        ("sfdown", "_down"),
-    ]:
+    for syst, postfix in zip(self.sf_variations, ["", "_up", "_down"]):
         # get the inputs for this type of variation
         variable_map_syst = {
             **variable_map,
@@ -160,14 +160,17 @@ def electron_weights_setup(
 ) -> None:
     bundle = reqs["external_files"]
 
-    # create the corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_electron_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    # load the corrector
+    correction_set = load_correction_set(self.get_electron_file(bundle.files))
+
     self.electron_config: ElectronSFConfig = self.get_electron_config()
     self.electron_sf_corrector = correction_set[self.electron_config.correction]
+
+    # the ValType key accepts different arguments for efficiencies and scale factors
+    if self.electron_config.correction.endswith("Eff"):
+        self.sf_variations = ["nom", "up", "down"]
+    else:
+        self.sf_variations = ["sf", "sfup", "sfdown"]
 
     # check versions
     if self.supported_versions and self.electron_sf_corrector.version not in self.supported_versions:
@@ -180,6 +183,7 @@ electron_trigger_weights = electron_weights.derive(
     cls_dict={
         "get_electron_file": (lambda self, external_files: external_files.electron_trigger_sf),
         "get_electron_config": (lambda self: self.config_inst.x.electron_trigger_sf_names),
+        "use_supercluster_eta": False,
         "weight_name": "electron_trigger_weight",
     },
 )
