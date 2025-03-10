@@ -21,6 +21,7 @@
 .env_*.sh.tmp
 .coverage
 coverage*.xml
+law_user.cfg
 requirements_user.txt
 __pycache__
 dist
@@ -36,3 +37,4 @@ data
 .setups
 .mypy_cache
 .vscode
+.__afs*
