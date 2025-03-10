@@ -4,12 +4,8 @@
 Definition of shifts.
 """
 
-from collections import OrderedDict
-
 import law
-import os
 import re
-import yaml
 
 from columnflow.util import DotDict, call_once_on_config
 
@@ -156,7 +152,7 @@ def add_shifts(config: od.Config) -> None:
         "CorrelationGroupUncorrelated",
     ]
 
-    for jec_source in config.x.jec["uncertainty_sources"]:
+    for jec_source in config.x.jec["Jet"]["uncertainty_sources"]:
         idx = all_jec_sources.index(jec_source)
         config.add_shift(name=f"jec_{jec_source}_up", id=5000 + 2 * idx, type="shape")
         config.add_shift(name=f"jec_{jec_source}_down", id=5001 + 2 * idx, type="shape")

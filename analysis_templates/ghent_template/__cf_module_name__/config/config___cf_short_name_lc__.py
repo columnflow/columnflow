@@ -88,79 +88,83 @@ def add_config(
     # jec configuration
     # https://twiki.cern.ch/twiki/bin/view/CMS/JECDataMC?rev=201
     jerc_postfix = "APV" if year == 2016 and campaign.x.vfp == "post" else ""
-    cfg.x.jec = DotDict.wrap({
-        "campaign": f"Summer19UL{year2}{jerc_postfix}",
-        "version": {2016: "V7", 2017: "V5", 2018: "V5"}[year],
-        "jet_type": "AK4PFchs",
-        "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
-        "levels_for_type1_met": ["L1FastJet"],
-        "uncertainty_sources": [
-            # "AbsoluteStat",
-            # "AbsoluteScale",
-            # "AbsoluteSample",
-            # "AbsoluteFlavMap",
-            # "AbsoluteMPFBias",
-            # "Fragmentation",
-            # "SinglePionECAL",
-            # "SinglePionHCAL",
-            # "FlavorQCD",
-            # "TimePtEta",
-            # "RelativeJEREC1",
-            # "RelativeJEREC2",
-            # "RelativeJERHF",
-            # "RelativePtBB",
-            # "RelativePtEC1",
-            # "RelativePtEC2",
-            # "RelativePtHF",
-            # "RelativeBal",
-            # "RelativeSample",
-            # "RelativeFSR",
-            # "RelativeStatFSR",
-            # "RelativeStatEC",
-            # "RelativeStatHF",
-            # "PileUpDataMC",
-            # "PileUpPtRef",
-            # "PileUpPtBB",
-            # "PileUpPtEC1",
-            # "PileUpPtEC2",
-            # "PileUpPtHF",
-            # "PileUpMuZero",
-            # "PileUpEnvelope",
-            # "SubTotalPileUp",
-            # "SubTotalRelative",
-            # "SubTotalPt",
-            # "SubTotalScale",
-            # "SubTotalAbsolute",
-            # "SubTotalMC",
-            "Total",
-            # "TotalNoFlavor",
-            # "TotalNoTime",
-            # "TotalNoFlavorNoTime",
-            # "FlavorZJet",
-            # "FlavorPhotonJet",
-            # "FlavorPureGluon",
-            # "FlavorPureQuark",
-            # "FlavorPureCharm",
-            # "FlavorPureBottom",
-            # "TimeRunA",
-            # "TimeRunB",
-            # "TimeRunC",
-            # "TimeRunD",
-            "CorrelationGroupMPFInSitu",
-            "CorrelationGroupIntercalibration",
-            "CorrelationGroupbJES",
-            "CorrelationGroupFlavor",
-            "CorrelationGroupUncorrelated",
-        ],
-    })
+    cfg.x.jec = {
+        "Jet": DotDict.wrap({
+            "campaign": f"Summer19UL{year2}{jerc_postfix}",
+            "version": {2016: "V7", 2017: "V5", 2018: "V5"}[year],
+            "jet_type": "AK4PFchs",
+            "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
+            "levels_for_type1_met": ["L1FastJet"],
+            "uncertainty_sources": [
+                # "AbsoluteStat",
+                # "AbsoluteScale",
+                # "AbsoluteSample",
+                # "AbsoluteFlavMap",
+                # "AbsoluteMPFBias",
+                # "Fragmentation",
+                # "SinglePionECAL",
+                # "SinglePionHCAL",
+                # "FlavorQCD",
+                # "TimePtEta",
+                # "RelativeJEREC1",
+                # "RelativeJEREC2",
+                # "RelativeJERHF",
+                # "RelativePtBB",
+                # "RelativePtEC1",
+                # "RelativePtEC2",
+                # "RelativePtHF",
+                # "RelativeBal",
+                # "RelativeSample",
+                # "RelativeFSR",
+                # "RelativeStatFSR",
+                # "RelativeStatEC",
+                # "RelativeStatHF",
+                # "PileUpDataMC",
+                # "PileUpPtRef",
+                # "PileUpPtBB",
+                # "PileUpPtEC1",
+                # "PileUpPtEC2",
+                # "PileUpPtHF",
+                # "PileUpMuZero",
+                # "PileUpEnvelope",
+                # "SubTotalPileUp",
+                # "SubTotalRelative",
+                # "SubTotalPt",
+                # "SubTotalScale",
+                # "SubTotalAbsolute",
+                # "SubTotalMC",
+                "Total",
+                # "TotalNoFlavor",
+                # "TotalNoTime",
+                # "TotalNoFlavorNoTime",
+                # "FlavorZJet",
+                # "FlavorPhotonJet",
+                # "FlavorPureGluon",
+                # "FlavorPureQuark",
+                # "FlavorPureCharm",
+                # "FlavorPureBottom",
+                # "TimeRunA",
+                # "TimeRunB",
+                # "TimeRunC",
+                # "TimeRunD",
+                "CorrelationGroupMPFInSitu",
+                "CorrelationGroupIntercalibration",
+                "CorrelationGroupbJES",
+                "CorrelationGroupFlavor",
+                "CorrelationGroupUncorrelated",
+            ],
+        })
+    }
 
     # JER
     # https://twiki.cern.ch/twiki/bin/view/CMS/JetResolution?rev=107
-    cfg.x.jer = DotDict.wrap({
-        "campaign": f"Summer19UL{year2}{jerc_postfix}",
-        "version": "JR" + {2016: "V3", 2017: "V2", 2018: "V2"}[year],
-        "jet_type": "AK4PFchs",
-    })
+    cfg.x.jer = {
+        "Jet": DotDict.wrap({
+            "campaign": f"Summer19UL{year2}{jerc_postfix}",
+            "version": "JR" + {2016: "V3", 2017: "V2", 2018: "V2"}[year],
+            "jet_type": "AK4PFchs",
+        })
+    }
 
     # JEC uncertainty sources propagated to btag scale factors
     # (names derived from contents in BTV correctionlib file)
@@ -233,11 +237,11 @@ def add_config(
     json_mirror = "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration"
     year_short = str(year)[2:]  # 20XX > XX
     lumi_cert_site = f"https://cms-service-dqmdc.web.cern.ch/CAF/certification/Collisions{year_short}/{ecm:g}TeV"
-    pu_reweighting_site = f"{lumi_cert_site}/PileUp/UltraLegacy"
+
     goldenjsons = {
-        2016: f"Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt",
-        2017: f"Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt",
-        2018: f"Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt",
+        2016: "Cert_271036-284044_13TeV_Legacy2016_Collisions16_JSON.txt",
+        2017: "Cert_294927-306462_13TeV_UL2017_Collisions17_GoldenJSON.txt",
+        2018: "Cert_314472-325175_13TeV_Legacy2018_Collisions18_JSON.txt",
     }
     cfg.x.external_files = DotDict.wrap({
         # lumi files (golden run 2 only!!)
@@ -258,7 +262,7 @@ def add_config(
         # btag scale factor
         "btag_sf_corr": (f"{json_mirror}/POG/BTV/{year}{corr_postfix}_UL/btagging.json.gz", "v1"),
 
-         # Pile up scale factor
+        # Pile up scale factor
         "pu_sf": (f"{json_mirror}/POG/LUM/{year}{corr_postfix}_UL/puWeights.json.gz", "v1")
     })
 
@@ -344,6 +348,7 @@ def add_config(
     cfg.x.default_ml_model = None
     cfg.x.default_inference_model = "example"
     cfg.x.default_variables = ("n_jet",)
+    cfg.x.default_cateogries = ("incl",)
 
     add_categories_selection(cfg)
     add_variables(cfg)
