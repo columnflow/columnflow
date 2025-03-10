@@ -125,6 +125,7 @@ normalized_scale_weights = normalized_weight_factory(
 normalized_pdf_weights = normalized_weight_factory(
     producer_name="normalized_pdf_weights",
     weight_producers={pdf_weights},
+    add_uses={"pdf_weight{,_up,_down}"},
 )
 
 normalized_pu_weights = normalized_weight_factory(

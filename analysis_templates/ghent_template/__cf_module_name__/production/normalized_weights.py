@@ -4,7 +4,7 @@
 Column production methods related to generic event weights.
 """
 
-from typing import Iterable, Callable
+from typing import Iterable, Callable, Collection
 
 import law
 
@@ -22,11 +22,12 @@ logger = law.logger.get_logger(__name__)
 def normalized_weight_factory(
     producer_name: str,
     weight_producers: Iterable[Producer],
+    add_uses: Collection = tuple(),
     **kwargs,
 ) -> Callable:
 
     @producer(
-        uses=set(weight_producers) | set().union(*[w.produces for w in weight_producers]) | {"process_id"},
+        uses={"process_id"}.union(weight_producers, *[w.produces for w in weight_producers], add_uses),
         cls_name=producer_name,
         mc_only=True,
         # skip the checking existence of used/produced columns because not all columns are there
