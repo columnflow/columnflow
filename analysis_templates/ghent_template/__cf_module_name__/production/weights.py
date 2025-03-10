@@ -13,6 +13,7 @@ from columnflow.production.cms.electron import electron_weights
 from columnflow.production.cms.muon import muon_weights
 from columnflow.production.cms.scale import murmuf_weights, murmuf_envelope_weights
 from columnflow.production.cms.pdf import pdf_weights
+from columnflow.production.cmsGhent.parton_shower import ps_weights
 from __cf_short_name_lc__.production.normalized_weights import normalized_weight_factory
 
 np = maybe_import("numpy")
@@ -89,6 +90,11 @@ normalized_pu_weights = normalized_weight_factory(
     weight_producers={pu_weight},
 )
 
+normalized_ps_weights = normalized_weight_factory(
+    producer_name="normalized_ps_weights",
+    weight_producers={ps_weights},
+)
+
 
 @producer(
     uses={
@@ -122,6 +128,9 @@ def event_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if not self.dataset_inst.has_tag("skip_pdf"):
         events = self[normalized_pdf_weights](events, **kwargs)
 
+    if not self.dataset_inst.has_tag("skip_ps"):
+        events = self[normalized_ps_weights](events, **kwargs)
+
     return events
 
 
@@ -137,3 +146,7 @@ def event_weights_init(self: Producer) -> None:
     if not self.dataset_inst.has_tag("skip_pdf"):
         self.uses |= {normalized_pdf_weights}
         self.produces |= {normalized_pdf_weights}
+
+    if not self.dataset_inst.has_tag("skip_ps"):
+        self.uses |= {normalized_ps_weights}
+        self.produces |= {normalized_ps_weights}
