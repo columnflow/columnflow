@@ -80,7 +80,7 @@ def normalized_weight_factory(
         self.weight_names = set()
         for col in self.used_columns:
             col = col.string_nano_column
-            if "weight" in col and "normalized" not in col and "btag" not in col:
+            if "weight" in col and "normalized" not in col:
                 self.weight_names.add(col)
 
         self.produces |= set(f"normalized_{weight_name}" for weight_name in self.weight_names)
