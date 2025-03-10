@@ -54,7 +54,6 @@ def normalized_weight_factory(
         if not_reproduced := missing_weights.difference(events.fields):
             logger.info(f"Weight columns {not_reproduced} could not be reproduced")
 
-
         for weight_name in self.weight_names.intersection(events.fields):
             # create a weight vector starting with ones
             norm_weight_per_pid = np.ones(len(events), dtype=np.float32)
@@ -70,7 +69,6 @@ def normalized_weight_factory(
             # store it
             norm_weight_per_pid = ak.values_astype(norm_weight_per_pid, np.float32)
             events = set_ak_column(events, f"normalized_{weight_name}", norm_weight_per_pid)
-
 
         return events
 
@@ -92,9 +90,7 @@ def normalized_weight_factory(
         from columnflow.tasks.selection import MergeSelectionStats
         reqs["selection_stats"] = MergeSelectionStats.req(
             self.task,
-            tree_index=0,
             branch=-1,
-            _exclude=MergeSelectionStats.exclude_params_forest_merge,
         )
 
     @normalized_weight.setup

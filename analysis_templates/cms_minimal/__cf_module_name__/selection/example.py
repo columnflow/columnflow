@@ -26,7 +26,7 @@ ak = maybe_import("awkward")
 
 
 @selector(
-    uses={"Muon.pt", "Muon.eta"},
+    uses={"Muon.{pt,eta,phi,mass}"},
 )
 def muon_selection(
     self: Selector,
@@ -53,7 +53,7 @@ def muon_selection(
 
 
 @selector(
-    uses={"Jet.pt", "Jet.eta"},
+    uses={"Muon.{pt,eta,phi,mass}"},
 )
 def jet_selection(
     self: Selector,
