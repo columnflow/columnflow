@@ -65,6 +65,7 @@ setup___cf_short_name_lc__() {
     export CF_REPO_BASE="${__cf_short_name_uc___BASE}"
     export CF_REPO_BASE_ALIAS="__cf_short_name_uc___BASE"
     export CF_SETUP_NAME="${setup_name}"
+    export TMPDIR=${TMPDIR:-/scratch/$USER/columnflow}
 
     # load cf setup helpers
     CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
