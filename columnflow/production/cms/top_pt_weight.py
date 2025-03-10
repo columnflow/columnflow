@@ -19,7 +19,7 @@ logger = law.logger.get_logger(__name__)
 
 
 @producer(
-    uses={"GenPart.pdgId", "GenPart.statusFlags"},
+    uses={"GenPart.{pdgId,statusFlags}"},
     # requested GenPartonTop columns, passed to the *uses* and *produces*
     produced_top_columns={"pt"},
     mc_only=True,

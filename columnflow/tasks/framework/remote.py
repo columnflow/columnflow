@@ -4,9 +4,12 @@
 Base classes and tools for working with remote tasks and targets.
 """
 
+from __future__ import annotations
+
 import os
 import re
 import math
+from dataclasses import dataclass
 
 import luigi
 import law
@@ -14,7 +17,7 @@ import law
 from columnflow import flavor as cf_flavor
 from columnflow.tasks.framework.base import Requirements, AnalysisTask
 from columnflow.tasks.framework.parameters import user_parameter_inst
-from columnflow.util import real_path
+from columnflow.util import UNSET, real_path
 
 
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
@@ -58,6 +61,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -88,6 +92,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -227,6 +232,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
@@ -302,6 +308,7 @@ class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.Transfe
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @law.decorator.notify
     @law.decorator.log
     def run(self):
         # create the bundle
@@ -315,12 +322,47 @@ class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.Transfe
         self.transfer(bundle)
 
 
-class RemoteWorkflowMixin(object):
+@dataclass
+class SchedulerMessageHandler:
+    attr: str
+    param: luigi.Parameter | None = None
+
+    def __post_init__(self):
+        if not re.match(r"^[a-zA-Z0-9_]+$", self.attr):
+            raise ValueError(
+                f"invalid {self.__class__.__name__} attribute '{self.attr}', must only contain "
+                "alphanumeric characters and underscores",
+            )
+
+
+class RemoteWorkflowMixin(AnalysisTask):
     """
     Mixin class for custom remote workflows adding common functionality.
     """
 
     skip_destination_info: bool = False
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        # overwrite resources with config values when not specified (comparing to parameter default)
+        lookup_keys = self.get_config_lookup_keys(self)
+        resources_dict = self._get_cfg_resources_dict()
+        for attr, value in self._dfs_key_lookup(lookup_keys, resources_dict, empty_value={}):
+            # attr must refer to an attribute coming from a valid parameter
+            if (
+                (orig_value := getattr(self, attr, UNSET)) is UNSET or
+                not isinstance((param_inst := getattr(self.__class__, attr, None)), luigi.Parameter)
+            ):
+                continue
+            # skip when the value was set manually
+            if orig_value != param_inst._default:
+                continue
+            # parse and set
+            setattr(self, attr, param_inst.parse(value))
+
+        # container to store scheduler message handlers
+        self._scheduler_message_handlers: dict[str, SchedulerMessageHandler] = {}
 
     def add_bundle_requirements(
         self,
@@ -525,12 +567,57 @@ class RemoteWorkflowMixin(object):
 
         return info
 
+    def add_message_handler(self, *args, **kwargs) -> None:
+        # obtain the handler
+        if len(args) == 1 and isinstance(args[0], SchedulerMessageHandler) and not kwargs:
+            handler = args[0]
+        else:
+            handler = SchedulerMessageHandler(*args, **kwargs)
+
+        # check if there is a parameter with that attribute
+        param = getattr(self.__class__, handler.attr, None)
+        if param is None:
+            raise ValueError(f"no parameter found for attribute '{handler.attr}'")
+        handler.param = param
+
+        # register it (potentially overwriting)
+        self._scheduler_message_handlers[handler.attr] = handler
+
+    def handle_scheduler_message(self, msg, _attr_value=None):
+        attr, value = _attr_value or (None, None)
+
+        # go through handlers and find match
+        if attr is None:
+            for handler in self._scheduler_message_handlers.values():
+                m = re.match(rf"^\s*({handler.attr})\s*(\=|\:)\s*(.*)\s*$", str(msg))
+                if not m:
+                    continue
+                attr = handler.attr
+                try:
+                    parsed = handler.param.parse(m.group(3))
+                    value = handler.param.serialize(parsed)
+                except ValueError as e:
+                    value = e
+                break
+
+        return super().handle_scheduler_message(msg, (attr, value))
+
 
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
 _default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
+_default_htcondor_memory = law.util.parse_bytes(
+    law.config.get_expanded("analysis", "htcondor_memory", law.NO_FLOAT),
+    input_unit="GB",
+    unit="GB",
+)
+_default_htcondor_disk = law.util.parse_bytes(
+    law.config.get_expanded("analysis", "htcondor_disk", law.NO_FLOAT),
+    input_unit="GB",
+    unit="GB",
+)
 
 
-class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkflowMixin):
+class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
 
     transfer_logs = luigi.BoolParameter(
         default=True,
@@ -562,11 +649,18 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         "empty default",
     )
     htcondor_memory = law.BytesParameter(
-        default=law.NO_FLOAT,
-        unit="MB",
+        default=_default_htcondor_memory,
+        unit="GB",
         significant=False,
-        description="requested memeory in MB; empty value leads to the cluster default setting; "
-        "empty default",
+        description="requested memory in GB; empty value leads to the cluster default setting; "
+        f"{'empty default' if _default_htcondor_memory <= 0 else 'default: ' + str(_default_htcondor_memory)}",
+    )
+    htcondor_disk = law.BytesParameter(
+        default=_default_htcondor_disk,
+        unit="GB",
+        significant=False,
+        description="requested disk space in GB; empty value leads to the cluster default setting; "
+        f"{'empty default' if _default_htcondor_disk <= 0 else 'default: ' + str(_default_htcondor_disk)}",
     )
     htcondor_flavor = luigi.ChoiceParameter(
         default=_default_htcondor_flavor,
@@ -586,9 +680,15 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         f"{_default_htcondor_share_software}",
     )
 
+    # parameters that should not be passed to a workflow required upstream
+    exclude_params_req_set = {
+        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_memory", "htcondor_disk",
+    }
+
+    # parameters that should not be passed from workflow to branches
     exclude_params_branch = {
         "max_runtime", "htcondor_logs", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
-        "htcondor_flavor", "htcondor_share_software",
+        "htcondor_disk", "htcondor_flavor", "htcondor_share_software",
     }
 
     # mapping of environment variables to render variables that are forwarded
@@ -615,6 +715,14 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
 
         # cached BundleRepo requirement to avoid race conditions during checksum calculation
         self.bundle_repo_req = self.reqs.BundleRepo.req(self)
+
+        # add scheduler message handlers
+        self.add_message_handler("max_runtime")
+        self.add_message_handler("htcondor_logs")
+        self.add_message_handler("htcondor_cpus")
+        self.add_message_handler("htcondor_gpus")
+        self.add_message_handler("htcondor_memory")
+        self.add_message_handler("htcondor_disk")
 
     def htcondor_workflow_requires(self):
         reqs = law.htcondor.HTCondorWorkflow.htcondor_workflow_requires(self)
@@ -660,6 +768,15 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
         # default lcg setup file
         remote_lcg_setup = law.config.get_expanded("job", "remote_lcg_setup_el9")
 
+        # batch name for display in condor_q
+        batch_name = self.task_family
+        info = self.htcondor_destination_info({})
+        if "config" in info:
+            batch_name += f"_{info['config']}"
+        if "dataset" in info:
+            batch_name += f"_{info['dataset']}"
+        config.custom_content.append(("batch_name", batch_name))
+
         # CERN settings, https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers
         if self.htcondor_flavor.startswith("cern"):
             cern_os = "el9"
@@ -695,7 +812,11 @@ class HTCondorWorkflow(AnalysisTask, law.htcondor.HTCondorWorkflow, RemoteWorkfl
 
         # request memory
         if self.htcondor_memory is not None and self.htcondor_memory > 0:
-            config.custom_content.append(("Request_Memory", self.htcondor_memory))
+            config.custom_content.append(("Request_Memory", f"{self.htcondor_memory} Gb"))
+
+        # request disk space
+        if self.htcondor_disk is not None and self.htcondor_disk > 0:
+            config.custom_content.append(("RequestDisk", f"{self.htcondor_disk} Gb"))
 
         # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
@@ -731,7 +852,7 @@ _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "max
 _default_slurm_partition = law.config.get_expanded("analysis", "slurm_partition", "cms-uhh")
 
 
-class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
+class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
 
     transfer_logs = luigi.BoolParameter(
         default=True,
@@ -757,6 +878,10 @@ class SlurmWorkflow(AnalysisTask, law.slurm.SlurmWorkflow, RemoteWorkflowMixin):
         f"maxwell; default: '{_default_slurm_flavor}'",
     )
 
+    # parameters that should not be passed to a workflow required upstream
+    exclude_params_req_set = {"max_runtime"}
+
+    # parameters that should not be passed from workflow to branches
     exclude_params_branch = {"max_runtime", "slurm_partition", "slurm_flavor"}
 
     # mapping of environment variables to render variables that are forwarded
@@ -855,3 +980,5 @@ class RemoteWorkflow(*remote_workflow_bases):
 
     # upstream requirements
     reqs = Requirements(*(cls.reqs for cls in remote_workflow_bases))
+
+    workflow_run_decorators = [law.decorator.notify]

@@ -26,7 +26,7 @@ ak = maybe_import("awkward")
 
 
 @selector(
-    uses={"Muon.pt", "Muon.eta"},
+    uses={"Muon.{pt,eta,phi,mass}"},
 )
 def muon_selection(
     self: Selector,
@@ -53,7 +53,7 @@ def muon_selection(
 
 
 @selector(
-    uses={"Jet.pt", "Jet.eta"},
+    uses={"Muon.{pt,eta,phi,mass}"},
 )
 def jet_selection(
     self: Selector,
@@ -81,6 +81,14 @@ def jet_selection(
         },
     )
 
+@jet_selection.init
+def jet_selection_init(self: Selector) -> None:
+    # register shifts
+    self.shifts |= {
+        shift_inst.name
+        for shift_inst in self.config_inst.shifts
+        if shift_inst.has_tag(("jec", "jer"))
+    }
 
 #
 # exposed selectors

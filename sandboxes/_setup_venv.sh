@@ -2,7 +2,7 @@
 
 # Script that installs and sources a virtual environment. Distinctions are made depending on whether
 # the venv is already present, and whether the script is called as part of a remote (law) job
-# (CF_REMOTE_ENV=1).
+# (CF_REMOTE_ENV=true).
 #
 # Four environment variables are expected to be set before this script is called:
 #   CF_SANDBOX_FILE
@@ -41,10 +41,10 @@
 #      but the exit code remains unchanged.
 #
 # Note on remote jobs:
-# When the CF_REMOTE_ENV variable is found to be "1" (usually set by a remote job bootstrap script),
-# no mode is supported and an error is printed when it is set to a non-empty value. In any case, no
-# installation will happen but the setup is reused from a pre-compiled software bundle that is
-# fetched from a local or remote location and unpacked.
+# When the CF_REMOTE_ENV variable is set (usually set by a remote job bootstrap script) and
+# true-ish, no mode is supported and an error is printed when it is set to a non-empty value. In any
+# case, no installation will happen but the setup is reused from a pre-compiled software bundle that
+# is fetched from a local or remote location and unpacked.
 
 setup_venv() {
     local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
@@ -59,7 +59,7 @@ setup_venv() {
     fi
 
     # source the main setup script to access helpers
-    CF_SKIP_SETUP="1" source "${this_dir}/../setup.sh" "" || return "$?"
+    CF_SKIP_SETUP="true" source "${this_dir}/../setup.sh" "" || return "$?"
 
 
     #
@@ -83,7 +83,7 @@ setup_venv() {
         >&2 echo "unknown venv setup mode '${mode}'"
         return "1"
     fi
-    if [ "${CF_REMOTE_ENV}" = "1" ] && [ "${mode}" != "install" ]; then
+    if ${CF_REMOTE_ENV} && [ "${mode}" != "install" ]; then
         >&2 echo "the venv setup mode must be 'install' or empty in remote jobs, but got '${mode}'"
         return "2"
     fi
@@ -148,7 +148,7 @@ setup_venv() {
 
     # prepend persistent path fragments to priotize packages in the outer env
     export CF_VENV_PYTHONPATH="${install_path}/lib/python${pyv}/site-packages"
-    export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${CF_VENV_PYTHONPATH}:${PYTHONPATH}"
+    export PYTHONPATH="${CF_INITIAL_PYTHONPATH}:${CF_PERSISTENT_PYTHONPATH}:${CF_VENV_PYTHONPATH}:${PYTHONPATH}"
     export PATH="${CF_PERSISTENT_PATH}:${PATH}"
 
 
@@ -169,7 +169,7 @@ setup_venv() {
     local ret="0"
 
     # handle local environments
-    if [ "${CF_REMOTE_ENV}" != "1" ]; then
+    if ! ${CF_REMOTE_ENV}; then
         # optionally remove the current installation
         if [ "${mode}" = "reinstall" ]; then
             echo "removing current installation at ${install_path_repr} (mode '${mode}')"
@@ -301,7 +301,7 @@ setup_venv() {
     fi
 
     # handle remote job environments
-    if [ "${CF_REMOTE_ENV}" = "1" ]; then
+    if ${CF_REMOTE_ENV}; then
         # in this case, the environment is inside a remote job, i.e., these variables are present:
         # CF_JOB_BASH_SANDBOX_URIS, CF_JOB_BASH_SANDBOX_PATTERNS and CF_JOB_BASH_SANDBOX_NAMES
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
@@ -350,7 +350,7 @@ setup_venv() {
     export CF_VENV_NAME="${CF_VENV_NAME}"
     export CF_VENV_HASH="${install_hash}"
     export CF_VENV_NAME_HASHED="${venv_name_hashed}"
-    export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "1" || echo "0" )"
+    export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "true" || echo "false" )"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"

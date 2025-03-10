@@ -8,6 +8,7 @@ User Guide
    building_blocks/index
    sandbox.md
    ml.md
+   shifts.md
    plotting.md
    examples.md
    debugging.md

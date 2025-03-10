@@ -4,7 +4,7 @@
 Column production methods related to generic event weights.
 """
 
-from typing import Iterable, Callable
+from typing import Iterable, Callable, Collection
 
 import law
 
@@ -22,11 +22,12 @@ logger = law.logger.get_logger(__name__)
 def normalized_weight_factory(
     producer_name: str,
     weight_producers: Iterable[Producer],
+    add_uses: Collection = tuple(),
     **kwargs,
 ) -> Callable:
 
     @producer(
-        uses=set(weight_producers) | set().union(*[w.produces for w in weight_producers]) | {"process_id"},
+        uses={"process_id"}.union(weight_producers, *[w.produces for w in weight_producers], add_uses),
         cls_name=producer_name,
         mc_only=True,
         # skip the checking existence of used/produced columns because not all columns are there
@@ -53,7 +54,6 @@ def normalized_weight_factory(
         if not_reproduced := missing_weights.difference(events.fields):
             logger.info(f"Weight columns {not_reproduced} could not be reproduced")
 
-
         for weight_name in self.weight_names.intersection(events.fields):
             # create a weight vector starting with ones
             norm_weight_per_pid = np.ones(len(events), dtype=np.float32)
@@ -70,7 +70,6 @@ def normalized_weight_factory(
             norm_weight_per_pid = ak.values_astype(norm_weight_per_pid, np.float32)
             events = set_ak_column(events, f"normalized_{weight_name}", norm_weight_per_pid)
 
-
         return events
 
     @normalized_weight.init
@@ -81,7 +80,7 @@ def normalized_weight_factory(
         self.weight_names = set()
         for col in self.used_columns:
             col = col.string_nano_column
-            if "weight" in col and "normalized" not in col and "btag" not in col:
+            if "weight" in col and "normalized" not in col:
                 self.weight_names.add(col)
 
         self.produces |= set(f"normalized_{weight_name}" for weight_name in self.weight_names)
@@ -91,9 +90,7 @@ def normalized_weight_factory(
         from columnflow.tasks.selection import MergeSelectionStats
         reqs["selection_stats"] = MergeSelectionStats.req(
             self.task,
-            tree_index=0,
             branch=-1,
-            _exclude=MergeSelectionStats.exclude_params_forest_merge,
         )
 
     @normalized_weight.setup

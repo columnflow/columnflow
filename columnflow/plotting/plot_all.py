@@ -5,16 +5,15 @@ Example plot function.
 """
 
 from __future__ import annotations
-from unittest.mock import patch
-from functools import partial
+
+__all__ = []
 
 from columnflow.types import Sequence
 from columnflow.util import maybe_import, try_float
 from columnflow.plotting.plot_util import (
     get_position,
     get_cms_label,
-    FigAxesType,
-    fix_cbar_minor_ticks,
+    remove_label_placeholders,
 )
 
 hist = maybe_import("hist")
@@ -169,7 +168,6 @@ def plot_all(
     cms_label: str = "wip",
     whitespace_fraction: float = 0.3,
     magnitudes: float = 4,
-    figaxes: FigAxesType = None,
     **kwargs,
 ) -> tuple(plt.Figure, tuple(plt.Axes)):
     """
@@ -183,65 +181,61 @@ def plot_all(
     "ratio_kwargs": dict (optional),
 
     The *style_config* expects fields (all optional):
+    "gridspec_cfg": dict,
     "ax_cfg": dict,
     "rax_cfg": dict,
     "legend_cfg": dict,
     "cms_label_cfg": dict,
 
     :param plot_config: Dictionary that defines which plot methods will be called with which
-    key word arguments.
+        key word arguments.
     :param style_config: Dictionary that defines arguments on how to style the overall plot.
     :param skip_ratio: Optional bool parameter to not display the ratio plot.
     :param skip_legend: Optional bool parameter to not display the legend.
     :param cms_label: Optional string parameter to set the CMS label text.
     :param whitespace_fraction: Optional float parameter that defines the ratio of which
-    the plot will consist of whitespace for the legend and labels
+        the plot will consist of whitespace for the legend and labels
     :param magnitudes: Optional float parameter that defines the displayed ymin when plotting
-    with a logarithmic scale.
-    :param figaxes: tuple containing a figure and axes for the plots
+        with a logarithmic scale.
     :return: tuple of plot figure and axes
     """
-    # available plot methods mapped to their names
+    # general mplhep style
+    plt.style.use(mplhep.style.CMS)
+
+    # setup figure and axes
+    rax = None
+    grid_spec = {"left": 0.15, "right": 0.95, "top": 0.95, "bottom": 0.1}
+    grid_spec |= style_config.get("gridspec_cfg", {})
+    if not skip_ratio:
+        grid_spec |= {"height_ratios": [3, 1], "hspace": 0}
+        fig, axs = plt.subplots(2, 1, gridspec_kw=grid_spec, sharex=True)
+        (ax, rax) = axs
+    else:
+        fig, ax = plt.subplots(gridspec_kw=grid_spec)
+        axs = (ax,)
+
+    # invoke all plots methods
     plot_methods = {
         func.__name__: func
         for func in [draw_error_bands, draw_stack, draw_hist, draw_profile, draw_errorbars]
     }
-
-    rax = None
-    if figaxes is None:
-        plt.style.use(mplhep.style.CMS)
-        if not skip_ratio:
-            fig, axs = plt.subplots(2, 1, gridspec_kw=dict(height_ratios=[3, 1], hspace=0), sharex=True)
-            (ax, rax) = axs
-        else:
-            fig, ax = plt.subplots()
-            axs = (ax,)
-    else:
-        fig, ax = figaxes
-        if skip_ratio:
-            if not isinstance(ax, plt.Axes):
-                assert len(ax) == 1 and isinstance(ax[0], plt.Axes), f"expected one axes (no ratio) but got {ax}"
-                ax = ax[0]
-        else:
-            assert len(ax) == 2 and all([isinstance(a, plt.Axes) for a in ax]), \
-                f"expected two axes (ratio) but got {ax}"
-            ax, rax = ax
-
     for key, cfg in plot_config.items():
+        # check if required fields are present
         if "method" not in cfg:
             raise ValueError(f"no method given in plot_cfg entry {key}")
-        method = cfg["method"]
-
         if "hist" not in cfg:
             raise ValueError(f"no histogram(s) given in plot_cfg entry {key}")
-        hist = cfg["hist"]
-        kwargs = cfg.get("kwargs", {})
-        (plot_methods[method] if isinstance(method, str) else method)(ax, hist, **kwargs)
 
+        # invoke the method
+        method = cfg["method"]
+        h = cfg["hist"]
+        plot_methods[method](ax, h, **cfg.get("kwargs", {}))
+
+        # repeat for ratio axes if configured
         if not skip_ratio and "ratio_kwargs" in cfg:
             # take ratio_method if the ratio plot requires a different plotting method
             method = cfg.get("ratio_method", method)
-            (plot_methods[method] if isinstance(method, str) else method)(rax, hist, **cfg["ratio_kwargs"])
+            plot_methods[method](rax, h, **cfg.get("ratio_kwargs", {}))
 
     # axis styling
     ax_kwargs = {
@@ -260,17 +254,26 @@ def plot_all(
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
 
-    # ax configs that can not be handled by `ax.set`
-    minorxticks = ax_kwargs.pop("minorxticks", None)
-    minoryticks = ax_kwargs.pop("minoryticks", None)
+    # some settings cannot be handled by ax.set
+    xminorticks = ax_kwargs.pop("xminorticks", ax_kwargs.pop("minorxticks", None))
+    yminorticks = ax_kwargs.pop("yminorticks", ax_kwargs.pop("minoryticks", None))
+    xloc = ax_kwargs.pop("xloc", None)
+    yloc = ax_kwargs.pop("yloc", None)
 
+    # set all values
     ax.set(**ax_kwargs)
 
-    if minorxticks is not None:
-        ax.set_xticks(minorxticks, minor=True)
-    if minoryticks is not None:
-        ax.set_xticks(minoryticks, minor=True)
+    # set manual configs
+    if xminorticks is not None:
+        ax.set_xticks(xminorticks, minor=True)
+    if yminorticks is not None:
+        ax.set_xticks(yminorticks, minor=True)
+    if xloc is not None:
+        ax.set_xlabel(ax.get_xlabel(), loc=xloc)
+    if yloc is not None:
+        ax.set_ylabel(ax.get_ylabel(), loc=yloc)
 
+    # ratio plot
     if not skip_ratio:
         # hard-coded line at 1
         rax.axhline(y=1.0, linestyle="dashed", color="gray")
@@ -281,40 +284,64 @@ def plot_all(
             "yscale": "linear",
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
+
+        # some settings cannot be handled by ax.set
+        xloc = rax_kwargs.pop("xloc", None)
+        yloc = rax_kwargs.pop("yloc", None)
+
+        # set all values
         rax.set(**rax_kwargs)
 
+        # set manual configs
+        if xloc is not None:
+            rax.set_xlabel(rax.get_xlabel(), loc=xloc)
+        if yloc is not None:
+            rax.set_ylabel(rax.get_ylabel(), loc=yloc)
+
+        # remove x-label from main axis
         if "xlabel" in rax_kwargs:
             ax.set_xlabel("")
 
+    # label alignment
     fig.align_labels()
 
     # legend
     if not skip_legend:
         # resolve legend kwargs
         legend_kwargs = {
-            "ncol": 1,
+            "ncols": 1,
             "loc": "upper right",
         }
         legend_kwargs.update(style_config.get("legend_cfg", {}))
 
+        if "title" in legend_kwargs:
+            legend_kwargs["title"] = remove_label_placeholders(legend_kwargs["title"])
+
         # retrieve the legend handles and their labels
         handles, labels = ax.get_legend_handles_labels()
 
-        # assume all `StepPatch` objects are part of MC stack
-        in_stack = [
-            isinstance(handle, mpl.patches.StepPatch)
-            for handle in handles
-        ]
+        # custom argument: entries_per_column
+        n_cols = legend_kwargs.get("ncols", 1)
+        entries_per_col = legend_kwargs.pop("entries_per_column", None)
+        if callable(entries_per_col):
+            entries_per_col = entries_per_col(ax, handles, labels, n_cols)
+        if entries_per_col and n_cols > 1:
+            if isinstance(entries_per_col, (list, tuple)):
+                assert len(entries_per_col) == n_cols
+            else:
+                entries_per_col = [entries_per_col] * n_cols
+            # fill handles and labels with empty entries
+            max_entries = max(entries_per_col)
+            empty_handle = ax.plot([], label="", linestyle="None")[0]
+            for i, n in enumerate(entries_per_col):
+                for _ in range(max_entries - min(n, len(handles) - sum(entries_per_col[:i]))):
+                    handles.insert(i * max_entries + n, empty_handle)
+                    labels.insert(i * max_entries + n, "")
 
-        # reverse order of entries that are part of the stack
-        if any(in_stack):
-            def shuffle(entries, mask):
-                entries = np.array(entries, dtype=object)
-                entries[mask] = entries[mask][::-1]
-                return list(entries)
-
-            handles = shuffle(handles, in_stack)
-            labels = shuffle(labels, in_stack)
+        # custom hook to adjust handles and labels
+        update_handles_labels = legend_kwargs.pop("update_handles_labels", None)
+        if callable(update_handles_labels):
+            update_handles_labels(ax, handles, labels, n_cols)
 
         # make legend using ordered handles/labels
         ax.legend(handles, labels, **legend_kwargs)
@@ -343,81 +370,7 @@ def plot_all(
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)
 
-    plt.tight_layout()
+    # finalization
+    fig.tight_layout()
 
     return fig, axs
-
-
-def make_plot_2d(
-    plot_config: dict,
-    style_config: dict,
-    figaxes: FigAxesType | None = None,
-    **kwargs,
-):
-    """
-    Function that makes a 2d plot based on two configuration dictionaries,
-    *plot_config* and *style_config*.
-
-    The *plot_config* contains the fields:
-    "hist": hist.Hist,
-    "kwargs": optional arguments to be passed to the plot_config["hist"].hist2d,
-    "cbar_kwargs": optional arguments to be passed to plt.colorbar (not sure if all will work),
-
-    The *style_config* expects fields (all optional):
-    "ax_cfg": dict,
-    "legend_cfg": dict,
-    "cms_label_cfg": dict,
-    "annotate_cfg": dict
-
-    :param plot_config: Dictionary with the histogram to be plotted and how (includes colorbar)
-    :param style_config: Dictionary that defines arguments on how to style the overall plot.
-    :param figaxes: tuple containing a figure and axes for the plots
-    :return: tuple of plot figure and axes
-    """
-
-    if figaxes is None:
-        # use CMS plotting style
-        plt.style.use(mplhep.style.CMS)
-        fig, ax = plt.subplots()
-    else:
-        fig, ax = figaxes
-        assert isinstance(ax, plt.Axes), f"expected one single axes but got {ax}"
-
-    # apply style_config
-    if ax_cfg := style_config.get("ax_cfg", {}):
-        for tickname in ["xticks", "yticks"]:
-            ticks = ax_cfg.pop(tickname)
-            for ticksize in ["major", "minor"]:
-                if subticks := ticks.get(ticksize, {}):
-                    getattr(ax, "set_" + tickname)(**subticks, minor=ticksize == "minor")
-        ax.set(**ax_cfg)
-
-    if "legend_cfg" in style_config:
-        ax.legend(**style_config["legend_cfg"])
-
-    # annotation of category label
-    if annotate_kwargs := style_config.get("annotate_cfg", {}):
-        ax.annotate(**annotate_kwargs)
-
-    if cms_label_kwargs := style_config.get("cms_label_cfg", {}):
-        mplhep.cms.label(ax=ax, **cms_label_kwargs)
-
-    # call plot method, patching the colorbar function
-    # called internally by mplhep to draw the extension symbols
-    with patch.object(plt, "colorbar", partial(plt.colorbar, **plot_config.get("cbar_kwargs", {}))):
-        plot_config["hist"].plot2d(ax=ax, **plot_config.get("kwargs", {}))
-
-    if plot_config.get("kwargs", {}).get("cbar", False):
-        # fix color bar minor ticks with SymLogNorm
-        # returned collections can vary -> brute-force set
-        # norm on all colorbars that are found
-        cbars = {
-            coll.colorbar
-            for coll in ax.collections
-            if coll.colorbar
-        }
-        for cbar in cbars:
-            fix_cbar_minor_ticks(cbar)
-
-    fig.tight_layout()
-    return fig, (ax,)

@@ -4,12 +4,8 @@
 Definition of shifts.
 """
 
-from collections import OrderedDict
-
 import law
-import os
 import re
-import yaml
 
 from columnflow.util import DotDict, call_once_on_config
 
@@ -62,23 +58,6 @@ def add_shifts(config: od.Config) -> None:
     config.add_shift(name="mu_trig_sf_up", id=52, type="shape")
     config.add_shift(name="mu_trig_sf_down", id=53, type="shape")
     add_shift_aliases("mu_sf", {"muon_weight": "muon_weight_{direction}"}, selection_dependent=False)
-
-    # b-tagging uncertainties
-    btag_uncs = [
-        "hf", "lf", f"hfstats1_{config.x.year}", f"hfstats2_{config.x.year}",
-        f"lfstats1_{config.x.year}", f"lfstats2_{config.x.year}", "cferr1", "cferr2",
-    ]
-    for i, unc in enumerate(btag_uncs):
-        config.add_shift(name=f"btag_{unc}_up", id=100 + 2 * i, type="shape")
-        config.add_shift(name=f"btag_{unc}_down", id=101 + 2 * i, type="shape")
-        add_shift_aliases(
-            f"btag_{unc}",
-            {
-                "normalized_btag_weight": f"normalized_btag_weight_{unc}_" + "{direction}",
-                "normalized_njet_btag_weight": f"normalized_njet_btag_weight_{unc}_" + "{direction}",
-            },
-            selection_dependent=False,
-        )
 
     config.add_shift(name="mur_up", id=201, type="shape")
     config.add_shift(name="mur_down", id=202, type="shape")
@@ -156,7 +135,7 @@ def add_shifts(config: od.Config) -> None:
         "CorrelationGroupUncorrelated",
     ]
 
-    for jec_source in config.x.jec["uncertainty_sources"]:
+    for jec_source in config.x.jec["Jet"]["uncertainty_sources"]:
         idx = all_jec_sources.index(jec_source)
         config.add_shift(name=f"jec_{jec_source}_up", id=5000 + 2 * idx, type="shape")
         config.add_shift(name=f"jec_{jec_source}_down", id=5001 + 2 * idx, type="shape")
@@ -172,7 +151,6 @@ def add_shifts(config: od.Config) -> None:
 
     get_shifts = lambda *keys: sum(([config.get_shift(f"{k}_up"), config.get_shift(f"{k}_down")] for k in keys), [])
 
-    config.x.event_weights["normalized_btag_weight"] = get_shifts(*(f"btag_{unc}" for unc in btag_uncs))
     config.x.event_weights["normalized_pu_weight"] = get_shifts("minbias_xs")
     config.x.event_weights["electron_weight"] = get_shifts("e_sf")
     config.x.event_weights["muon_weight"] = get_shifts("mu_sf")

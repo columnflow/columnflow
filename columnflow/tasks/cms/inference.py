@@ -7,19 +7,23 @@ Tasks related to the creation of datacards for inference purposes.
 from collections import OrderedDict, defaultdict
 
 import law
+import order as od
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, InferenceModelMixin,
+    HistHookMixin, WeightProducerMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
-from columnflow.util import dev_sandbox
+from columnflow.util import dev_sandbox, DotDict
 from columnflow.config_util import get_datasets_from_process
 
 
 class CreateDatacards(
+    HistHookMixin,
     InferenceModelMixin,
+    WeightProducerMixin,
     MLModelsMixin,
     ProducersMixin,
     SelectorStepsMixin,
@@ -57,7 +61,12 @@ class CreateDatacards(
                 )
             ]
 
-        # if not, check the config
+        # if the proc object is dynamic, it is calculated and the fly (e.g. via a hist hook)
+        # and doesn't have any additional requirements
+        if proc_obj.is_dynamic:
+            return []
+
+        # otherwise, check the config
         return [
             dataset_inst.name
             for dataset_inst in get_datasets_from_process(self.config_inst, proc_obj.config_process)
@@ -145,6 +154,7 @@ class CreateDatacards(
                 for dataset in self.get_mc_datasets(proc_obj)
             }
             for proc_obj in cat_obj.processes
+            if not proc_obj.is_dynamic
         }
         if cat_obj.config_data_datasets:
             reqs["data"] = {
@@ -161,8 +171,14 @@ class CreateDatacards(
         return reqs
 
     def output(self):
+        hooks_repr = self.hist_hooks_repr
         cat_obj = self.branch_data
-        basename = lambda name, ext: f"{name}__cat_{cat_obj.name}__var_{cat_obj.config_variable}.{ext}"
+
+        def basename(name: str, ext: str) -> str:
+            parts = [name, cat_obj.name, cat_obj.config_variable]
+            if hooks_repr:
+                parts.append(f"hooks_{hooks_repr}")
+            return f"{'__'.join(map(str, parts))}.{ext}"
 
         return {
             "card": self.target(basename("datacard", "txt")),
@@ -185,11 +201,13 @@ class CreateDatacards(
         leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
         # histogram data per process
-        hists = OrderedDict()
+        hists: dict[od.Process, hist.Hist] = dict()
 
         with self.publish_step(f"extracting {variable_inst.name} in {category_inst.name} ..."):
+            # loop over processes and forward them to any possible hist hooks
             for proc_obj_name, inp in inputs.items():
                 if proc_obj_name == "data":
+                    # there is not process object for data
                     proc_obj = None
                     process_inst = self.config_inst.get_process("data")
                 else:
@@ -220,15 +238,10 @@ class CreateDatacards(
                             for p in sub_process_insts
                             if p.id in h.axes["process"]
                         ],
-                        "category": [
-                            hist.loc(c.id)
-                            for c in leaf_category_insts
-                            if c.id in h.axes["category"]
-                        ],
                     }]
 
                     # axis reductions
-                    h = h[{"process": sum, "category": sum}]
+                    h = h[{"process": sum}]
 
                     # add the histogram for this dataset
                     if h_proc is None:
@@ -240,30 +253,68 @@ class CreateDatacards(
                 if h_proc is None:
                     raise Exception(f"no histograms found for process '{process_inst.name}'")
 
+                # save histograms in hist_hook format
+                hists[process_inst] = h_proc
+
+            # apply hist hooks
+            hists = self.invoke_hist_hooks(hists)
+
+            # define datacard processes to loop over
+            cat_processes = list(cat_obj.processes)
+            if cat_obj.config_data_datasets and not cat_obj.data_from_processes:
+                cat_processes.append(DotDict({"name": "data"}))
+
+            # after application of hist hooks, we can proceed with the datacard creation
+            datacard_hists: OrderedDict[str, OrderedDict[str, hist.Hist]] = OrderedDict()
+            for proc_obj in cat_processes:
+                # obtain process information from inference model and config again
+                proc_name = "data" if proc_obj.name == "data" else proc_obj.config_process
+                process_inst = self.config_inst.get_process(proc_name)
+
+                h_proc = hists.get(process_inst, None)
+                if h_proc is None:
+                    self.logger.warning(
+                        f"found no histogram for process '{proc_obj.name}', please check your "
+                        f"inference model '{self.inference_model}'",
+                    )
+                    continue
+
+                # select relevant category
+                h_proc = h_proc[{
+                    "category": [
+                        hist.loc(c.id)
+                        for c in leaf_category_insts
+                        if c.id in h_proc.axes["category"]
+                    ],
+                }][{"category": sum}]
+
                 # create the nominal hist
-                hists[proc_obj_name] = OrderedDict()
+                datacard_hists[proc_obj.name] = OrderedDict()
                 nominal_shift_inst = self.config_inst.get_shift("nominal")
-                hists[proc_obj_name]["nominal"] = h_proc[
+                datacard_hists[proc_obj.name]["nominal"] = h_proc[
                     {"shift": hist.loc(nominal_shift_inst.id)}
                 ]
 
-                # per shift
-                if proc_obj:
-                    for param_obj in proc_obj.parameters:
-                        # skip the parameter when varied hists are not needed
-                        if not self.inference_model_inst.require_shapes_for_parameter(param_obj):
-                            continue
-                        # store the varied hists
-                        hists[proc_obj_name][param_obj.name] = {}
-                        for d in ["up", "down"]:
-                            shift_inst = self.config_inst.get_shift(f"{param_obj.config_shift_source}_{d}")
-                            hists[proc_obj_name][param_obj.name][d] = h_proc[
-                                {"shift": hist.loc(shift_inst.id)}
-                            ]
+                # stop here for data
+                if proc_obj.name == "data":
+                    continue
+
+                # create histograms per shift
+                for param_obj in proc_obj.parameters:
+                    # skip the parameter when varied hists are not needed
+                    if not self.inference_model_inst.require_shapes_for_parameter(param_obj):
+                        continue
+                    # store the varied hists
+                    datacard_hists[proc_obj_name][param_obj.name] = {}
+                    for d in ["up", "down"]:
+                        shift_inst = self.config_inst.get_shift(f"{param_obj.config_shift_source}_{d}")
+                        datacard_hists[proc_obj_name][param_obj.name][d] = h_proc[
+                            {"shift": hist.loc(shift_inst.id)}
+                        ]
 
             # forward objects to the datacard writer
             outputs = self.output()
-            writer = DatacardWriter(self.inference_model_inst, {cat_obj.name: hists})
+            writer = DatacardWriter(self.inference_model_inst, {cat_obj.name: datacard_hists})
             with outputs["card"].localize("w") as tmp_card, outputs["shapes"].localize("w") as tmp_shapes:
                 writer.write(tmp_card.abspath, tmp_shapes.abspath, shapes_path_ref=outputs["shapes"].basename)
 

@@ -134,6 +134,7 @@ For a better overview of the tasks that are triggered by the commands below, che
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/JanekMoels"><img src="https://avatars.githubusercontent.com/u/116348923?v=4?s=100" width="100px;" alt="JanekMoels"/><br /><sub><b>JanekMoels</b></sub></a><br /><a href="#ideas-JanekMoels" title="Ideas, Planning, & Feedback">🤔</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/haddadanas"><img src="https://avatars.githubusercontent.com/u/103462379?v=4?s=100" width="100px;" alt="haddadanas"/><br /><sub><b>haddadanas</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=haddadanas" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/jomatthi"><img src="https://avatars.githubusercontent.com/u/82223346?v=4?s=100" width="100px;" alt="jomatthi"/><br /><sub><b>jomatthi</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=jomatthi" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/JulesVandenbroeck"><img src="https://avatars.githubusercontent.com/u/93740577?v=4?s=100" width="100px;" alt="JulesVandenbroeck"/><br /><sub><b>JulesVandenbroeck</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=JulesVandenbroeck" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>

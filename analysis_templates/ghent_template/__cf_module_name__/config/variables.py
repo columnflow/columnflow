@@ -15,29 +15,15 @@ def add_variables(config: od.Config) -> None:
     """
     config.add_variable(
         name="event",
-        expression="event",
-        binning=(1, 0.0, 1.0e9),
+        expression=lambda events: np.zeros(len(events), dtype=int),
+        binning=(1, 0, 1),
         x_title="Event number",
-        discrete_x=True,
-    )
-    config.add_variable(
-        name="run",
-        expression="run",
-        binning=(1, 100000.0, 500000.0),
-        x_title="Run number",
-        discrete_x=True,
-    )
-    config.add_variable(
-        name="lumi",
-        expression="luminosityBlock",
-        binning=(1, 0.0, 5000.0),
-        x_title="Luminosity block",
         discrete_x=True,
     )
     config.add_variable(
         name="n_jet",
         expression="n_jet",
-        binning=(6, 0.5, 6.5),
+        binning=(6, 1, 7),
         x_title="Number of jets",
         discrete_x=True,
     )

@@ -6,36 +6,27 @@ Helpful utilities often used in selections.
 
 from __future__ import annotations
 
-__all__ = [
-    "sorted_indices_from_mask", "create_collections_from_masks",
-]
+__all__ = []
+
+import law
 
 from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column
+from columnflow.columnar_util import set_ak_column, sorted_indices_from_mask as _sorted_indices_from_mask
 
 ak = maybe_import("awkward")
 
 
-def sorted_indices_from_mask(
-    mask: ak.Array,
-    metric: ak.Array,
-    sort_axis: int = -1,
-    ascending: bool = True,
-) -> ak.Array:
-    """
-    Takes a boolean *mask* and converts it to an array of indices, sorted using a *metric* of equal
-    size along a *sort_axis* and, by default, in *ascending* order. Example:
+logger = law.logger.get_logger(__name__)
 
-    .. code-block:: python
 
-        mask = [[True, False, False, True], ...]
-        metric = [[5.0, 1.0, 0.9, 4.1], ...]
-
-        sorted_indices_from_mask(mask, metric)
-        # -> [[3, 0], ...]
-    """
-    indices = ak.argsort(metric, axis=sort_axis, ascending=ascending)
-    return indices[mask[indices]]
+def sorted_indices_from_mask(*args, **kwargs) -> ak.Array:
+    # deprecated
+    logger.warning_once(
+        "sorted_indices_from_mask_deprecated",
+        "columnflow.selection.util.sorted_indices_from_mask() is deprecated and will be removed in "
+        "April 2025; use columnflow.columnar_util.sorted_indices_from_mask() instead",
+    )
+    return _sorted_indices_from_mask(*args, **kwargs)
 
 
 def create_collections_from_masks(

@@ -3,11 +3,9 @@
 Column production methods related to higher-level features.
 """
 
-import functools
-
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, four_vec
-from columnflow.columnar_util import set_ak_column, EMPTY_FLOAT
+from columnflow.columnar_util import set_ak_column
 
 from columnflow.production.categories import category_ids
 
@@ -28,7 +26,7 @@ maybe_import("coffea.nanoevents.methods.nanoaod")
         {"Electron", "Muon", }
     ) | four_vec(
         {"Jet"},
-        {"hadronFlavour"}
+        {"btagDeepFlavB"}
     )
     ),
     produces=({
