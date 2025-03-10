@@ -27,8 +27,21 @@ setup___cf_short_name_lc__() {
     #   __cf_short_name_uc___SETUP
     #       A flag that is set to 1 after the setup was successful.
 
+    #
+    # load cf setup helpers
+    #
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
+    local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
+    local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
+    local cf_base="${this_dir}/modules/columnflow"
+    CF_SKIP_SETUP="true" source "${cf_base}/setup.sh" "" || return "$?"
+
+    #
     # prevent repeated setups
-    if [ "${__cf_short_name_uc___SETUP}" = "1" ]; then
+    #
+
+    cf_export_bool __cf_short_name_uc___SETUP
+    if ${__cf_short_name_uc___SETUP} && ! ${CF_ON_SLURM}; then
         >&2 echo "the __cf_analysis_name__ analysis was already succesfully setup"
         >&2 echo "re-running the setup requires a new shell"
         return "1"
@@ -53,7 +66,6 @@ setup___cf_short_name_lc__() {
         setopt globdots
     fi
 
-
     #
     # global variables
     # (__cf_short_name_uc__ = __cf_analysis_name__, CF = columnflow)
@@ -61,7 +73,7 @@ setup___cf_short_name_lc__() {
 
     # start exporting variables
     export __cf_short_name_uc___BASE="${this_dir}"
-    export CF_BASE="${this_dir}/modules/columnflow"
+    export CF_BASE="${cf_base}"
     export CF_REPO_BASE="${__cf_short_name_uc___BASE}"
     export CF_REPO_BASE_ALIAS="__cf_short_name_uc___BASE"
     export CF_SETUP_NAME="${setup_name}"
@@ -71,7 +83,7 @@ setup___cf_short_name_lc__() {
     CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
 
     # interactive setup
-    if [ "${CF_REMOTE_ENV}" != "1" ]; then
+    if ! ${CF_REMOTE_ENV}; then
         cf_setup_interactive_body() {
             # pre-export the CF_FLAVOR which will be cms
             export CF_FLAVOR="cms"
@@ -90,13 +102,11 @@ setup___cf_short_name_lc__() {
     export CF_VENV_BASE="${CF_VENV_BASE:-${CF_SOFTWARE_BASE}/venvs}"
     export CF_CMSSW_BASE="${CF_CMSSW_BASE:-${CF_SOFTWARE_BASE}/cmssw}"
 
-
     #
     # common variables
     #
 
     cf_setup_common_variables || return "$?"
-
 
     #
     # minimal local software setup
@@ -116,12 +126,13 @@ setup___cf_short_name_lc__() {
         done
     fi
 
-
     #
     # git hooks
     #
 
-    cf_setup_git_hooks || return "$?"
+    if ! ${CF_REMOTE_ENV}; then
+        cf_setup_git_hooks || return "$?"
+    fi
 
 
     #
@@ -131,7 +142,7 @@ setup___cf_short_name_lc__() {
     export LAW_HOME="${LAW_HOME:-${__cf_short_name_uc___BASE}/.law}"
     export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${__cf_short_name_uc___BASE}/law.cfg}"
 
-    if which law &> /dev/null; then
+    if ! ${CF_REMOTE_ENV} && which law &> /dev/null; then
         # source law's bash completion scipt
         source "$( law completion )" ""
 
@@ -140,7 +151,7 @@ setup___cf_short_name_lc__() {
     fi
 
     # finalize
-    export __cf_short_name_uc___SETUP="1"
+    export __cf_short_name_uc___SETUP="true"
 }
 
 main() {
@@ -158,6 +169,6 @@ main() {
 }
 
 # entry point
-if [ "${__cf_short_name_uc___SKIP_SETUP}" != "1" ]; then
+if [ "${__cf_short_name_uc___SKIP_SETUP}" != "true" ]; then
     main "$@"
 fi
