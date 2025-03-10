@@ -15,7 +15,7 @@ import law
 import order as od
 
 from columnflow.types import Any, Iterable, Sequence
-from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT
+from columnflow.tasks.framework.base import ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT
 from columnflow.tasks.framework.parameters import SettingsParameter, DerivableInstParameter, DerivableInstsParameter
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
@@ -956,7 +956,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         return columns
 
 
-class MLModelMixinBase(AnalysisTask):
+class MLModelMixinBase(ConfigTask):
     """
     Base mixin to include a machine learning application into tasks.
 
@@ -972,6 +972,14 @@ class MLModelMixinBase(AnalysisTask):
         default=DotDict(),
         description="settings passed to the init function of the ML model",
     )
+    ml_model_inst = DerivableInstParameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
+    exclude_params_index = {"ml_model_inst"}
+    exclude_params_repr = {"ml_model_inst"}
+    exclude_params_sandbox = {"ml_model_inst"}
+    exclude_params_remote_workflow = {"ml_model_inst"}
 
     exclude_params_repr_empty = {"ml_model"}
 
@@ -1069,9 +1077,35 @@ class MLModelTrainingMixin(
     """
     A mixin class for training machine learning models.
     """
+    single_config = False
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
+        # NOTE: we can only build TAF insts from the MLModel after ml_model_inst is set
+        if not cls.upstream_task_cls:
+            raise ValueError(f"upstream_task_cls must be set for multi-config task {cls.task_family}")
+
+        if shifts is None:
+            shifts = TaskShifts()
+
+        ml_model_inst = params["ml_model_inst"]
+        for config_inst, dataset_insts in ml_model_inst.used_datasets.items():
+            for dataset_inst in dataset_insts:
+                # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
+                _params = params.copy()
+                _params["config_inst"] = config_inst
+                _params["config"] = config_inst.name
+                _params["dataset"] = dataset_inst.name
+                logger.debug(f"building taf insts for {ml_model_inst.cls_name} {config_inst.name}, {dataset_inst.name}")
+                cls.upstream_task_cls.build_taf_insts(_params, shifts)
+                cls.upstream_task_cls.get_known_shifts(_params, shifts)
+
+        params["known_shifts"] = shifts
+
+        return params
+
+    @classmethod
+    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve the parameter values for the given parameters.
 
@@ -1083,56 +1117,47 @@ class MLModelTrainingMixin(
         :raises Exception: If the ML model instance received configs to define training configs,
             but did not define any.
         """
-        # resolve ConfigTask parameters first to setup the config insts
-        params = ConfigTask.resolve_param_values(params)
+        # NOTE: we need to resolve ml_model_inst before CSPs because the ml_model_inst itself defines
+        # used CSPs and datasets
+        params = super().resolve_pre_taf_init_params(params)
 
-        if "analysis_inst" in params and "ml_model" in params:
-            analysis_inst = params["analysis_inst"]
+        if "analysis_inst" not in params or "ml_model" not in params:
+            raise ValueError("analysis_inst and ml_model need to be set to resolve the ml_model_inst")
 
-            # NOTE: we could try to implement resolving the default ml_model here
-            ml_model_inst = cls.get_ml_model_inst(
-                params["ml_model"],
-                analysis_inst,
-                parameters=params["ml_model_settings"],
+        analysis_inst = params["analysis_inst"]
+
+        # NOTE: we could try to implement resolving the default ml_model here
+        # NOTE: why not implement the config resoluting in get_ml_model_inst instead?
+        ml_model_inst = cls.get_ml_model_inst(
+            params["ml_model"],
+            analysis_inst,
+            parameters=params["ml_model_settings"],
+        )
+        params["ml_model_inst"] = ml_model_inst
+
+        # resolve configs
+        _configs = params.get("configs", ())
+        params["configs"] = tuple(ml_model_inst.training_configs(list(_configs)))
+        if not params["configs"]:
+            raise Exception(
+                f"MLModel '{ml_model_inst.cls_name}' received configs '{_configs}' to define "
+                "training configs, but did not define any",
             )
-            params["ml_model_inst"] = ml_model_inst
+        ml_model_inst._set_configs(params["configs"])
 
-            # resolve configs
-            _configs = params.get("configs", ())
-            params["configs"] = tuple(ml_model_inst.training_configs(list(_configs)))
-            if not params["configs"]:
-                raise Exception(
-                    f"MLModel '{ml_model_inst.cls_name}' received configs '{_configs}' to define "
-                    "training configs, but did not define any",
-                )
-            ml_model_inst._set_configs(params["configs"])
+        # call the model's setup hook
+        ml_model_inst._setup()
 
-            # call the model's setup hook
-            ml_model_inst._setup()
-
-            # resolve CSPs based on the MLModel
-            params["calibrators"] = law.util.make_tuple(
-                ml_model_inst.training_calibrators(analysis_inst, params["calibrators"]),
-            )
-            params["selector"] = ml_model_inst.training_selector(analysis_inst, params["selector"])
-            params["producers"] = law.util.make_tuple(
-                ml_model_inst.training_producers(analysis_inst, params["producers"]),
-            )
-
-        # as final step, resolve CSPs
-        params = super().resolve_param_values(params)
+        # resolve CSPs based on the MLModel
+        params["calibrators"] = law.util.make_tuple(
+            ml_model_inst.training_calibrators(analysis_inst, params["calibrators"]),
+        )
+        params["selector"] = ml_model_inst.training_selector(analysis_inst, params["selector"])
+        params["producers"] = law.util.make_tuple(
+            ml_model_inst.training_producers(analysis_inst, params["producers"]),
+        )
 
         return params
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # get the ML model instance
-        self.ml_model_inst = self.get_ml_model_inst(
-            self.ml_model,
-            self.analysis_inst,
-            configs=list(self.configs),
-            parameters=self.ml_model_settings,
-        )
 
     def store_parts(self) -> law.util.InsertableDict[str, str]:
         """
@@ -1150,7 +1175,7 @@ class MLModelTrainingMixin(
         return parts
 
 
-class MLModelMixin(ConfigTask, MLModelMixinBase):
+class MLModelMixin(MLModelMixinBase):
     """
     A mixin for tasks that require a single machine learning model, e.g. for evaluation.
     """
@@ -1166,45 +1191,30 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
     exclude_params_repr_empty = {"ml_model"}
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_pre_taf_init_params(params)
 
-        # add the default ml model when empty
-        if "analysis_inst" in params:
-            analysis_inst = params["analysis_inst"]
+        # # add the default ml model when empty
+        params["ml_model"] = cls.resolve_config_default(
+            param=params.get("ml_model"),
+            task_params=params,
+            container=params["analysis_inst"],
+            default_str="default_ml_model",
+            multi_strategy="same",
+        )
 
-            params["ml_model"] = cls.resolve_config_default(
-                params,
-                params.get("ml_model"),
-                container=analysis_inst,
-                default_str="default_ml_model",
-                multiple=False,
-            )
-
-            # when both config_inst and ml_model are set, initialize the ml_model_inst
-            if all(params.get(x) not in (None, law.NO_STR) for x in ("config_inst", "ml_model")):
+        # when both config_inst and ml_model are set, initialize the ml_model_inst
+        if all(params.get(x) not in (None, law.NO_STR) for x in ("config_inst", "ml_model")):
+            if not params.get("ml_model_inst"):
                 params["ml_model_inst"] = cls.get_ml_model_inst(
                     params["ml_model"],
-                    analysis_inst,
+                    params["analysis_inst"],
                     requested_configs=[params["config_inst"]],
                 )
-            elif not cls.allow_empty_ml_model:
-                raise Exception(f"no ml_model configured for {cls.task_family}")
+        elif not cls.allow_empty_ml_model:
+            raise Exception(f"no ml_model configured for {cls.task_family}")
 
         return params
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # get the ML model instance
-        self.ml_model_inst = None
-        if self.ml_model != law.NO_STR:
-            self.ml_model_inst = self.get_ml_model_inst(
-                self.ml_model,
-                self.analysis_inst,
-                requested_configs=[self.config_inst],
-                parameters=self.ml_model_settings,
-            )
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
@@ -1223,8 +1233,43 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
         return columns
 
 
-class MLModelDataMixin(MLModelMixin):
+class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
+    preparation_producer_inst = DerivableInstParameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
+    exclude_params_index = {"preparation_producer_inst"}
+    exclude_params_repr = {"preparation_producer_inst"}
+    exclude_params_sandbox = {"preparation_producer_inst"}
+    exclude_params_remote_workflow = {"preparation_producer_inst"}
 
+    invokes_preparation_producer = False
+
+    @classmethod
+    def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        return cls.get_array_function_dict(params)
+
+    # @property
+    # def preparation_producer(self):
+    #     return self.ml_model_inst.preparation_producer(self.analysis_inst)
+
+    build_producer_inst = ProducerMixin.build_producer_inst
+
+    @classmethod
+    def build_taf_insts(cls, params, shifts: TaskShifts | None = None):
+        ml_model_inst = params["ml_model_inst"]
+        preparation_producer = ml_model_inst.preparation_producer(params["analysis_inst"])
+        # add the producer instance
+        if not params.get("preparation_producer_inst"):
+            params["preparation_producer_inst"] = cls.build_producer_inst(preparation_producer, params)
+
+        params = super().build_taf_insts(params, shifts)
+
+        return params
+
+
+class MLModelDataMixin(PreparationProducerMixin):
+    single_config = True
     allow_empty_ml_model = False
 
     def store_parts(self) -> law.util.InsertableDict:
@@ -1238,7 +1283,7 @@ class MLModelDataMixin(MLModelMixin):
         return parts
 
 
-class MLModelsMixin(AnalysisTask):
+class MLModelsMixin(ConfigTask):
 
     ml_models = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
@@ -1267,11 +1312,12 @@ class MLModelsMixin(AnalysisTask):
         if analysis_inst:
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
-                params,
-                params.get("ml_models"),
+                param=params.get("ml_models"),
+                task_params=params,
                 container=analysis_inst,
                 default_str="default_ml_model",
                 groups_str="ml_model_groups",
+                multi_strategy="same",
             )
 
             # special case: initialize them once to trigger their set_config hook

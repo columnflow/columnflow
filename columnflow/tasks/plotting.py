@@ -17,7 +17,7 @@ from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
     CategoriesMixin, MultiConfigDatasetsProcessesShiftSourcesMixin, HistHookMixin, MultiConfigDatasetsProcessesMixin,
-    # MLModelsMixin,
+    MLModelsMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -33,7 +33,7 @@ class PlotVariablesBase(
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,
-    # MLModelsMixin,
+    MLModelsMixin,
     WeightProducerClassMixin,
     CategoriesMixin,
     ProcessPlotSettingMixin,

@@ -14,6 +14,7 @@ from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, CalibratorsMixin, SelectorClassMixin, SelectorMixin,
     ProducerClassesMixin, ProducersMixin, VariablesMixin, DatasetShiftSourcesMixin,
     WeightProducerClassMixin, WeightProducerMixin, ChunkedIOMixin,
+    MLModelsMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
@@ -27,7 +28,7 @@ from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_t
 class _CreateHistograms(
     ReducedEventsUser,
     ProducersMixin,
-    # MLModelsMixin,
+    MLModelsMixin,
     WeightProducerMixin,
     ChunkedIOMixin,
     VariablesMixin,
@@ -339,7 +340,7 @@ class _MergeHistograms(
     CalibratorsMixin,
     SelectorMixin,
     ProducersMixin,
-    # MLModelsMixin,
+    MLModelsMixin,
     WeightProducerMixin,
     VariablesMixin,
     law.LocalWorkflow,
@@ -465,7 +466,7 @@ class _MergeShiftedHistograms(
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,
-    # MLModelsMixin,
+    MLModelsMixin,
     WeightProducerClassMixin,
     VariablesMixin,
     law.LocalWorkflow,
