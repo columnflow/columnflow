@@ -1845,9 +1845,8 @@ class DatasetsProcessesMixin(ConfigTask):
     @classmethod
     def modify_task_attributes(cls) -> None:
         super().modify_task_attributes()
-
         # single/multi config adjustments in case the switch has been specified
-        if isinstance(cls.single_config, bool) and getattr(cls, "datasets_multi", law.no_value) != law.no_value:
+        if isinstance(cls.single_config, bool) and getattr(cls, "datasets_multi", None) is not None:
             if not cls.has_single_config():
                 cls.datasets = cls.datasets_multi
                 cls.processes = cls.processes_multi
@@ -1874,7 +1873,6 @@ class DatasetsProcessesMixin(ConfigTask):
                     processes = config_inst.processes.names()
                 if not processes and not cls.allow_empty_processes:
                     raise ValueError(f"no processes found matching {processes_orig}")
-
             if datasets != law.no_value:
                 datasets_orig = datasets
                 if datasets:
@@ -1942,7 +1940,6 @@ class DatasetsProcessesMixin(ConfigTask):
                         config_inst: list(map(config_inst.get_dataset, datasets))
                         for config_inst, datasets in zip(config_insts, multi_datasets)
                     }
-
         return params
 
     @classmethod

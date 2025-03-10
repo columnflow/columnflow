@@ -16,7 +16,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
-    CategoriesMixin, MultiConfigDatasetsProcessesShiftSourcesMixin, HistHookMixin, MultiConfigDatasetsProcessesMixin,
+    CategoriesMixin, DatasetsProcessesShiftSourcesMixin, HistHookMixin, DatasetsProcessesMixin,
     MLModelsMixin,
 )
 from columnflow.tasks.framework.plotting import (
@@ -29,7 +29,7 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 from columnflow.hist_util import add_missing_shifts
 
 
-class PlotVariablesBase(
+class _PlotVariablesBase(
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,
@@ -37,13 +37,18 @@ class PlotVariablesBase(
     WeightProducerClassMixin,
     CategoriesMixin,
     ProcessPlotSettingMixin,
-    MultiConfigDatasetsProcessesMixin,
+    DatasetsProcessesMixin,
     VariablePlotSettingMixin,
     HistHookMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    # single_config = False set via MultiConfigDatasetsProcessesMixin
+    """
+    Base classes for :py:class:`PlotVariablesBase`.
+    """
+
+
+class PlotVariablesBase(_PlotVariablesBase):
     single_config = False
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -437,7 +442,7 @@ class PlotVariablesPerProcess2D(
 
 
 class PlotVariablesBaseMultiShifts(
-    MultiConfigDatasetsProcessesShiftSourcesMixin,
+    DatasetsProcessesShiftSourcesMixin,
     PlotVariablesBase,
 ):
     legend_title = luigi.Parameter(

@@ -1237,6 +1237,12 @@ class ConfigTask(AnalysisTask):
         """
         if shifts is None:
             shifts = TaskShifts()
+
+        if not cls.upstream_task_cls:
+            cls.get_known_shifts(params, shifts)
+            params["known_shifts"] = shifts
+            return params
+
         if cls.has_single_config():
             if cls.upstream_task_cls is not None:
                 _params = cls.upstream_task_cls.build_taf_insts(params, shifts)
@@ -1252,10 +1258,6 @@ class ConfigTask(AnalysisTask):
                 _params = cls.upstream_task_cls.build_taf_insts(_params, shifts)
                 cls.upstream_task_cls.get_known_shifts(_params, shifts)
 
-            params["known_shifts"] = shifts
-
-        if not cls.upstream_task_cls:
-            cls.get_known_shifts(params, shifts)
             params["known_shifts"] = shifts
 
         return params
@@ -1347,7 +1349,7 @@ class ConfigTask(AnalysisTask):
     @classmethod
     def broadcast_to_configs(cls, params: dict[str, Any], param: str, n_config_insts: int) -> tuple[Any]:
         value = params.get(param, law.no_value)
-        if not isinstance(value, tuple):
+        if value == () or not isinstance(value, tuple):
             value = (value,)
         if len(value) == 1:
             value *= n_config_insts
@@ -1622,8 +1624,8 @@ class DatasetTask(ShiftTask):
     file_merging = None
 
     @classmethod
-    def resolve_param_values(cls, params):
-        params = super().resolve_param_values(params)
+    def resolve_pre_taf_init_params(cls, params):
+        params = super().resolve_pre_taf_init_params(params)
 
         # store a reference to the dataset inst
         if "dataset_inst" not in params and "config_inst" in params and "dataset" in params:
