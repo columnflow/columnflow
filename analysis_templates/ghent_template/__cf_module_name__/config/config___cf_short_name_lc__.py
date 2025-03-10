@@ -338,7 +338,8 @@ def add_config(
             {"Jet"},
             {"btagDeepFlavB", "btagDeepFlavCvB"},
         ) | four_vec(  # Leptons
-            {"Electron", "Muon", }
+            {"Electron", "Muon", },
+            {"deltaEtaSC"},
         )
     )
 
