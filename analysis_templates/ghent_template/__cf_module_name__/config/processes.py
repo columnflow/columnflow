@@ -25,7 +25,7 @@ def add_processes(config: od.Config, campaign: od.Campaign):
         name="background",
         id=9999,  # cannot collide with ids defined in cmsdb though
         label="Background",
-        xsecs = {campaign.ecm: sum([config.get_process(bg).get_xsec(campaign.ecm) for bg in bg_processes])}
+        xsecs={campaign.ecm: sum([config.get_process(bg).get_xsec(campaign.ecm) for bg in bg_processes])}
     )
     for bg in bg_processes:
         background.add_process(config.get_process(bg))

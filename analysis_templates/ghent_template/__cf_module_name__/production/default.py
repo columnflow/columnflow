@@ -26,6 +26,7 @@ maybe_import("coffea.nanoevents.methods.nanoaod")
         {"Electron", "Muon", }
     ) | four_vec(
         {"Jet"},
+        {"btagDeepFlavB"}
     )
     ),
     produces=({

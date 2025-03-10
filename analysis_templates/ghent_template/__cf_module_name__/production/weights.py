@@ -5,7 +5,6 @@ Column production methods related to generic event weights.
 """
 
 from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column, has_ak_column, Route
 from columnflow.selection import SelectionResult
 from columnflow.production import Producer, producer
 from columnflow.production.cms.pileup import pu_weight
@@ -18,41 +17,6 @@ from __cf_short_name_lc__.production.normalized_weights import normalized_weight
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-
-
-@producer(
-    produces={"event_weight"},
-    mc_only=True,
-)
-def event_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
-    """
-    Producer that calculates the 'final' event weight (as done in cf.CreateHistograms)
-    """
-    weight = ak.Array(np.ones(len(events)))
-    if self.dataset_inst.is_mc:
-        for column in self.config_inst.x.event_weights:
-            weight = weight * Route(column).apply(events)
-        for column in self.dataset_inst.x("event_weights", []):
-            if has_ak_column(events, column):
-                weight = weight * Route(column).apply(events)
-            else:
-                self.logger.warning_once(
-                    f"missing_dataset_weight_{column}",
-                    f"weight '{column}' for dataset {self.dataset_inst.name} not found",
-                )
-
-    events = set_ak_column(events, "event_weight", weight)
-
-    return events
-
-
-@event_weight.init
-def event_weight_init(self: Producer) -> None:
-    if not getattr(self, "dataset_inst", None):
-        return
-
-    self.uses |= set(self.config_inst.x.event_weights.keys())
-    self.uses |= set(self.dataset_inst.x("event_weights", {}).keys())
 
 
 @producer(
@@ -130,12 +94,10 @@ normalized_pu_weights = normalized_weight_factory(
     uses={
         normalization_weights, electron_weights, muon_weights,
         normalized_pu_weights,
-        event_weight,
     },
     produces={
         normalization_weights, electron_weights, muon_weights,
         normalized_pu_weights,
-        event_weight,
     },
     mc_only=True,
 )
@@ -159,9 +121,6 @@ def event_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     if not self.dataset_inst.has_tag("skip_pdf"):
         events = self[normalized_pdf_weights](events, **kwargs)
-
-    # calculate the full event weight for plotting purposes
-    events = self[event_weight](events, **kwargs)
 
     return events
 
