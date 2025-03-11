@@ -299,7 +299,7 @@ def muon_mva_input(events):
     mc_only=True,
     # lepton config bundle, function to determine the location of a list of LeptonWeightConfig's
     lepton_configs=lambda self: self.config_inst.x.lepton_weight_configs,
-    config_naming=lambda self, cfg: cfg.weight_name 
+    config_naming=lambda self, cfg: cfg.weight_name,
 )
 def bundle_lepton_weights(
     self: Producer,
