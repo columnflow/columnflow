@@ -71,7 +71,6 @@ def plot_variable_per_process(
     )
 
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
-
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
 
@@ -342,11 +341,11 @@ def plot_profile(
 
     # remove shift axis from histograms
     remove_residual_axis(hists, "shift")
-    breakpoint()
+
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
-    breakpoint()
+
     # process histograms to profiled and reduced histograms
     profiled_hists, reduced_hists = OrderedDict(), OrderedDict()
     for process_inst, h_in in hists.items():
