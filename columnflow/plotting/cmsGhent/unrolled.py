@@ -234,7 +234,7 @@ def plot_unrolled(
     for i, hist in enumerate(hists):
         ax = axes[i]
 
-        plot_config = prepare_stack_plot_config(hists, shape_norm=shape_norm, **kwargs)
+        plot_config = prepare_stack_plot_config(hist, shape_norm=shape_norm, **kwargs)
 
         if shape_norm:
             style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"

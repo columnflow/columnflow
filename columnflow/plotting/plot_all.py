@@ -41,7 +41,7 @@ def draw_error_bands(
     baseline[np.isnan(baseline)] = 0.0
 
     defaults = {
-        "x": h.axes[0].centers,
+        "x": h.axes[0].centers - (h.axes[0].edges[0] if type(h.axes[0]) is hist.axes.Integer else 0),
         "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
         "height": baseline * 2 * rel_error,
         "bottom": baseline * (1 - rel_error),
@@ -148,7 +148,7 @@ def draw_errorbars(
     yerr[1] -= values
     yerr[yerr < 0] = 0
     defaults = {
-        "x": h.axes[0].centers,
+        "x": h.axes[0].centers - (h.axes[0].edges[0] if type(h.axes[0]) is hist.axes.Integer else 0),
         "y": values,
         "yerr": yerr,
         "color": "k",
