@@ -9,7 +9,8 @@ import law
 
 from columnflow.production import producer, Producer
 from columnflow.util import maybe_import, DotDict
-from columnflow.columnar_util import has_ak_column, Route, fill_hist
+from columnflow.columnar_util import has_ak_column, Route
+from columnflow.hist_util import fill_hist
 import columnflow.production.cmsGhent.trigger.util as util
 from columnflow.selection import SelectionResult
 import order as od
