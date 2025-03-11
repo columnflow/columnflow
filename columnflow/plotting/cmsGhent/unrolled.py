@@ -39,7 +39,7 @@ from columnflow.plotting.plot_all import (
     draw_hist, draw_errorbars, draw_stack, draw_error_bands,
 )
 from columnflow.plotting.plot_util import (
-    prepare_plot_config,
+    prepare_stack_plot_config,
     prepare_style_config,
     remove_residual_axis,
     apply_variable_settings,
@@ -234,13 +234,9 @@ def plot_unrolled(
     for i, hist in enumerate(hists):
         ax = axes[i]
 
-        plot_config = prepare_plot_config(
-            hist,
-            shape_norm=shape_norm,
-            hide_errors=hide_errors,
-        )
+        plot_config = prepare_stack_plot_config(hists, shape_norm=shape_norm, **kwargs)
 
-        if shape_norm:
+       if shape_norm:
             style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
 
         if density:
