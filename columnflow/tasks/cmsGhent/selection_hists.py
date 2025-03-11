@@ -89,10 +89,8 @@ class SelectionEfficiencyHistMixin(
         for d in self.datasets:
             reqs[d] = self.reqs.MergeSelectionStats.req(
                 self,
-                tree_index=0,
                 branch=-1,
                 dataset=d,
-                _exclude=MergeSelectionStats.exclude_params_forest_merge,
             )
         return reqs
 
@@ -100,10 +98,8 @@ class SelectionEfficiencyHistMixin(
         return {
             d: self.reqs.MergeSelectionStats.req(
                 self,
-                tree_index=0,
                 branch=-1,
                 dataset=d,
-                _exclude=MergeSelectionStats.exclude_params_forest_merge,
             )
             for d in self.datasets
         }
