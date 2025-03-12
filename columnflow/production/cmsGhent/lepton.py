@@ -28,13 +28,14 @@ class LeptonWeightConfig:
         @param correction_set: name of the corrections in the json
         @param get_sf_file: function mapping external files to the scale factor json
         @param input_pars: dictionary passed to the corrector inputs
-
+        @syst_key: systematic variable key of the correction set
+        @param systematics: tuple of tuples (or dict) of systematic variable input of the correction set and the postfix linked to the systematic 
         @param aux: dictionary with other useful information
         @param uses: columns used for the weight calculation
         @param input_func: function that calculates a dictionary with input arrays for the weight calculation
         @param mask_func: function that calculates a mask to apply before calculating the weights
 
-    """
+    """  # noqa
     year: str | int
     weight_name: str
     correction_set: Sequence[str] | str
