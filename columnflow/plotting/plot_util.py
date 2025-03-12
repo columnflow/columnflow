@@ -32,6 +32,7 @@ logger = law.logger.get_logger(__name__)
 
 label_options = {
     "wip": "Work in progress",
+    "int": "Internal",
     "pre": "Preliminary",
     "pw": "Private work (CMS data/simulation)",
     "pwip": "Private work in progress (CMS)",
@@ -429,9 +430,11 @@ def prepare_style_config(
     if not yscale:
         yscale = "log" if variable_inst.log_y else "linear"
 
+    discrete_shift = (variable_inst.x_min if variable_inst.x_discrete else 0)
+
     xlim = (
-        variable_inst.x("x_min", variable_inst.x_min),
-        variable_inst.x("x_max", variable_inst.x_max),
+        variable_inst.x("x_min", variable_inst.x_min) - discrete_shift,
+        variable_inst.x("x_max", variable_inst.x_max) - discrete_shift,
     )
 
     # build the label from category and optional variable selection labels
