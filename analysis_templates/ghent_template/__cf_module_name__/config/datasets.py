@@ -8,10 +8,6 @@ from __future__ import annotations
 
 import law
 import order as od
-import cmsdb.processes as procs
-from columnflow.tasks.external import GetDatasetLFNs
-# import cmsdb.processes as procs
-
 
 logger = law.logger.get_logger(__name__)
 
