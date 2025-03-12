@@ -53,9 +53,13 @@ def add_lepton_settings(config: od.Config) -> None:
         weight_name="muon_weight_mediumid",
     )
 
-    MuonLoosePFIsoWeightConfig = MuonMediumIDWeightConfig.copy(
-        correction_set="NUM_LoosePFIso_DEN_MediumID",
-        weight_name="muon_weight_loosepfiso",
+    @MuonMediumIDWeightConfig.mask(uses={"Muon.pt"})
+    def muon_mask(events):
+        return (events.Muon.pt > 15)
+
+    MuonLooseRelIsoWeightConfig = MuonMediumIDWeightConfig.copy(
+        correction_set="NUM_LooseRelIso_DEN_MediumID",
+        weight_name="muon_weight_loosereliso",
     )
 
     config.x.lepton_weight_configs = [
@@ -63,7 +67,7 @@ def add_lepton_settings(config: od.Config) -> None:
         ElectronRecoAbove20WeightConfig,
         ElectronWP90IsoWeightConfig,
         MuonMediumIDWeightConfig,
-        MuonLoosePFIsoWeightConfig,
+        MuonLooseRelIsoWeightConfig,
     ]
 
     return

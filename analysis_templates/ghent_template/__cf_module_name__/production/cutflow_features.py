@@ -6,9 +6,7 @@ Column production methods for cutflow features.
 
 from columnflow.selection import SelectionResult
 from columnflow.production import Producer, producer
-from columnflow.production.categories import category_ids
 from columnflow.production.cms.mc_weight import mc_weight
-from columnflow.selection.util import create_collections_from_masks
 from columnflow.util import maybe_import, four_vec
 from columnflow.columnar_util import EMPTY_FLOAT, Route, set_ak_column
 
@@ -36,9 +34,6 @@ def cutflow_features(
 ) -> ak.Array:
     if self.dataset_inst.is_mc:
         events = self[mc_weight](events, **kwargs)
-
-    # apply object masks and create new collections
-    reduced_events = create_collections_from_masks(events, results.objects)
 
     # add cutflow columns
     events = set_ak_column(

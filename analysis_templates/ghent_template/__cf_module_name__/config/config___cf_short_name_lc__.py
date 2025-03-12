@@ -16,7 +16,7 @@ from columnflow.config_util import (
 from __cf_short_name_lc__.config.styling import stylize_processes
 from __cf_short_name_lc__.config.datasets import add_datasets, configure_datasets
 from __cf_short_name_lc__.config.processes import add_processes
-from __cf_short_name_lc__.config.settings import add_settings
+from __cf_short_name_lc__.config.settings.settings import add_settings
 from __cf_short_name_lc__.config.veto import add_vetoes
 from __cf_short_name_lc__.config.categories import add_categories_selection
 from __cf_short_name_lc__.config.variables import add_variables
@@ -155,7 +155,7 @@ def add_config(
             # columns added during selection, required in general
             "mc_weight", "PV.npvs", "process_id", "category_ids", "deterministic_seed",
             # weight-related columns
-            "pu_weight*", "pdf_weight*",
+            "pu_weight*", "pdf_weight*", "isr_weight*", "fsr_weight*",
             "murf_envelope_weight*", "mur_weight*", "muf_weight*",
             "btag_weight*",
             # extra columns
@@ -174,7 +174,7 @@ def add_config(
     cfg.x.default_ml_model = None
     cfg.x.default_inference_model = "example"
     cfg.x.default_variables = ("n_jet",)
-    cfg.x.default_cateogries = ("incl",)
+    cfg.x.default_categories = ("incl",)
 
     add_categories_selection(cfg)
     add_variables(cfg)

@@ -5,17 +5,13 @@ Stat-related methods.
 """
 from __future__ import annotations
 
-import functools
-
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.selection.stats import increment_stats
-from columnflow.production import Producer, producer
-from columnflow.production.cms.btag import btag_weights
+
 from __cf_short_name_lc__.production.weights import event_weights_to_normalize
 
 from columnflow.util import maybe_import
 from columnflow.columnar_util import optional_column, has_ak_column
-from columnflow.ml import MLModel
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")

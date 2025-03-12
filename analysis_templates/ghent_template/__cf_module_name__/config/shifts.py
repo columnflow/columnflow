@@ -24,63 +24,62 @@ def add_shifts(config: od.Config) -> None:
     config.add_shift(name="minbias_xs_up", id=7, type="shape")
     config.add_shift(name="minbias_xs_down", id=8, type="shape")
     add_shift_aliases(
+        config,
         "minbias_xs",
         {
             "pu_weight": "pu_weight_{name}",
             "normalized_pu_weight": "normalized_pu_weight_{name}",
         },
-        selection_dependent=False)
+    )
 
-    config.add_shift(name="top_pt_up", id=9, type="shape")
-    config.add_shift(name="top_pt_down", id=10, type="shape")
-    add_shift_aliases("top_pt", {"top_pt_weight": "top_pt_weight_{direction}"}, selection_dependent=False)
+    config.add_shift(name="top_pt_up", id=9, type="shape", tags={"selection_dependent"})
+    config.add_shift(name="top_pt_down", id=10, type="shape", tags={"selection_dependent"})
+    add_shift_aliases(config, "top_pt", {"top_pt_weight": "top_pt_weight_{direction}"})
 
     # lepton uncertainties
     config.add_shift(name="electron_wp90iso_up", id=40, type="shape")
     config.add_shift(name="electron_wp90iso_down", id=41, type="shape")
-    add_shift_aliases("electron_wp90iso", {
-                      "electron_weight_wp90iso": "electron_weight_wp90iso_{direction}"}, selection_dependent=False)
+    add_shift_aliases(config, "electron_wp90iso", {
+                      "electron_weight_wp90iso": "electron_weight_wp90iso_{direction}"})
 
     config.add_shift(name="electron_reco_up", id=42, type="shape")
     config.add_shift(name="electron_reco_down", id=43, type="shape")
     add_shift_aliases(
+        config,
         "electron_reco",
         {
             "electron_weight_recobelow20": "electron_weight_recobelow20_{direction}",
             "electron_weight_recoabove20": "electron_weight_recoabove20_{direction}",
         },
-        selection_dependent=False,
     )
 
     config.add_shift(name="muon_mediumid_up", id=50, type="shape")
     config.add_shift(name="muon_mediumid_down", id=51, type="shape")
-    add_shift_aliases("muon_mediumid", {
-                      "muon_weight_mediumid": "muon_weight_mediumid_{direction}"}, selection_dependent=False)
+    add_shift_aliases(config, "muon_mediumid", {
+                      "muon_weight_mediumid": "muon_weight_mediumid_{direction}"})
 
-    config.add_shift(name="muon_loosepfiso_up", id=52, type="shape")
-    config.add_shift(name="muon_loosepfiso_down", id=53, type="shape")
-    add_shift_aliases("muon_loosepfiso", {
-                      "muon_weight_loosepfiso": "muon_weight_loosepfiso_{direction}"}, selection_dependent=False)
+    config.add_shift(name="muon_loosereliso_up", id=52, type="shape")
+    config.add_shift(name="muon_loosereliso_down", id=53, type="shape")
+    add_shift_aliases(config, "muon_loosereliso", {
+                      "muon_weight_loosereliso": "muon_weight_loosereliso_{direction}"})
 
-    config.add_shift(name="mur_up", id=201, type="shape")
-    config.add_shift(name="mur_down", id=202, type="shape")
-    config.add_shift(name="muf_up", id=203, type="shape")
-    config.add_shift(name="muf_down", id=204, type="shape")
-    config.add_shift(name="murmuf_envelope_up", id=205, type="shape")
-    config.add_shift(name="murmuf_envelope_down", id=206, type="shape")
-    config.add_shift(name="pdf_up", id=207, type="shape")
-    config.add_shift(name="pdf_down", id=208, type="shape")
-    config.add_shift(name="fsr_up", id=209, type="shape")
-    config.add_shift(name="fsr_down", id=210, type="shape")
-    config.add_shift(name="isr_up", id=211, type="shape")
-    config.add_shift(name="isr_down", id=212, type="shape")
+    # dataset shift tag is added to prevent shifts to be added to config.x.event_weights
+    config.add_shift(name="mur_up", id=201, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="mur_down", id=202, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="muf_up", id=203, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="muf_down", id=204, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="pdf_up", id=207, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="pdf_down", id=208, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="fsr_up", id=209, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="fsr_down", id=210, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="isr_up", id=211, type="shape", tags={"dataset_shift"})
+    config.add_shift(name="isr_down", id=212, type="shape", tags={"dataset_shift"})
 
-    for unc in ["mur", "muf", "murmuf_envelope", "pdf", "isr", "fsr"]:
-        # add_shift_aliases(unc, {f"{unc}_weight": f"{unc}_weight_" + "{direction}"}, selection_dependent=False)
+    for unc in ["mur", "muf", "pdf", "isr", "fsr"]:
         add_shift_aliases(
+            config,
             unc,
             {f"normalized_{unc}_weight": f"normalized_{unc}_weight_" + "{direction}"},
-            selection_dependent=False,
         )
 
     all_jec_sources = [
@@ -144,17 +143,17 @@ def add_shifts(config: od.Config) -> None:
 
     for jec_source in config.x.jec["Jet"]["uncertainty_sources"]:
         idx = all_jec_sources.index(jec_source)
-        config.add_shift(name=f"jec_{jec_source}_up", id=5000 + 2 * idx, type="shape")
-        config.add_shift(name=f"jec_{jec_source}_down", id=5001 + 2 * idx, type="shape")
+        config.add_shift(name=f"jec_{jec_source}_up", id=5000 + 2 * idx, type="shape", tags={"selection_dependent"})
+        config.add_shift(name=f"jec_{jec_source}_down", id=5001 + 2 * idx, type="shape", tags={"selection_dependent"})
         add_shift_aliases(
+            config,
             f"jec_{jec_source}",
             {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"},
-            selection_dependent=True,
         )
 
     config.add_shift(name="jer_up", id=6000, type="shape", tags={"selection_dependent"})
     config.add_shift(name="jer_down", id=6001, type="shape", tags={"selection_dependent"})
-    add_shift_aliases("jer", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"}, selection_dependent=True)
+    add_shift_aliases(config, "jer", {"Jet.pt": "Jet.pt_{name}", "Jet.mass": "Jet.mass_{name}"})
 
     for shift_inst in config.shifts:
         if shift_inst.tags:

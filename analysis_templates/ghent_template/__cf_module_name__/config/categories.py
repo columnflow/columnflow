@@ -4,11 +4,8 @@
 Definition of categories.
 """
 
-from collections import OrderedDict
-
 import law
 
-from columnflow.config_util import create_category_combinations
 from columnflow.util import call_once_on_config
 
 import order as od

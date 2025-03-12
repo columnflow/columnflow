@@ -6,7 +6,6 @@ Collection of helpers for styling, e.g.
 
 import order as od
 
-from columnflow.columnar_util import EMPTY_FLOAT
 
 #
 # Processes
