@@ -260,6 +260,9 @@ def fixed_wp_btag_weights_init(
     if not shift_inst:
         return
 
+    if not getattr(self, "dataset_inst", None):
+        return
+
     # to handle this efficiently in one spot, store jec information
     self.jec_source = shift_inst.x.jec_source if shift_inst.has_tag("jec") else None
     btag_sf_jec_source = "" if self.jec_source == "Total" else self.jec_source  # noqa
