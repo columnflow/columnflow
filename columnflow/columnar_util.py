@@ -2690,6 +2690,9 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
                 self.post_init_func(task=task)
             self._post_init_called = True
 
+        # recreate dependencies after the post_init has been run
+        self.create_dependencies(instance_cache={}, only_update=True)
+
     def run_requires(
         self,
         task: law.Task,

@@ -62,8 +62,8 @@ def category_ids(
     return target_events
 
 
-@category_ids.init
-def category_ids_init(self: Producer, **kwargs) -> None:
+@category_ids.post_init
+def category_ids_post_init(self: Producer, **kwargs) -> None:
     # store a mapping from leaf category to categorizer classes for faster lookup
     self.categorizer_map = defaultdict(list)
 
