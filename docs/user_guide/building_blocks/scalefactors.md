@@ -59,10 +59,62 @@ def event_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 If an analysis has multiple lepton scale factors their `LeptonWeightConfig`'s can be combined in a list and the function mapping to this list in the config can be given to the `bundle_lepton_weights` producer as attribute. The `bundle_lepton_weights` producer derives a `lepton_weight` producer for each given`LeptonWeightConfig` and produces their scale factor. The default mapping for this list of `LeptonWeightConfig`'s is `config.x.lepton_weight_configs`.
 
+The `bundle_lepton_weights` producer produces weight columns for each `LeptonWeightConfig´ seperately. However, one can combine these weight variations in one shift by adding shift aliases. An example here shows how to bundle the variation of electron reconstruction scale factors from different correction sets into one shift.
+```
+config.add_shift(name="electron_reco_sf_up", id=42, type="shape")
+config.add_shift(name="electron_reco_sf_down", id=43, type="shape")
+add_shift_aliases(config, "electron_reco_sf", {
+    "electron_weight_recobelow20": "electron_weight_recobelow20_{direction}",
+    "electron_weight_reco20to75": "electron_weight_reco20to75_{direction}",
+    "electron_weight_recoabove75": "electron_weight_recoabove75_{direction}",
+})
+```
+
 ### b-tagging scale factors
 
-### trigger scale factors
+B-tagging scale factors are produces for fixed working points following [BTV recommendations](https://btv-wiki.docs.cern.ch/PerformanceCalibration/fixedWPSFRecommendations/). The configuration of the b-tagging scale factors is done with the class `BTagSFConfig` that has attributes:
+- `correction_set`: b-tag algorithm name for which to produce scale factors (deepJet, particleNet, robustParticleTransformer)
+- `sources`: uncertainty variations to include when producing the scale factors
+- `jec_sources`: JEC uncertainty variations to propagate trough
+B-tagging scale factors require the b-tagging efficiency in Monte Carlo to be measured in the analysis phase-space (without b-tagging requirements). For this in addition to the `BTagSFConfig` the production of b-tagging efficiencies requires two additional settings in the config:
+- binning variables: the variables in which to bin the measured b-tagging efficiency. These variables are added to the config and their names stored in `config.x.default_btag_variables`.
+- dataset groups: the Monte Carlo samples to combine for the b-tagging efficiency measurements. These dataset groups are of the type Dict[name,list(datasets)] and are stored in `config.x.btag_dataset_groups`. An example of dataset groups bundled by the number of top quarks in the process is shown here:
+```
+config.x.btag_dataset_groups = {
+    "ttx": [dataset.name for dataset in config.datasets if (
+        dataset.name.startswith("tt") &
+        (dataset.is_mc))],
+    "tx": [dataset.name for dataset in config.datasets if (
+        (dataset.name.startswith("t") |
+        dataset.name.startswith("st")) &
+        (not dataset.name.startswith("tt")) &
+        (dataset.is_mc))],
+    "ewk": [dataset.name for dataset in config.datasets if (
+        ~(dataset.name.startswith("t") |
+        dataset.name.startswith("st")) &
+        (~dataset.name.startswith("tt")) &
+        (dataset.is_mc))],
+}
+```
 
+
+B-tagging scale factors require the b-tagging efficiency in Monte Carlo to be measured in the analysis phase-space (without b-tagging requirements). In columnflow this is achieved trough the custom `cf.BTagEfficiency` task in [columnflow/tasks/cmsGhent/btagefficiency.py](https://github.com/GhentAnalysis/columnflow/blob/scalefactor-development/columnflow/tasks/cmsGhent/btagefficiency.py). The `cf.BTagEfficiency` task requires histograms to be created in the `cf.SelectEvents` task using the `btag_efficiency_hists` helper function. This helper function can be included in the selection as shown in the [template selection](). The `cf.BTagEfficiency` task is not required to be run in the command line as it is a requirement of the b-tagging weight producer in [columnflow/production/cmsGnet/btag_weights.py](https://github.com/GhentAnalysis/columnflow/blob/252a1c91a9a1b2238c6fcce219789e3733d1f432/columnflow/production/cmsGhent/btag_weights.py#L129) called `fixed_wp_btag_weights`. Here is an example of a `producer` to produce b-tagging scale factor weights and uncertainties for the `medium` working point:
+```
+from columnflow.production.cmsGhent.btag_weights import jet_btag, fixed_wp_btag_weights
+
+@producer(
+    uses={fixed_wp_btag_weights, jet_btag},
+    produces={fixed_wp_btag_weights, jet_btag},
+)
+def btag_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    is_ctjet = abs(events.Jet.eta) < 2.4
+    events = self[jet_btag](events, working_points=["L", "M", "T"], jet_mask=is_ctjet)
+    events = self[fixed_wp_btag_weights](events, working_points=["M",], jet_mask=is_ctjet)
+    return events
+```
+
+### trigger scale factors
+TODO
 
 ## experimental uncertainties
 
