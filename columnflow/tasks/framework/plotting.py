@@ -11,7 +11,7 @@ import luigi
 
 from columnflow.types import Any, Callable
 from columnflow.tasks.framework.base import ConfigTask, RESOLVE_DEFAULT
-from columnflow.tasks.framework.mixins import VariablesMixin
+from columnflow.tasks.framework.mixins import VariablesMixin, DatasetsProcessesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.util import DotDict, dict_add_strict, ipython_shell
 
@@ -419,7 +419,7 @@ class PlotBase2D(PlotBase):
 class ProcessPlotSettingMixin(
     # TODO: could add back DatasetsProcessesMixin
     PlotBase,
-    # DatasetsProcessesMixin,
+    DatasetsProcessesMixin,
 ):
     """
     Mixin class for tasks creating plots where contributions of different processes are shown.

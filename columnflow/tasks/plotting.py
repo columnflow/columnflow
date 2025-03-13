@@ -16,7 +16,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
-    CategoriesMixin, ShiftSourcesMixin, HistHookMixin, DatasetsProcessesMixin,
+    CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
     MLModelsMixin,
 )
 from columnflow.tasks.framework.plotting import (
@@ -37,7 +37,6 @@ class _PlotVariablesBase(
     WeightProducerClassMixin,
     CategoriesMixin,
     ProcessPlotSettingMixin,
-    DatasetsProcessesMixin,
     VariablePlotSettingMixin,
     HistHookMixin,
     law.LocalWorkflow,
@@ -331,7 +330,7 @@ class PlotVariablesBaseSingleShift(
                     req[config_inst.name][d] = self.reqs.MergeHistograms.req(
                         self,
                         config=config_inst.name,
-                        # shift=self.global_shift_insts[config_inst.name],
+                        shift=self.global_shift_insts[config_inst],
                         dataset=d,
                         branch=-1,
                         _exclude={"branches"},
