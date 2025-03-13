@@ -1200,7 +1200,7 @@ class ConfigTask(AnalysisTask):
         return None
 
     @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
         if (analysis_inst := params.get("analysis_inst")):
@@ -1216,14 +1216,23 @@ class ConfigTask(AnalysisTask):
             # for backwards compatibility, we automatically switch the defaults from config to analysis inst
             params = cls.switch_to_analysis_inst_aux(params)
 
+        # resolving of parameters that is required before ArrayFunctions etc. can be initialized
         params = cls.resolve_pre_taf_init_params(params)
-        params = cls.build_taf_insts(params)
+
+        # initialize ArrayFunctions etc. and collect known shifts
+        shifts = TaskShifts()
+        params = cls.build_taf_insts(params, shifts)
+
+        # resolving of parameters that can only be performed after ArrayFunction initialization
         params = cls.resolve_post_taf_init_params(params)
+
+        # resolving of shifts
+        params = cls.resolve_shifts(params, shifts)
 
         return params
 
     @classmethod
-    def build_taf_insts(cls, params, shifts: TaskShifts | None = None) -> dict[str, Any]:
+    def build_taf_insts(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         """
         Build the array function instances.
         For single-config/dataset tasks, build_taf_insts is implemented by mixin classes such as the ProducersMixin.
@@ -1235,22 +1244,21 @@ class ConfigTask(AnalysisTask):
         :param shifts: Collection of local and global shifts.
         :return: Updated dictionary of task parameters.
         """
-        if shifts is None:
-            shifts = TaskShifts()
-
+        cls.get_known_shifts(params, shifts)
         if not cls.upstream_task_cls:
-            cls.get_known_shifts(params, shifts)
             params["known_shifts"] = shifts
             return params
 
+        logger.debug(
+            f"{cls.task_family}: uses ConfigTask.build_taf_insts base implementation; "
+            f"upsteam_task_cls was defined as {cls.upstream_task_cls}; ",
+        )
+        # base implementation for ConfigTasks that do not define any datasets.
+        # Needed for e.g. MergeShiftedHistograms
         if cls.has_single_config():
-            if cls.upstream_task_cls is not None:
-                _params = cls.upstream_task_cls.build_taf_insts(params, shifts)
-                cls.upstream_task_cls.get_known_shifts(params, shifts)
+            _params = cls.upstream_task_cls.build_taf_insts(params, shifts)
+            cls.upstream_task_cls.get_known_shifts(params, shifts)
         else:
-            if cls.upstream_task_cls is None:
-                raise ValueError(f"upstream_task_cls must be set for multi-config task {cls.task_family}")
-
             for config_inst in params["config_insts"]:
                 _params = params.copy()
                 _params["config_inst"] = config_inst
@@ -1258,12 +1266,12 @@ class ConfigTask(AnalysisTask):
                 _params = cls.upstream_task_cls.build_taf_insts(_params, shifts)
                 cls.upstream_task_cls.get_known_shifts(_params, shifts)
 
-            params["known_shifts"] = shifts
+        params["known_shifts"] = shifts
 
         return params
 
     @classmethod
-    def resolve_pre_taf_init_params(cls, params):
+    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve parameters before the array function instances have been initialized.
 
@@ -1273,13 +1281,24 @@ class ConfigTask(AnalysisTask):
         return params
 
     @classmethod
-    def resolve_post_taf_init_params(cls, params):
+    def resolve_post_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve parameters after the array function instances have been initialized.
 
         :param params: Dictionary of task parameters.
         :return: Updated dictionary of task parameters.
         """
+        return params
+
+    @classmethod
+    def resolve_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        """
+        Resolve shifts
+
+        :param params: Dictionary of task parameters.
+        :return: Updated dictionary of task parameters.
+        """
+        # called within modify_param_values to resolve shifts after all other parameters have been resolved
         return params
 
     @classmethod
@@ -1487,13 +1506,12 @@ class ShiftTask(ConfigTask):
     allow_empty_shift = False
 
     @classmethod
-    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().modify_param_values(params)
-        params = cls.resolve_shifts(params)
-        return params
+    def resolve_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        params = super().resolve_shifts(params, shifts)
 
-    @classmethod
-    def resolve_shifts(cls, params: dict[str, Any]) -> dict:
+        if "known_shifts" not in params:
+            raise Exception(f"{cls.task_family}: known shifts should be resolved before calling 'resolve_shifts'")
+
         # get configs
         config_insts = params.get("config_insts")
 
@@ -1520,11 +1538,7 @@ class ShiftTask(ConfigTask):
             global_shift = requested_shift
             if (local_shift := params.get("local_shift")) in {None, law.NO_STR}:
                 # determine the known shifts for this class
-                if "known_shifts" in params:
-                    shifts = params["known_shifts"]
-                else:
-                    shifts = TaskShifts()
-                    cls.get_known_shifts(params, shifts)
+                shifts = params["known_shifts"]
                 # check cases
                 if requested_shift in shifts.local:
                     local_shift = requested_shift
@@ -1555,8 +1569,8 @@ class ShiftTask(ConfigTask):
 
             if cls.has_single_config():
                 config_inst = params["config_inst"]
-                params["global_shift_inst"] = get_shift_or_nominal(config_inst, params["shift"])
-                params["local_shift_inst"] = get_shift_or_nominal(config_inst, params["local_shift"])
+                params["global_shift_inst"] = params["global_shift_insts"][config_inst]
+                params["local_shift_inst"] = params["local_shift_insts"][config_inst]
 
         return params
 

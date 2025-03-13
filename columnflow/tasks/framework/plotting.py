@@ -417,7 +417,7 @@ class PlotBase2D(PlotBase):
 
 
 class ProcessPlotSettingMixin(
-    # TODO: could add back MultiConfigDatasetsProcessesMixin if it works with both ConfigTask and MultiConfigTask
+    # TODO: could add back DatasetsProcessesMixin
     PlotBase,
     # DatasetsProcessesMixin,
 ):
