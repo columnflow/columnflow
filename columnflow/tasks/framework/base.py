@@ -27,6 +27,7 @@ from columnflow.types import Sequence, Callable, Any, T
 
 
 logger = law.logger.get_logger(__name__)
+logger_dev = law.logger.get_logger(f"{__name__}-dev")
 
 # default analysis and config related objects
 default_analysis = law.config.get_expanded("analysis", "default_analysis")
@@ -1258,14 +1259,14 @@ class ConfigTask(AnalysisTask):
 
         # check if shifts are already known
         if params.get("known_shifts", None) and params["branch"] != -1:
-            logger.warning(f"{cls.task_family}: shifts already known")
+            logger_dev.debug(f"{cls.task_family}: shifts already known")
             shifts = params["known_shifts"]
             return params
         else:
             if params.get("known_shifts", None) and params["branch"] == -1:
-                logger.warning(f"{cls.task_family}: shifts already known, but this is branch -1")
+                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
             else:
-                logger.warning(f"{cls.task_family}: shifts unknown")
+                logger_dev.debug(f"{cls.task_family}: shifts unknown")
             cls.get_known_shifts(params, shifts)
             params["known_shifts"] = shifts
 
@@ -1275,7 +1276,7 @@ class ConfigTask(AnalysisTask):
             params["known_shifts"] = shifts
             return params
 
-        logger.debug(
+        logger_dev.debug(
             f"{cls.task_family}: uses ConfigTask.build_taf_insts base implementation; "
             f"upsteam_task_cls was defined as {cls.upstream_task_cls}; ",
         )
@@ -1550,7 +1551,7 @@ class ShiftTask(ConfigTask):
             shift_defined_in_config = False
             for config_inst in config_insts:
                 if requested_shift not in config_inst.shifts:
-                    logger.warning(f"shift {requested_shift} unknown to config {config_inst}")
+                    logger_dev.debug(f"shift {requested_shift} unknown to config {config_inst}")
                 else:
                     shift_defined_in_config = True
             if not shift_defined_in_config:

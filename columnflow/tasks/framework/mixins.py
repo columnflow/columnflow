@@ -28,7 +28,7 @@ from columnflow.util import maybe_import, DotDict
 
 ak = maybe_import("awkward")
 
-logger = law.logger.get_logger(__name__)
+logger_dev = law.logger.get_logger(f"{__name__}-dev")
 
 
 class ArrayFunctionClassMixin(ConfigTask):
@@ -1096,7 +1096,9 @@ class MLModelTrainingMixin(
                 _params["config_inst"] = config_inst
                 _params["config"] = config_inst.name
                 _params["dataset"] = dataset_inst.name
-                logger.debug(f"building taf insts for {ml_model_inst.cls_name} {config_inst.name}, {dataset_inst.name}")
+                logger_dev.debug(
+                    f"building taf insts for {ml_model_inst.cls_name} {config_inst.name}, {dataset_inst.name}",
+                )
                 cls.upstream_task_cls.build_taf_insts(_params, shifts)
                 cls.upstream_task_cls.get_known_shifts(_params, shifts)
 
@@ -1937,14 +1939,14 @@ class DatasetsProcessesMixin(ConfigTask):
 
         # check if shifts are already known
         if params.get("known_shifts", None) and params["branch"] != -1:
-            logger.warning(f"{cls.task_family}: shifts already known")
+            logger_dev.debug(f"{cls.task_family}: shifts already known")
             shifts = params["known_shifts"]
             return params
         else:
             if params.get("known_shifts", None) and params["branch"] == -1:
-                logger.warning(f"{cls.task_family}: shifts already known, but this is branch -1")
+                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
             else:
-                logger.warning(f"{cls.task_family}: shifts unknown")
+                logger_dev.debug(f"{cls.task_family}: shifts unknown")
 
         # run get_known_shifts for this task class
         cls.get_known_shifts(params, shifts)
@@ -1962,7 +1964,7 @@ class DatasetsProcessesMixin(ConfigTask):
                 _params["config_inst"] = config_inst
                 _params["config"] = config_inst.name
                 _params["dataset"] = dataset
-                logger.debug(f"building taf insts for {config_inst.name}, {dataset}")
+                logger_dev.debug(f"building taf insts for {config_inst.name}, {dataset}")
                 cls.upstream_task_cls.build_taf_insts(_params, shifts)
                 cls.upstream_task_cls.get_known_shifts(_params, shifts)
 
