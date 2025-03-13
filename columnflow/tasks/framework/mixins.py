@@ -1904,8 +1904,8 @@ class DatasetsProcessesMixin(ConfigTask):
 
         # "broadcast" to match number of configs
         config_insts = params.get("config_insts")
-        processes = cls.broadcast_to_configs(params, "processes", len(config_insts))
-        datasets = cls.broadcast_to_configs(params, "datasets", len(config_insts))
+        processes = cls.broadcast_to_configs(processes, "processes", len(config_insts))
+        datasets = cls.broadcast_to_configs(datasets, "datasets", len(config_insts))
 
         # perform resolution per config
         multi_processes = []

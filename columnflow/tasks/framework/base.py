@@ -1392,15 +1392,14 @@ class ConfigTask(AnalysisTask):
         return _repr + f"_{law.util.create_hash(all_values)}"
 
     @classmethod
-    def broadcast_to_configs(cls, params: dict[str, Any], param: str, n_config_insts: int) -> tuple[Any]:
-        value = params.get(param, law.no_value)
+    def broadcast_to_configs(cls, value: Any, name: str, n_config_insts: int) -> tuple[Any]:
         if value == () or not isinstance(value, tuple):
             value = (value,)
         if len(value) == 1:
             value *= n_config_insts
         elif len(value) != n_config_insts:
             raise ValueError(
-                f"number of {param} sequences ({len(value)}) does not match number of configs "
+                f"number of {name} sequences ({len(value)}) does not match number of configs "
                 f"({n_config_insts})",
             )
         return value
