@@ -36,6 +36,7 @@ Lepton scale factors are calculated in the `cf.ProduceColumns` task using the `l
 - `systematics`: tuples of systematic variable of the correction set and the postfix linked to the systematic (see example)
 - `uses`: columns used for the weight calculation in correctionlib
 - `input_func`: function that calculates a dictionary with input arrays for the correction set
+- `input_pars`: dictionary providing fixed inputs to the correction set
 - `mask_func`: function that calculates a mask to apply on the Leptons before calculating the weights
 
 A baseline `LeptonWeightConfig` and examples for electron and muon scale factors are defined in [columnflow/production/cmsGhent/lepton.py](https://github.com/GhentAnalysis/columnflow/blob/scalefactor-development/columnflow/production/cmsGhent/lepton.py#L243-L290). To make a `lepton_weight` producer for a specific `LeptonWeightConfig` (eg the predefined `ElectronRecoBelow20WeightConfig`) to add to the `event_weights` producer of your analysis one can derive the `lepton_weight` producer:
