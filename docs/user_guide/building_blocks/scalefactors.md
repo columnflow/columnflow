@@ -31,7 +31,7 @@ Lepton scale factors are calculated in the `cf.ProduceColumns` task using the `l
 - `year`: campaign year of the scale factors
 - `weight_name`: name of the produced weight columns related to the scale factor
 - `correction_set`: name of the correction set(s) in the correctionlib file
-- ´get_sf_file´: function mapping external files to the scale factor correctionlib file
+- `get_sf_file`: function mapping external files to the scale factor correctionlib file
 - `syst_key`: systematic variable key of thecorrection set
 - `systematics`: tuples of systematic variable of the correction set and the postfix linked to the systematic (see example)
 - `uses`: columns used for the weight calculation in correctionlib
