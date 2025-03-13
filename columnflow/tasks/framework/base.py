@@ -1117,6 +1117,17 @@ class ConfigTask(AnalysisTask):
         brace_expand=True,
     )
 
+    # NOTE: maybe we need some different type of parameter to allow parsing/serializing TaskShifts
+    known_shifts = luigi.Parameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
+
+    exclude_params_index = {"known_shifts"}
+    exclude_params_repr = {"known_shifts"}
+    exclude_params_sandbox = {"known_shifts"}
+    exclude_params_remote_workflow = {"known_shifts"}
+
     # the field in the store parts behind which the new part is inserted
     # added here for subclasses that typically refer to the store part added by _this_ class
     config_store_anchor = "config"
@@ -1244,7 +1255,22 @@ class ConfigTask(AnalysisTask):
         :param shifts: Collection of local and global shifts.
         :return: Updated dictionary of task parameters.
         """
+
+        # check if shifts are already known
+        if params.get("known_shifts", None) and params["branch"] != -1:
+            logger.warning(f"{cls.task_family}: shifts already known")
+            shifts = params["known_shifts"]
+            return params
+        else:
+            if params.get("known_shifts", None) and params["branch"] == -1:
+                logger.warning(f"{cls.task_family}: shifts already known, but this is branch -1")
+            else:
+                logger.warning(f"{cls.task_family}: shifts unknown")
+            cls.get_known_shifts(params, shifts)
+            params["known_shifts"] = shifts
+
         cls.get_known_shifts(params, shifts)
+
         if not cls.upstream_task_cls:
             params["known_shifts"] = shifts
             return params

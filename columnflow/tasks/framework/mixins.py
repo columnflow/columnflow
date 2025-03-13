@@ -1935,6 +1935,17 @@ class DatasetsProcessesMixin(ConfigTask):
         if not cls.upstream_task_cls:
             raise ValueError(f"upstream_task_cls must be set for multi-config task {cls.task_family}")
 
+        # check if shifts are already known
+        if params.get("known_shifts", None) and params["branch"] != -1:
+            logger.warning(f"{cls.task_family}: shifts already known")
+            shifts = params["known_shifts"]
+            return params
+        else:
+            if params.get("known_shifts", None) and params["branch"] == -1:
+                logger.warning(f"{cls.task_family}: shifts already known, but this is branch -1")
+            else:
+                logger.warning(f"{cls.task_family}: shifts unknown")
+
         # run get_known_shifts for this task class
         cls.get_known_shifts(params, shifts)
 
