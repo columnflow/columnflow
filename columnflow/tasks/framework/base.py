@@ -136,37 +136,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return params
 
     @classmethod
-    def switch_to_analysis_inst_aux(cls, params: dict):
-        """
-        This function switches the default values from the config insts to the analysis inst to help
-        with the transition to the MultiConfigTask, for which the defaults need to be set in the
-        analysis inst.
-        """
-        if "config_insts" not in params:
-            return params
-
-        # TaskArrayFunctions that should be set via the analysis inst aux values
-        analysis_inst_aux = (
-            "default_calibrator", "default_selector", "default_selector_steps",
-            "default_producer", "default_ml_model",
-            "default_weight_producer", "default_inference_model",
-        )
-
-        # set defaults to the analysis inst if they are set in the config inst
-        # (assuming defaults are the same in all configs)
-        config_inst = params.get("config_insts")[0]
-        for default in analysis_inst_aux:
-            if config_inst.has_aux(default) and not params["analysis_inst"].has_aux(default):
-                law.logger.get_logger(cls.task_family).warning(
-                    f"The {default} aux value is set in the config, but not in the analysis. "
-                    "It is recommended to set this value in the analysis instead. The value in the "
-                    f"analysis inst will be set to '{config_inst.x(default)}'.",
-                )
-                params["analysis_inst"].set_aux(default, config_inst.x(default))
-
-        return params
-
-    @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         # store a reference to the analysis inst
         if "analysis_inst" not in params and "analysis" in params:
@@ -1224,9 +1193,6 @@ class ConfigTask(AnalysisTask):
             else:
                 if "config_insts" not in params and "configs" in params:
                     params["config_insts"] = list(map(analysis_inst.get_config, params["configs"]))
-
-            # for backwards compatibility, we automatically switch the defaults from config to analysis inst
-            params = cls.switch_to_analysis_inst_aux(params)
 
         # resolving of parameters that is required before ArrayFunctions etc. can be initialized
         params = cls.resolve_pre_taf_init_params(params)

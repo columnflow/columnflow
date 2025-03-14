@@ -71,11 +71,11 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
         params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default class if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["calibrator"] = cls.resolve_config_default(
                 param=params.get("calibrator"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_calibrator",
                 multi_strategy="same",
             )
@@ -249,11 +249,11 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
         params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default classes if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["calibrators"] = cls.resolve_config_default_and_groups(
                 param=params.get("calibrators"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_calibrator",
                 groups_str="calibrator_groups",
                 multi_strategy="same",
@@ -426,12 +426,12 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
     def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_pre_taf_init_params(params)
 
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             # resolve the default class if necessary
             params["selector"] = cls.resolve_config_default(
                 param=params.get("selector"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_selector",
                 multi_strategy="same",
             )
@@ -441,7 +441,7 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
                 params["selector_steps"] = cls.resolve_config_default_and_groups(
                     param=params.get("selector_steps"),
                     task_params=params,
-                    container=analysis_inst,
+                    container=container,
                     default_str="default_selector_steps",
                     groups_str="selector_step_groups",
                     multi_strategy="same",
@@ -628,11 +628,11 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
         params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default class if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["producer"] = cls.resolve_config_default(
                 param=params.get("producer"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_producer",
                 multi_strategy="same",
             )
@@ -805,11 +805,11 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
         params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default classes if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["producers"] = cls.resolve_config_default_and_groups(
                 param=params.get("producers"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_producer",
                 groups_str="producer_groups",
                 multi_strategy="same",
@@ -1309,14 +1309,12 @@ class MLModelsMixin(ConfigTask):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        analysis_inst = params.get("analysis_inst")
-
-        if analysis_inst:
+        if (container := cls._get_config_container(params)):
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
                 param=params.get("ml_models"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_ml_model",
                 groups_str="ml_model_groups",
                 multi_strategy="same",
@@ -1327,7 +1325,7 @@ class MLModelsMixin(ConfigTask):
                 params["ml_model_insts"] = [
                     MLModelMixinBase.get_ml_model_inst(
                         ml_model,
-                        analysis_inst,
+                        params["analysis_inst"],
                         requested_configs=[params["config"]] if cls.has_single_config() else params["configs"],
                     )
                     for ml_model in params["ml_models"]
@@ -1399,11 +1397,11 @@ class WeightProducerClassMixin(ArrayFunctionClassMixin):
         params = super().resolve_pre_taf_init_params(params)
 
         # resolve the default class if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["weight_producer"] = cls.resolve_config_default(
                 param=params.get("weight_producer"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_weight_producer",
                 multi_strategy="same",
             )
@@ -1559,11 +1557,11 @@ class InferenceModelClassMixin(ConfigTask):
         params = super().resolve_pre_taf_init_params(params)
 
         # add the default inference model when empty
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["inference_model"] = cls.resolve_config_default(
                 param=params.get("inference_model"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_inference_model",
                 multi_strategy="same",
             )
