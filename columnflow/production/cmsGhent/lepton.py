@@ -74,6 +74,8 @@ class LeptonWeightConfig:
                 for s, ss in self.systematics.items()
             }
 
+        self.produced_weights = {f"{self.weight_name}{postfix}" for postfix in self.systematics.values()}
+
     def copy(self, /, **changes):
         return dataclasses.replace(self, **changes)
 
@@ -194,7 +196,7 @@ def lepton_weights_init(self: Producer) -> None:
         if not hasattr(self, key):
             setattr(self, key, value)
     self.uses |= self.lepton_config.uses
-    self.produces |= {f"{self.weight_name}{postfix}" for postfix in self.systematics.values()}
+    self.produces |= self.produced_weights
 
 
 @lepton_weights.requires
@@ -323,5 +325,4 @@ def bundle_lepton_weights_init(self: Producer) -> None:
             self.config_naming(config),
             cls_dict=dict(lepton_config=config),
         ))
-
-    self.produces |= self.uses
+        self.produces.extend(self.produced_weights)

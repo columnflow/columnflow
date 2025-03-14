@@ -167,5 +167,3 @@ def bundle_trigger_histograms_init(self: Producer) -> None:
             self.config_naming(config),
             cls_dict=dict(trigger_config=config),
         ))
-
-    self.produces |= self.uses

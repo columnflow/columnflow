@@ -143,5 +143,4 @@ def bundle_trigger_weights_init(self: Producer) -> None:
             self.config_naming(config),
             cls_dict=dict(trigger_config=config),
         ))
-
-    self.produces |= self.uses
+        self.produces.add(config.sf_name + "{,_up,_down}")
