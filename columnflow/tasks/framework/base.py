@@ -2076,19 +2076,19 @@ def wrapper_factory(
             # get the target config instances
             if self.wrapper_has_configs:
                 configs = self.find_config_objects(
-                    self.configs,
-                    self.analysis_inst,
-                    od.Config,
-                    self.analysis_inst.x("config_groups", {}),
+                    names=self.configs,
+                    container=self.analysis_inst,
+                    object_cls=od.Config,
+                    groups_str="config_groups",
                 )
                 if not configs:
                     raise ValueError(f"no configs found in analysis {self.analysis_inst} matching {self.configs}")
                 if self.wrapper_has_skip_configs:
                     skip_configs = self.find_config_objects(
-                        self.skip_configs,
-                        self.analysis_inst,
-                        od.Config,
-                        self.analysis_inst.x("config_groups", {}),
+                        names=self.skip_configs,
+                        container=self.analysis_inst,
+                        object_cls=od.Config,
+                        groups_str="config_groups",
                     )
                     configs = [c for c in configs if c not in skip_configs]
                     if not configs:
@@ -2109,19 +2109,19 @@ def wrapper_factory(
                 # find all shifts
                 if self.wrapper_has_shifts:
                     shifts = self.find_config_objects(
-                        self.shifts,
-                        config_inst,
-                        od.Shift,
-                        config_inst.x("shift_groups", {}),
+                        names=self.shifts,
+                        container=config_inst,
+                        object_cls=od.Shift,
+                        groups_str="shift_groups",
                     )
                     if not shifts:
                         raise ValueError(f"no shifts found in config {config_inst} matching {self.shifts}")
                     if self.wrapper_has_skip_shifts:
                         skip_shifts = self.find_config_objects(
-                            self.skip_shifts,
-                            config_inst,
-                            od.Shift,
-                            config_inst.x("shift_groups", {}),
+                            names=self.skip_shifts,
+                            container=config_inst,
+                            object_cls=od.Shift,
+                            groups_str="shift_groups",
                         )
                         shifts = [s for s in shifts if s not in skip_shifts]
                     if not shifts:
@@ -2135,19 +2135,19 @@ def wrapper_factory(
                 # find all datasets
                 if self.wrapper_has_datasets:
                     datasets = self.find_config_objects(
-                        self.datasets,
-                        config_inst,
-                        od.Dataset,
-                        config_inst.x("dataset_groups", {}),
+                        names=self.datasets,
+                        container=config_inst,
+                        object_cls=od.Dataset,
+                        groups_str="dataset_groups",
                     )
                     if not datasets:
                         raise ValueError(f"no datasets found in config {config_inst} matching {self.datasets}")
                     if self.wrapper_has_skip_datasets:
                         skip_datasets = self.find_config_objects(
-                            self.skip_datasets,
-                            config_inst,
-                            od.Dataset,
-                            config_inst.x("dataset_groups", {}),
+                            names=self.skip_datasets,
+                            container=config_inst,
+                            object_cls=od.Dataset,
+                            groups_str="dataset_groups",
                         )
                         datasets = [d for d in datasets if d not in skip_datasets]
                         if not datasets:
