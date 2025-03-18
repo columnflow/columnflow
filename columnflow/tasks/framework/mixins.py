@@ -1938,7 +1938,6 @@ class DatasetsProcessesMixin(ConfigTask):
         # check if shifts are already known
         if params.get("known_shifts", None) and params.get("branch", -1) != -1:
             logger_dev.debug(f"{cls.task_family}: shifts already known")
-            shifts = params["known_shifts"]
             return params
         else:
             if params.get("known_shifts", None) and params.get("branch", -1) == -1:

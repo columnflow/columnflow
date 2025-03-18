@@ -330,7 +330,7 @@ class PlotVariablesBaseSingleShift(
                     req[config_inst.name][d] = self.reqs.MergeHistograms.req(
                         self,
                         config=config_inst.name,
-                        shift=self.global_shift_insts[config_inst],
+                        shift=self.global_shift_insts[config_inst].name,
                         dataset=d,
                         branch=-1,
                         _exclude={"branches"},
