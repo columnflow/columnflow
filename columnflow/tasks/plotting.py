@@ -514,11 +514,6 @@ class PlotVariablesBaseMultiShifts(
         return parts
 
     def get_plot_shifts(self):
-        # return (
-        #     ["nominal"] +
-        #     [f"{shift_source}_up" for shift_source in self.shift_sources] +
-        #     [f"{shift_source}_down" for shift_source in self.shift_sources]
-        # )
         return [
             "nominal",
             f"{self.branch_data.shift_source}_up",

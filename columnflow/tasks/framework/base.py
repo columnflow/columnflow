@@ -1252,9 +1252,11 @@ class ConfigTask(AnalysisTask):
             cls.resolution_task_class.get_known_shifts(params, shifts)
         else:
             for config_inst in params["config_insts"]:
-                _params = params.copy()
-                _params["config_inst"] = config_inst
-                _params["config"] = config_inst.name
+                _params = {
+                    **params,
+                    "config_inst": config_inst,
+                    "config": config_inst.name,
+                }
                 _params = cls.resolution_task_class.resolve_instances(_params, shifts)
                 cls.resolution_task_class.get_known_shifts(_params, shifts)
 
@@ -1359,7 +1361,7 @@ class ConfigTask(AnalysisTask):
 
     @classmethod
     def broadcast_to_configs(cls, value: Any, name: str, n_config_insts: int) -> tuple[Any]:
-        if value == () or not isinstance(value, tuple):
+        if not isinstance(value, tuple) or not value:
             value = (value,)
         if len(value) == 1:
             value *= n_config_insts

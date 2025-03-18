@@ -1092,10 +1092,12 @@ class MLModelTrainingMixin(
         for config_inst, dataset_insts in ml_model_inst.used_datasets.items():
             for dataset_inst in dataset_insts:
                 # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
-                _params = params.copy()
-                _params["config_inst"] = config_inst
-                _params["config"] = config_inst.name
-                _params["dataset"] = dataset_inst.name
+                _params = {
+                    **params,
+                    "config_inst": config_inst,
+                    "config": config_inst.name,
+                    "dataset": dataset_inst.name,
+                }
                 logger_dev.debug(
                     f"building taf insts for {ml_model_inst.cls_name} {config_inst.name}, {dataset_inst.name}",
                 )
@@ -1957,10 +1959,12 @@ class DatasetsProcessesMixin(ConfigTask):
 
             for dataset in datasets:
                 # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
-                _params = params.copy()
-                _params["config_inst"] = config_inst
-                _params["config"] = config_inst.name
-                _params["dataset"] = dataset
+                _params = {
+                    **params,
+                    "config_inst": config_inst,
+                    "config": config_inst.name,
+                    "dataset": dataset,
+                }
                 logger_dev.debug(f"building taf insts for {config_inst.name}, {dataset}")
                 cls.resolution_task_class.resolve_instances(_params, shifts)
                 cls.resolution_task_class.get_known_shifts(_params, shifts)
