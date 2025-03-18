@@ -1195,14 +1195,14 @@ class ConfigTask(AnalysisTask):
                     params["config_insts"] = list(map(analysis_inst.get_config, params["configs"]))
 
         # resolving of parameters that is required before ArrayFunctions etc. can be initialized
-        params = cls.resolve_pre_taf_init_params(params)
+        params = cls.resolve_param_values_pre_init(params)
 
         # initialize ArrayFunctions etc. and collect known shifts
         shifts = TaskShifts()
-        params = cls.build_taf_insts(params, shifts)
+        params = cls.resolve_instances(params, shifts)
 
         # resolving of parameters that can only be performed after ArrayFunction initialization
-        params = cls.resolve_post_taf_init_params(params)
+        params = cls.resolve_param_values_post_init(params)
 
         # resolving of shifts
         params = cls.resolve_shifts(params, shifts)
@@ -1210,12 +1210,12 @@ class ConfigTask(AnalysisTask):
         return params
 
     @classmethod
-    def build_taf_insts(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         """
         Build the array function instances.
-        For single-config/dataset tasks, build_taf_insts is implemented by mixin classes such as the ProducersMixin.
-        For multi-config tasks, build_taf_insts from the upstream task is called for each config instance.
-        If the build_taf_insts function needs to be called for other combinations of parameters (e.g. per dataset),
+        For single-config/dataset tasks, resolve_instances is implemented by mixin classes such as the ProducersMixin.
+        For multi-config tasks, resolve_instances from the upstream task is called for each config instance.
+        If the resolve_instances function needs to be called for other combinations of parameters (e.g. per dataset),
         it can be overwritten by the task class.
 
         :param params: Dictionary of task parameters.
@@ -1238,33 +1238,33 @@ class ConfigTask(AnalysisTask):
 
         cls.get_known_shifts(params, shifts)
 
-        if not cls.upstream_task_cls:
+        if not cls.resolution_task_class:
             params["known_shifts"] = shifts
             return params
 
         logger_dev.debug(
-            f"{cls.task_family}: uses ConfigTask.build_taf_insts base implementation; "
-            f"upsteam_task_cls was defined as {cls.upstream_task_cls}; ",
+            f"{cls.task_family}: uses ConfigTask.resolve_instances base implementation; "
+            f"upsteam_task_cls was defined as {cls.resolution_task_class}; ",
         )
         # base implementation for ConfigTasks that do not define any datasets.
         # Needed for e.g. MergeShiftedHistograms
         if cls.has_single_config():
-            _params = cls.upstream_task_cls.build_taf_insts(params, shifts)
-            cls.upstream_task_cls.get_known_shifts(params, shifts)
+            _params = cls.resolution_task_class.resolve_instances(params, shifts)
+            cls.resolution_task_class.get_known_shifts(params, shifts)
         else:
             for config_inst in params["config_insts"]:
                 _params = params.copy()
                 _params["config_inst"] = config_inst
                 _params["config"] = config_inst.name
-                _params = cls.upstream_task_cls.build_taf_insts(_params, shifts)
-                cls.upstream_task_cls.get_known_shifts(_params, shifts)
+                _params = cls.resolution_task_class.resolve_instances(_params, shifts)
+                cls.resolution_task_class.get_known_shifts(_params, shifts)
 
         params["known_shifts"] = shifts
 
         return params
 
     @classmethod
-    def resolve_pre_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve parameters before the array function instances have been initialized.
 
@@ -1274,7 +1274,7 @@ class ConfigTask(AnalysisTask):
         return params
 
     @classmethod
-    def resolve_post_taf_init_params(cls, params: dict[str, Any]) -> dict[str, Any]:
+    def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve parameters after the array function instances have been initialized.
 
@@ -1309,7 +1309,7 @@ class ConfigTask(AnalysisTask):
         """
         return params
 
-    upstream_task_cls = None
+    resolution_task_class = None
 
     @classmethod
     def _multi_sequence_repr(
@@ -1630,8 +1630,8 @@ class DatasetTask(ShiftTask):
     file_merging = None
 
     @classmethod
-    def resolve_pre_taf_init_params(cls, params):
-        params = super().resolve_pre_taf_init_params(params)
+    def resolve_param_values_pre_init(cls, params):
+        params = super().resolve_param_values_pre_init(params)
 
         # store a reference to the dataset inst
         if "dataset_inst" not in params and "config_inst" in params and "dataset" in params:

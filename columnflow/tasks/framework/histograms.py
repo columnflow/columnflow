@@ -140,7 +140,7 @@ class HistogramsUserSingleShiftBase(
     HistogramsUserBase,
 ):
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
-    upstream_task_cls = MergeHistograms
+    resolution_task_class = MergeHistograms
 
     # upstream requirements
     reqs = Requirements(
@@ -169,7 +169,7 @@ class HistogramsUserMultiShiftBase(
     HistogramsUserBase,
 ):
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
-    upstream_task_cls = MergeHistograms
+    resolution_task_class = MergeHistograms
 
     # upstream requirements
     reqs = Requirements(

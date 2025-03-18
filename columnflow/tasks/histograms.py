@@ -482,7 +482,7 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
-    upstream_task_cls = MergeHistograms
+    resolution_task_class = MergeHistograms
 
     # upstream requirements
     reqs = Requirements(

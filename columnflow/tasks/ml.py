@@ -444,7 +444,7 @@ class MLTraining(
     RemoteWorkflow,
 ):
     # use the MergeMLEvents task to trigger upstream TaskArrayFunction initialization
-    upstream_task_cls = MergeMLEvents
+    resolution_task_class = MergeMLEvents
 
     single_config = False
     allow_empty_ml_model = False
