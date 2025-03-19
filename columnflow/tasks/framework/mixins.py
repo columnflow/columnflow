@@ -167,7 +167,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         return calibrator_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts | None = None) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the calibrator instance
         if not params.get("calibrator_inst"):
             params["calibrator_inst"] = cls.build_calibrator_inst(params["calibrator"], params)
@@ -337,7 +337,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         return insts
 
     @classmethod
-    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts | None = None) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the calibrator instances
         if not params.get("calibrator_insts"):
             params["calibrator_insts"] = cls.build_calibrator_insts(params["calibrators"], params)
@@ -543,7 +543,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         return selector_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts | None = None) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the selector instance
         if not params.get("selector_inst"):
             params["selector_inst"] = cls.build_selector_inst(params["selector"], params)
@@ -724,7 +724,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         return producer_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts | None = None) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the producer instance
         if not params.get("producer_inst"):
             params["producer_inst"] = cls.build_producer_inst(params["producer"], params)
@@ -893,7 +893,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         return insts
 
     @classmethod
-    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts | None = None) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the producer instances
         if not params.get("producer_insts"):
             params["producer_insts"] = cls.build_producer_insts(params["producers"], params)
@@ -1084,7 +1084,6 @@ class MLModelTrainingMixin(
         if not cls.resolution_task_class:
             raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
 
-        # run get_known_shifts for this task class
         cls.get_known_shifts(params, shifts)
 
         ml_model_inst = params["ml_model_inst"]
@@ -1259,7 +1258,7 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
     build_producer_inst = ProducerMixin.build_producer_inst
 
     @classmethod
-    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts | None = None) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         ml_model_inst = params["ml_model_inst"]
         preparation_producer = ml_model_inst.preparation_producer(params["analysis_inst"])
         # add the producer instance
@@ -1497,7 +1496,7 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         return weight_producer_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts | None = None) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the weight producer instance
         if not params.get("weight_producer_inst"):
             params["weight_producer_inst"] = cls.build_weight_producer_inst(
@@ -1646,17 +1645,6 @@ class InferenceModelMixin(InferenceModelClassMixin):
         if not cls.resolution_task_class:
             raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
 
-        # check if shifts are already known
-        if params.get("known_shifts", None) and params.get("branch", -1) != -1:
-            logger_dev.debug(f"{cls.task_family}: shifts already known")
-            return params
-        else:
-            if params.get("known_shifts", None) and params.get("branch", -1) == -1:
-                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
-            else:
-                logger_dev.debug(f"{cls.task_family}: shifts unknown")
-
-        # run get_known_shifts for this task class
         cls.get_known_shifts(params, shifts)
 
         # we loop over all configs/datasets, but return initial params
@@ -1976,17 +1964,6 @@ class DatasetsProcessesMixin(ConfigTask):
         if not cls.resolution_task_class:
             raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
 
-        # check if shifts are already known
-        if params.get("known_shifts", None) and params.get("branch", -1) != -1:
-            logger_dev.debug(f"{cls.task_family}: shifts already known")
-            return params
-        else:
-            if params.get("known_shifts", None) and params.get("branch", -1) == -1:
-                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
-            else:
-                logger_dev.debug(f"{cls.task_family}: shifts unknown")
-
-        # run get_known_shifts for this task class
         cls.get_known_shifts(params, shifts)
 
         # we loop over all configs/datasets, but return initial params

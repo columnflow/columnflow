@@ -1197,15 +1197,25 @@ class ConfigTask(AnalysisTask):
         # resolving of parameters that is required before ArrayFunctions etc. can be initialized
         params = cls.resolve_param_values_pre_init(params)
 
-        # initialize ArrayFunctions etc. and collect known shifts
-        shifts = TaskShifts()
-        params = cls.resolve_instances(params, shifts)
+        # check if shifts are already known for *this* workflow
+        if params.get("known_shifts", None) and params.get("branch", -1) != -1:
+            logger_dev.debug(f"{cls.task_family}: shifts already known")
+        else:
+            if params.get("known_shifts", None) and params.get("branch", -1) == -1:
+                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
+            else:
+                logger_dev.debug(f"{cls.task_family}: shifts unknown")
+
+            # initialize ArrayFunctions etc. and collect known shifts
+            shifts = params["known_shifts"] = TaskShifts()
+            params = cls.resolve_instances(params, shifts)
+            params["known_shifts"] = shifts
 
         # resolving of parameters that can only be performed after ArrayFunction initialization
         params = cls.resolve_param_values_post_init(params)
 
         # resolving of shifts
-        params = cls.resolve_shifts(params, shifts)
+        params = cls.resolve_shifts(params)
 
         return params
 
@@ -1222,19 +1232,6 @@ class ConfigTask(AnalysisTask):
         :param shifts: Collection of local and global shifts.
         :return: Updated dictionary of task parameters.
         """
-
-        # check if shifts are already known
-        if params.get("known_shifts", None) and params.get("branch", -1) != -1:
-            logger_dev.debug(f"{cls.task_family}: shifts already known")
-            return params
-        else:
-            if params.get("known_shifts", None) and params.get("branch", -1) == -1:
-                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
-            else:
-                logger_dev.debug(f"{cls.task_family}: shifts unknown")
-            cls.get_known_shifts(params, shifts)
-            params["known_shifts"] = shifts
-
         cls.get_known_shifts(params, shifts)
 
         if not cls.resolution_task_class:
@@ -1248,8 +1245,9 @@ class ConfigTask(AnalysisTask):
         # base implementation for ConfigTasks that do not define any datasets.
         # Needed for e.g. MergeShiftedHistograms
         if cls.has_single_config():
+            _params = params.copy()
             _params = cls.resolution_task_class.resolve_instances(params, shifts)
-            cls.resolution_task_class.get_known_shifts(params, shifts)
+            cls.resolution_task_class.get_known_shifts(_params, shifts)
         else:
             for config_inst in params["config_insts"]:
                 _params = {
@@ -1285,7 +1283,7 @@ class ConfigTask(AnalysisTask):
         return params
 
     @classmethod
-    def resolve_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+    def resolve_shifts(cls, params: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve shifts
 
@@ -1499,12 +1497,12 @@ class ShiftTask(ConfigTask):
     allow_empty_shift = False
 
     @classmethod
-    def resolve_shifts(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
-        params = super().resolve_shifts(params, shifts)
+    def resolve_shifts(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_shifts(params)
 
         if "known_shifts" not in params:
             raise Exception(f"{cls.task_family}: known shifts should be resolved before calling 'resolve_shifts'")
-
+        known_shifts = params["known_shifts"]
         # get configs
         config_insts = params.get("config_insts")
 
@@ -1530,12 +1528,10 @@ class ShiftTask(ConfigTask):
             #                or an upsteam task (== global shift), else nominal
             global_shift = requested_shift
             if (local_shift := params.get("local_shift")) in {None, law.NO_STR}:
-                # determine the known shifts for this class
-                shifts = params["known_shifts"]
                 # check cases
-                if requested_shift in shifts.local:
+                if requested_shift in known_shifts.local:
                     local_shift = requested_shift
-                elif requested_shift in shifts.upstream:
+                elif requested_shift in known_shifts.upstream:
                     local_shift = "nominal"
                 else:
                     global_shift = "nominal"
