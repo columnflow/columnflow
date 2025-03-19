@@ -1032,7 +1032,6 @@ class MLModelMixinBase(ConfigTask):
         """
 
         ml_model_inst: MLModel = MLModel.get_cls(ml_model)(analysis_inst, **kwargs)
-
         if requested_configs:
             configs = ml_model_inst.training_configs(list(requested_configs))
             if configs:
@@ -1308,8 +1307,9 @@ class MLModelsMixin(ConfigTask):
         return ml_models_repr
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        # NOTE: at the moment, the ml_models will be initialized before CSPs are initialized
+        params = super().resolve_param_values_pre_init(params)
 
         if (container := cls._get_config_container(params)):
             # apply ml_model_groups and default_ml_model from the config
@@ -1622,8 +1622,8 @@ class InferenceModelMixin(InferenceModelClassMixin):
         return inference_model_cls(config_insts, **kwargs)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_post_init(params)
 
         # add the inference model instance
         if not params.get("inference_model_inst") and params.get("inference_model"):
@@ -1638,6 +1638,45 @@ class InferenceModelMixin(InferenceModelClassMixin):
                     params["inference_model"],
                     config_insts,
                 )
+
+        return params
+
+    @classmethod
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        if not cls.resolution_task_class:
+            raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
+
+        # check if shifts are already known
+        if params.get("known_shifts", None) and params.get("branch", -1) != -1:
+            logger_dev.debug(f"{cls.task_family}: shifts already known")
+            return params
+        else:
+            if params.get("known_shifts", None) and params.get("branch", -1) == -1:
+                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
+            else:
+                logger_dev.debug(f"{cls.task_family}: shifts unknown")
+
+        # run get_known_shifts for this task class
+        cls.get_known_shifts(params, shifts)
+
+        # we loop over all configs/datasets, but return initial params
+        inference_model_cls = InferenceModel.get_cls(params["inference_model"])
+        for i, config_inst in enumerate(params["config_insts"]):
+            datasets = inference_model_cls.used_datasets(config_inst)
+
+            for dataset in datasets:
+                # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
+                _params = {
+                    **params,
+                    "config_inst": config_inst,
+                    "config": config_inst.name,
+                    "dataset": dataset,
+                }
+                logger_dev.debug(f"building taf insts for {config_inst.name}, {dataset}")
+                cls.resolution_task_class.resolve_instances(_params, shifts)
+                cls.resolution_task_class.get_known_shifts(_params, shifts)
+
+        params["known_shifts"] = shifts
 
         return params
 
