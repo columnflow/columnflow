@@ -15,7 +15,7 @@ import law
 import order as od
 
 from columnflow.types import Any, Iterable, Sequence
-from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT
+from columnflow.tasks.framework.base import ConfigTask, DatasetTask, TaskShifts, RESOLVE_DEFAULT
 from columnflow.tasks.framework.parameters import SettingsParameter, DerivableInstParameter, DerivableInstsParameter
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
@@ -28,7 +28,7 @@ from columnflow.util import maybe_import, DotDict
 
 ak = maybe_import("awkward")
 
-logger = law.logger.get_logger(__name__)
+logger_dev = law.logger.get_logger(f"{__name__}-dev")
 
 
 class ArrayFunctionClassMixin(ConfigTask):
@@ -67,15 +67,15 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_pre_init(params)
 
         # resolve the default class if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["calibrator"] = cls.resolve_config_default(
                 param=params.get("calibrator"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_calibrator",
                 multi_strategy="same",
             )
@@ -167,12 +167,12 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         return calibrator_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the calibrator instance
         if not params.get("calibrator_inst"):
             params["calibrator_inst"] = cls.build_calibrator_inst(params["calibrator"], params)
+
+        params = super().resolve_instances(params, shifts)
 
         return params
 
@@ -242,18 +242,18 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(
+    def resolve_param_values_pre_init(
         cls,
         params: law.util.InsertableDict[str, Any],
     ) -> law.util.InsertableDict[str, Any]:
-        params = super().resolve_param_values(params)
+        params = super().resolve_param_values_pre_init(params)
 
         # resolve the default classes if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["calibrators"] = cls.resolve_config_default_and_groups(
                 param=params.get("calibrators"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_calibrator",
                 groups_str="calibrator_groups",
                 multi_strategy="same",
@@ -337,12 +337,12 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         return insts
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the calibrator instances
         if not params.get("calibrator_insts"):
             params["calibrator_insts"] = cls.build_calibrator_insts(params["calibrators"], params)
+
+        params = super().resolve_instances(params, shifts)
 
         return params
 
@@ -423,15 +423,15 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
     exclude_params_repr_empty = {"selector_steps"}
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_pre_init(params)
 
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             # resolve the default class if necessary
             params["selector"] = cls.resolve_config_default(
                 param=params.get("selector"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_selector",
                 multi_strategy="same",
             )
@@ -441,7 +441,7 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
                 params["selector_steps"] = cls.resolve_config_default_and_groups(
                     param=params.get("selector_steps"),
                     task_params=params,
-                    container=analysis_inst,
+                    container=container,
                     default_str="default_selector_steps",
                     groups_str="selector_step_groups",
                     multi_strategy="same",
@@ -543,12 +543,12 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         return selector_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the selector instance
         if not params.get("selector_inst"):
             params["selector_inst"] = cls.build_selector_inst(params["selector"], params)
+
+        params = super().resolve_instances(params, shifts)
 
         return params
 
@@ -624,15 +624,15 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_pre_init(params)
 
         # resolve the default class if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["producer"] = cls.resolve_config_default(
                 param=params.get("producer"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_producer",
                 multi_strategy="same",
             )
@@ -724,12 +724,12 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         return producer_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the producer instance
         if not params.get("producer_inst"):
             params["producer_inst"] = cls.build_producer_inst(params["producer"], params)
+
+        params = super().resolve_instances(params, shifts)
 
         return params
 
@@ -798,18 +798,18 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(
+    def resolve_param_values_pre_init(
         cls,
         params: law.util.InsertableDict[str, Any],
     ) -> law.util.InsertableDict[str, Any]:
-        params = super().resolve_param_values(params)
+        params = super().resolve_param_values_pre_init(params)
 
         # resolve the default classes if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["producers"] = cls.resolve_config_default_and_groups(
                 param=params.get("producers"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_producer",
                 groups_str="producer_groups",
                 multi_strategy="same",
@@ -893,12 +893,12 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         return insts
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the producer instances
         if not params.get("producer_insts"):
             params["producer_insts"] = cls.build_producer_insts(params["producers"], params)
+
+        params = super().resolve_instances(params, shifts)
 
         return params
 
@@ -956,7 +956,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         return columns
 
 
-class MLModelMixinBase(AnalysisTask):
+class MLModelMixinBase(ConfigTask):
     """
     Base mixin to include a machine learning application into tasks.
 
@@ -972,6 +972,14 @@ class MLModelMixinBase(AnalysisTask):
         default=DotDict(),
         description="settings passed to the init function of the ML model",
     )
+    ml_model_inst = DerivableInstParameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
+    exclude_params_index = {"ml_model_inst"}
+    exclude_params_repr = {"ml_model_inst"}
+    exclude_params_sandbox = {"ml_model_inst"}
+    exclude_params_remote_workflow = {"ml_model_inst"}
 
     exclude_params_repr_empty = {"ml_model"}
 
@@ -1024,7 +1032,6 @@ class MLModelMixinBase(AnalysisTask):
         """
 
         ml_model_inst: MLModel = MLModel.get_cls(ml_model)(analysis_inst, **kwargs)
-
         if requested_configs:
             configs = ml_model_inst.training_configs(list(requested_configs))
             if configs:
@@ -1069,9 +1076,38 @@ class MLModelTrainingMixin(
     """
     A mixin class for training machine learning models.
     """
+    single_config = False
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        # NOTE: we can only build TAF insts from the MLModel after ml_model_inst is set
+        if not cls.resolution_task_class:
+            raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
+
+        cls.get_known_shifts(params, shifts)
+
+        ml_model_inst = params["ml_model_inst"]
+        for config_inst, dataset_insts in ml_model_inst.used_datasets.items():
+            for dataset_inst in dataset_insts:
+                # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
+                _params = {
+                    **params,
+                    "config_inst": config_inst,
+                    "config": config_inst.name,
+                    "dataset": dataset_inst.name,
+                }
+                logger_dev.debug(
+                    f"building taf insts for {ml_model_inst.cls_name} {config_inst.name}, {dataset_inst.name}",
+                )
+                cls.resolution_task_class.resolve_instances(_params, shifts)
+                cls.resolution_task_class.get_known_shifts(_params, shifts)
+
+        params["known_shifts"] = shifts
+
+        return params
+
+    @classmethod
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
         """
         Resolve the parameter values for the given parameters.
 
@@ -1083,56 +1119,47 @@ class MLModelTrainingMixin(
         :raises Exception: If the ML model instance received configs to define training configs,
             but did not define any.
         """
-        # resolve ConfigTask parameters first to setup the config insts
-        params = ConfigTask.resolve_param_values(params)
+        # NOTE: we need to resolve ml_model_inst before CSPs because the ml_model_inst itself defines
+        # used CSPs and datasets
+        params = super().resolve_param_values_pre_init(params)
 
-        if "analysis_inst" in params and "ml_model" in params:
-            analysis_inst = params["analysis_inst"]
+        if "analysis_inst" not in params or "ml_model" not in params:
+            raise ValueError("analysis_inst and ml_model need to be set to resolve the ml_model_inst")
 
-            # NOTE: we could try to implement resolving the default ml_model here
-            ml_model_inst = cls.get_ml_model_inst(
-                params["ml_model"],
-                analysis_inst,
-                parameters=params["ml_model_settings"],
+        analysis_inst = params["analysis_inst"]
+
+        # NOTE: we could try to implement resolving the default ml_model here
+        # NOTE: why not implement the config resoluting in get_ml_model_inst instead?
+        ml_model_inst = cls.get_ml_model_inst(
+            params["ml_model"],
+            analysis_inst,
+            parameters=params["ml_model_settings"],
+        )
+        params["ml_model_inst"] = ml_model_inst
+
+        # resolve configs
+        _configs = params.get("configs", ())
+        params["configs"] = tuple(ml_model_inst.training_configs(list(_configs)))
+        if not params["configs"]:
+            raise Exception(
+                f"MLModel '{ml_model_inst.cls_name}' received configs '{_configs}' to define "
+                "training configs, but did not define any",
             )
-            params["ml_model_inst"] = ml_model_inst
+        ml_model_inst._set_configs(params["configs"])
 
-            # resolve configs
-            _configs = params.get("configs", ())
-            params["configs"] = tuple(ml_model_inst.training_configs(list(_configs)))
-            if not params["configs"]:
-                raise Exception(
-                    f"MLModel '{ml_model_inst.cls_name}' received configs '{_configs}' to define "
-                    "training configs, but did not define any",
-                )
-            ml_model_inst._set_configs(params["configs"])
+        # call the model's setup hook
+        ml_model_inst._setup()
 
-            # call the model's setup hook
-            ml_model_inst._setup()
-
-            # resolve CSPs based on the MLModel
-            params["calibrators"] = law.util.make_tuple(
-                ml_model_inst.training_calibrators(analysis_inst, params["calibrators"]),
-            )
-            params["selector"] = ml_model_inst.training_selector(analysis_inst, params["selector"])
-            params["producers"] = law.util.make_tuple(
-                ml_model_inst.training_producers(analysis_inst, params["producers"]),
-            )
-
-        # as final step, resolve CSPs
-        params = super().resolve_param_values(params)
+        # resolve CSPs based on the MLModel
+        params["calibrators"] = law.util.make_tuple(
+            ml_model_inst.training_calibrators(analysis_inst, params["calibrators"]),
+        )
+        params["selector"] = ml_model_inst.training_selector(analysis_inst, params["selector"])
+        params["producers"] = law.util.make_tuple(
+            ml_model_inst.training_producers(analysis_inst, params["producers"]),
+        )
 
         return params
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # get the ML model instance
-        self.ml_model_inst = self.get_ml_model_inst(
-            self.ml_model,
-            self.analysis_inst,
-            configs=list(self.configs),
-            parameters=self.ml_model_settings,
-        )
 
     def store_parts(self) -> law.util.InsertableDict[str, str]:
         """
@@ -1150,7 +1177,7 @@ class MLModelTrainingMixin(
         return parts
 
 
-class MLModelMixin(ConfigTask, MLModelMixinBase):
+class MLModelMixin(MLModelMixinBase):
     """
     A mixin for tasks that require a single machine learning model, e.g. for evaluation.
     """
@@ -1166,45 +1193,30 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
     exclude_params_repr_empty = {"ml_model"}
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_pre_init(params)
 
-        # add the default ml model when empty
-        if "analysis_inst" in params:
-            analysis_inst = params["analysis_inst"]
+        # # add the default ml model when empty
+        params["ml_model"] = cls.resolve_config_default(
+            param=params.get("ml_model"),
+            task_params=params,
+            container=params["analysis_inst"],
+            default_str="default_ml_model",
+            multi_strategy="same",
+        )
 
-            params["ml_model"] = cls.resolve_config_default(
-                params,
-                params.get("ml_model"),
-                container=analysis_inst,
-                default_str="default_ml_model",
-                multiple=False,
-            )
-
-            # when both config_inst and ml_model are set, initialize the ml_model_inst
-            if all(params.get(x) not in (None, law.NO_STR) for x in ("config_inst", "ml_model")):
+        # when both config_inst and ml_model are set, initialize the ml_model_inst
+        if all(params.get(x) not in (None, law.NO_STR) for x in ("config_inst", "ml_model")):
+            if not params.get("ml_model_inst"):
                 params["ml_model_inst"] = cls.get_ml_model_inst(
                     params["ml_model"],
-                    analysis_inst,
+                    params["analysis_inst"],
                     requested_configs=[params["config_inst"]],
                 )
-            elif not cls.allow_empty_ml_model:
-                raise Exception(f"no ml_model configured for {cls.task_family}")
+        elif not cls.allow_empty_ml_model:
+            raise Exception(f"no ml_model configured for {cls.task_family}")
 
         return params
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # get the ML model instance
-        self.ml_model_inst = None
-        if self.ml_model != law.NO_STR:
-            self.ml_model_inst = self.get_ml_model_inst(
-                self.ml_model,
-                self.analysis_inst,
-                requested_configs=[self.config_inst],
-                parameters=self.ml_model_settings,
-            )
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
@@ -1223,8 +1235,43 @@ class MLModelMixin(ConfigTask, MLModelMixinBase):
         return columns
 
 
-class MLModelDataMixin(MLModelMixin):
+class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
+    preparation_producer_inst = DerivableInstParameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
+    exclude_params_index = {"preparation_producer_inst"}
+    exclude_params_repr = {"preparation_producer_inst"}
+    exclude_params_sandbox = {"preparation_producer_inst"}
+    exclude_params_remote_workflow = {"preparation_producer_inst"}
 
+    invokes_preparation_producer = False
+
+    @classmethod
+    def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        return cls.get_array_function_dict(params)
+
+    # @property
+    # def preparation_producer(self):
+    #     return self.ml_model_inst.preparation_producer(self.analysis_inst)
+
+    build_producer_inst = ProducerMixin.build_producer_inst
+
+    @classmethod
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        ml_model_inst = params["ml_model_inst"]
+        preparation_producer = ml_model_inst.preparation_producer(params["analysis_inst"])
+        # add the producer instance
+        if not params.get("preparation_producer_inst"):
+            params["preparation_producer_inst"] = cls.build_producer_inst(preparation_producer, params)
+
+        params = super().resolve_instances(params, shifts)
+
+        return params
+
+
+class MLModelDataMixin(PreparationProducerMixin):
+    single_config = True
     allow_empty_ml_model = False
 
     def store_parts(self) -> law.util.InsertableDict:
@@ -1238,7 +1285,7 @@ class MLModelDataMixin(MLModelMixin):
         return parts
 
 
-class MLModelsMixin(AnalysisTask):
+class MLModelsMixin(ConfigTask):
 
     ml_models = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
@@ -1259,19 +1306,19 @@ class MLModelsMixin(AnalysisTask):
         return ml_models_repr
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        # NOTE: at the moment, the ml_models will be initialized before CSPs are initialized
+        params = super().resolve_param_values_pre_init(params)
 
-        analysis_inst = params.get("analysis_inst")
-
-        if analysis_inst:
+        if (container := cls._get_config_container(params)):
             # apply ml_model_groups and default_ml_model from the config
             params["ml_models"] = cls.resolve_config_default_and_groups(
-                params,
-                params.get("ml_models"),
-                container=analysis_inst,
+                param=params.get("ml_models"),
+                task_params=params,
+                container=container,
                 default_str="default_ml_model",
                 groups_str="ml_model_groups",
+                multi_strategy="same",
             )
 
             # special case: initialize them once to trigger their set_config hook
@@ -1279,7 +1326,7 @@ class MLModelsMixin(AnalysisTask):
                 params["ml_model_insts"] = [
                     MLModelMixinBase.get_ml_model_inst(
                         ml_model,
-                        analysis_inst,
+                        params["analysis_inst"],
                         requested_configs=[params["config"]] if cls.has_single_config() else params["configs"],
                     )
                     for ml_model in params["ml_models"]
@@ -1347,15 +1394,15 @@ class WeightProducerClassMixin(ArrayFunctionClassMixin):
     )
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_pre_init(params)
 
         # resolve the default class if necessary
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["weight_producer"] = cls.resolve_config_default(
                 param=params.get("weight_producer"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_weight_producer",
                 multi_strategy="same",
             )
@@ -1449,15 +1496,15 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         return weight_producer_cls(inst_dict=inst_dict)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # add the weight producer instance
         if not params.get("weight_producer_inst"):
             params["weight_producer_inst"] = cls.build_weight_producer_inst(
                 params["weight_producer"],
                 params,
             )
+
+        params = super().resolve_instances(params, shifts)
 
         return params
 
@@ -1507,15 +1554,15 @@ class InferenceModelClassMixin(ConfigTask):
     )
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_pre_init(params)
 
         # add the default inference model when empty
-        if (analysis_inst := params.get("analysis_inst")):
+        if (container := cls._get_config_container(params)):
             params["inference_model"] = cls.resolve_config_default(
                 param=params.get("inference_model"),
                 task_params=params,
-                container=analysis_inst,
+                container=container,
                 default_str="default_inference_model",
                 multi_strategy="same",
             )
@@ -1574,8 +1621,8 @@ class InferenceModelMixin(InferenceModelClassMixin):
         return inference_model_cls(config_insts, **kwargs)
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_post_init(params)
 
         # add the inference model instance
         if not params.get("inference_model_inst") and params.get("inference_model"):
@@ -1590,6 +1637,34 @@ class InferenceModelMixin(InferenceModelClassMixin):
                     params["inference_model"],
                     config_insts,
                 )
+
+        return params
+
+    @classmethod
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        if not cls.resolution_task_class:
+            raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
+
+        cls.get_known_shifts(params, shifts)
+
+        # we loop over all configs/datasets, but return initial params
+        inference_model_cls = InferenceModel.get_cls(params["inference_model"])
+        for i, config_inst in enumerate(params["config_insts"]):
+            datasets = inference_model_cls.used_datasets(config_inst)
+
+            for dataset in datasets:
+                # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
+                _params = {
+                    **params,
+                    "config_inst": config_inst,
+                    "config": config_inst.name,
+                    "dataset": dataset,
+                }
+                logger_dev.debug(f"building taf insts for {config_inst.name}, {dataset}")
+                cls.resolution_task_class.resolve_instances(_params, shifts)
+                cls.resolution_task_class.get_known_shifts(_params, shifts)
+
+        params["known_shifts"] = shifts
 
         return params
 
@@ -1609,9 +1684,8 @@ class CategoriesMixin(ConfigTask):
     allow_empty_categories = False
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
-
+    def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_post_init(params)
         if "analysis_inst" not in params or "config_insts" not in params:
             return params
 
@@ -1632,7 +1706,6 @@ class CategoriesMixin(ConfigTask):
                     # groups_str="category_groups",
                     multi_strategy="union",
                 )
-
                 # resolve them
                 categories = cls.find_config_objects(
                     names=categories,
@@ -1674,8 +1747,8 @@ class VariablesMixin(ConfigTask):
     allow_missing_variables = False
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_post_init(params)
 
         if "analysis_inst" not in params or "config_insts" not in params:
             return params
@@ -1801,9 +1874,8 @@ class DatasetsProcessesMixin(ConfigTask):
     @classmethod
     def modify_task_attributes(cls) -> None:
         super().modify_task_attributes()
-
         # single/multi config adjustments in case the switch has been specified
-        if isinstance(cls.single_config, bool) and getattr(cls, "datasets_multi", law.no_value) != law.no_value:
+        if isinstance(cls.single_config, bool) and getattr(cls, "datasets_multi", None) is not None:
             if not cls.has_single_config():
                 cls.datasets = cls.datasets_multi
                 cls.processes = cls.processes_multi
@@ -1811,8 +1883,8 @@ class DatasetsProcessesMixin(ConfigTask):
             cls.processes_multi = None
 
     @classmethod
-    def resolve_param_values(cls, params):
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_pre_init(params)
 
         # helper to resolve processes and datasets for one config
         def resolve(config_inst: od.Config, processes: Any, datasets: Any) -> tuple[list[str], list[str]]:
@@ -1830,7 +1902,6 @@ class DatasetsProcessesMixin(ConfigTask):
                     processes = config_inst.processes.names()
                 if not processes and not cls.allow_empty_processes:
                     raise ValueError(f"no processes found matching {processes_orig}")
-
             if datasets != law.no_value:
                 datasets_orig = datasets
                 if datasets:
@@ -1855,49 +1926,66 @@ class DatasetsProcessesMixin(ConfigTask):
 
             return (processes, datasets)
 
-        if cls.has_single_config():
-            if (config_inst := params.get("config_inst")):
-                # resolve
-                processes, datasets = resolve(
-                    config_inst,
-                    params.get("processes", law.no_value),
-                    params.get("datasets", law.no_value),
-                )
+        # get processes and datasets
+        single_config = cls.has_single_config()
+        processes = (params.get("processes", law.no_value),) if single_config else params.get("processes", ())
+        datasets = (params.get("datasets", law.no_value),) if single_config else params.get("datasets", ())
 
-                # store in params
-                if processes != law.no_value:
-                    params["processes"] = tuple(processes)
-                    params["process_insts"] = list(map(config_inst.get_process, processes))
-                if datasets != law.no_value:
-                    params["datasets"] = tuple(datasets)
-                    params["dataset_insts"] = list(map(config_inst.get_dataset, datasets))
-        else:
-            if (config_insts := params.get("config_insts")):
-                # "broadcast" single sequences to number of configs
-                processes = cls.broadcast_to_configs(params, "processes", len(config_insts))
-                datasets = cls.broadcast_to_configs(params, "datasets", len(config_insts))
+        # "broadcast" to match number of configs
+        config_insts = params.get("config_insts")
+        processes = cls.broadcast_to_configs(processes, "processes", len(config_insts))
+        datasets = cls.broadcast_to_configs(datasets, "datasets", len(config_insts))
 
-                # perform resolution per config
-                multi_processes = []
-                multi_datasets = []
-                for config_inst, _processes, _datasets in zip(config_insts, processes, datasets):
-                    _processes, _datasets = resolve(config_inst, _processes, _datasets)
-                    multi_processes.append(tuple(_processes) if _processes != law.no_value else None)
-                    multi_datasets.append(tuple(_datasets) if _datasets != law.no_value else None)
+        # perform resolution per config
+        multi_processes = []
+        multi_datasets = []
+        for config_inst, _processes, _datasets in zip(config_insts, processes, datasets):
+            _processes, _datasets = resolve(config_inst, _processes, _datasets)
+            multi_processes.append(tuple(_processes) if _processes != law.no_value else None)
+            multi_datasets.append(tuple(_datasets) if _datasets != law.no_value else None)
 
-                # store in params
-                if any(multi_processes):
-                    params["processes"] = tuple(multi_processes)
-                    params["process_insts"] = {
-                        config_inst: list(map(config_inst.get_process, processes))
-                        for config_inst, processes in zip(config_insts, multi_processes)
-                    }
-                if any(multi_datasets):
-                    params["datasets"] = tuple(multi_datasets)
-                    params["dataset_insts"] = {
-                        config_inst: list(map(config_inst.get_dataset, datasets))
-                        for config_inst, datasets in zip(config_insts, multi_datasets)
-                    }
+        # store params
+        params["processes"] = multi_processes[0] if single_config else tuple(multi_processes)
+        params["datasets"] = multi_datasets[0] if single_config else tuple(multi_datasets)
+
+        # store instances
+        params["process_insts"] = {
+            config_inst: list(map(config_inst.get_process, processes))
+            for config_inst, processes in zip(config_insts, multi_processes)
+        }
+        params["dataset_insts"] = {
+            config_inst: list(map(config_inst.get_dataset, datasets))
+            for config_inst, datasets in zip(config_insts, multi_datasets)
+        }
+        return params
+
+    @classmethod
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        if not cls.resolution_task_class:
+            raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
+
+        cls.get_known_shifts(params, shifts)
+
+        # we loop over all configs/datasets, but return initial params
+        for i, config_inst in enumerate(params["config_insts"]):
+            if cls.has_single_config():
+                datasets = params["datasets"]
+            else:
+                datasets = params["datasets"][i]
+
+            for dataset in datasets:
+                # NOTE: we need to copy here, because otherwise taf inits will only be triggered once
+                _params = {
+                    **params,
+                    "config_inst": config_inst,
+                    "config": config_inst.name,
+                    "dataset": dataset,
+                }
+                logger_dev.debug(f"building taf insts for {config_inst.name}, {dataset}")
+                cls.resolution_task_class.resolve_instances(_params, shifts)
+                cls.resolution_task_class.get_known_shifts(_params, shifts)
+
+        params["known_shifts"] = shifts
 
         return params
 
@@ -1914,9 +2002,10 @@ class DatasetsProcessesMixin(ConfigTask):
         :param shifts: TaskShifts object to adjust.
         """
         # add shifts of all datasets to upstream ones
-        for dataset_inst in params.get("dataset_insts") or []:
-            if dataset_inst.is_mc:
-                shifts.upstream |= set(dataset_inst.info.keys())
+        for config_inst, dataset_insts in params["dataset_insts"].items():
+            for dataset_inst in dataset_insts:
+                if dataset_inst.is_mc:
+                    shifts.upstream |= set(dataset_inst.info.keys())
 
         super().get_known_shifts(params, shifts)
 
@@ -1929,174 +2018,6 @@ class DatasetsProcessesMixin(ConfigTask):
         return self._multi_sequence_repr(self.processes, sort=True)
 
 
-class MultiConfigDatasetsProcessesMixin(ConfigTask):
-    single_config = False
-    datasets = law.MultiCSVParameter(
-        default=(),
-        description="comma-separated dataset names or patters to select; can also be the key of a "
-        "mapping defined in the 'dataset_groups' auxiliary data of the config; when empty, uses "
-        "all datasets registered in the config that contain any of the selected --processes; empty "
-        "default",
-        brace_expand=True,
-        parse_empty=True,
-    )
-
-    # TODO: this should be per config
-    processes = law.MultiCSVParameter(
-        default=(),
-        description="comma-separated process names or patterns for filtering processes; can also "
-        "be the key of a mapping defined in the 'process_groups' auxiliary data of the config; "
-        "uses all processes of the config when empty; empty default",
-        brace_expand=True,
-        parse_empty=True,
-    )
-
-    allow_empty_datasets = False
-    allow_empty_processes = False
-
-    @classmethod
-    def resolve_param_values(cls, params):
-        params = super().resolve_param_values(params)
-
-        config_insts = params.get("config_insts", ())
-
-        if not config_insts:
-            # configs not yet setup
-            return params
-
-        n_configs = len(config_insts)
-
-        # resolve processes
-        if "processes" in params:
-            if params["processes"]:
-                processes = list(params["processes"])
-                if len(processes) == 1:
-                    # resolve to number of configs
-                    processes = list(processes * len(config_insts))
-                elif len(processes) != n_configs:
-                    raise ValueError(
-                        f"number of processes ({len(processes)}) does not match number of configs ({n_configs})",
-                    )
-
-                for i, _processes in enumerate(processes):
-                    config_inst = config_insts[i]
-                    processes[i] = tuple(cls.find_config_objects(
-                        names=_processes,
-                        container=config_inst,
-                        object_cls=od.Process,
-                        groups_str="process_groups",
-                        deep=True,
-                    ))
-            else:
-                processes = tuple(tuple(config_inst.processes.names()) for config_inst in config_insts)
-
-            # complain when no processes were found
-            if not processes and not cls.allow_empty_processes:
-                raise ValueError(f"no processes found matching {params['processes']}")
-
-            params["processes"] = tuple(processes)
-            params["process_insts"] = tuple(
-                tuple(config_inst.get_process(p) for p in params["processes"][i])
-                for i, config_inst in enumerate(config_insts)
-            )
-
-        # resolve datasets
-        if "datasets" in params:
-            if params["datasets"]:
-                datasets = list(params["datasets"])
-                if len(datasets) == 1:
-                    # resolve to number of configs
-                    datasets = list(datasets * len(config_insts))
-                elif len(datasets) != n_configs:
-                    raise ValueError(
-                        f"number of datasets ({len(datasets)}) does not match number of configs ({n_configs})",
-                    )
-
-                for i, _datasets in enumerate(datasets):
-                    config_inst = config_insts[i]
-                    datasets[i] = tuple(cls.find_config_objects(
-                        names=_datasets,
-                        container=config_inst,
-                        object_cls=od.Dataset,
-                        groups_str="dataset_groups",
-                    ))
-
-            elif "processes" in params:
-                # pick all datasets that contain any of the requested (sub) processes
-                datasets = list()
-                for i, _processes in enumerate(processes):
-
-                    sub_process_insts = sum((
-                        [proc for proc, _, _ in process_inst.walk_processes(include_self=True)]
-                        for process_inst in map(config_insts[i].get_process, _processes)
-                    ), [])
-                    datasets.append(tuple(
-                        dataset_inst.name
-                        for dataset_inst in config_insts[i].datasets
-                        if any(map(dataset_inst.has_process, sub_process_insts))
-                    ))
-
-            # complain when no datasets were found
-            if not datasets and not cls.allow_empty_datasets:
-                raise ValueError(f"no datasets found matching {params['datasets']}")
-
-            params["datasets"] = tuple(datasets)
-            params["dataset_insts"] = tuple(
-                tuple(config_inst.get_dataset(d) for d in params["datasets"][i])
-                for i, config_inst in enumerate(config_insts)
-            )
-
-        return params
-
-    @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
-        # add shifts of all datasets to upstream ones
-        for _dataset_insts in params["dataset_insts"]:
-            for dataset_inst in _dataset_insts:
-                if dataset_inst.is_mc:
-                    shifts.upstream |= set(dataset_inst.info.keys())
-
-        super().get_known_shifts(params, shifts)
-
-    def get_multi_config_objects_repr(self, names: Sequence[Sequence[str]]):
-        """
-        Returns a string representation from a list of list of names.
-        When the names are the same per config, handle names as if there is only one config.
-        When there is just one unique name in total, return it directly.
-        When there are different names per config, the representation consists of the number of names
-        per config and a hash of the sorted merge of all names.
-
-        :param names: A list of list of names.
-        :return: A string representation of the names.
-        """
-        # when names are the same per config, handle names as if there is only one config
-        if len(set(names)) == 1:
-            names = (names[0],)
-
-        # when there is just one unique name in total, return it directly
-        if (len(names) == 1) & (len(names[0]) == 1):
-            return names[0][0]
-
-        _repr = ""
-        merge_names = []
-        for _names in sorted(names):
-            merge_names += sorted(_names)
-            _repr += f"{len(_names)}_"
-        return _repr + f"_{law.util.create_hash(sorted(merge_names))}"
-
-    @property
-    def datasets_repr(self):
-        return self.get_multi_config_objects_repr(self.datasets)
-
-    @property
-    def processes_repr(self):
-        return self.get_multi_config_objects_repr(self.processes)
-
-
 class ShiftSourcesMixin(ConfigTask):
     shift_sources = law.CSVParameter(
         default=(),
@@ -2107,11 +2028,10 @@ class ShiftSourcesMixin(ConfigTask):
     )
 
     allow_empty_shift_sources = False
-    shift_validation_task_cls = None
 
     @classmethod
-    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().resolve_param_values(params)
+    def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_post_init(params)
 
         # resolve shift sources
         if (container := cls._get_config_container(params)) and "shift_sources" in params:
@@ -2128,12 +2048,16 @@ class ShiftSourcesMixin(ConfigTask):
             if shifts:
                 sources = cls.reduce_shifts(shifts)
 
-                # when a validation task is set, is it to validate and reduce the requested shifts
-                if cls.shift_validation_task_cls:
-                    sources = [
-                        source for source in sources
-                        if cls.validate_shift_source(params, source)
-                    ]
+                # # reduce shifts based on known shifts
+                if "known_shifts" not in params:
+                    raise ValueError("known_shifts must be set before resolving shift sources")
+                sources = [
+                    source for source in sources
+                    if (
+                        f"{source}_up" in params["known_shifts"].upstream and
+                        f"{source}_down" in params["known_shifts"].upstream
+                    )
+                ]
 
             # complain when no sources were found
             if not sources and not cls.allow_empty_shift_sources:
@@ -2143,16 +2067,6 @@ class ShiftSourcesMixin(ConfigTask):
             params["shift_sources"] = tuple(sources)
 
         return params
-
-    @classmethod
-    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
-        if not cls.shift_validation_task_cls:
-            return True
-
-        # run the task's parameter validation using the up shift
-        _params = params | {"shift": f"{source}_up"}
-        cls.shift_validation_task_cls.modify_param_values(_params)
-        return _params["global_shift_inst"].source == source
 
     @classmethod
     def expand_shift_sources(cls, sources: Sequence[str] | set[str]) -> list[str]:
@@ -2190,42 +2104,6 @@ class DatasetShiftSourcesMixin(ShiftSourcesMixin, DatasetTask):
 
     # allow empty sources, i.e., using only nominal
     allow_empty_shift_sources = True
-
-
-class DatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, DatasetsProcessesMixin):
-
-    @classmethod
-    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
-        if not cls.shift_validation_task_cls:
-            return True
-
-        # run the task's parameter validation using the up shift and all datasets
-        for dataset in params["datasets"]:
-            _params = params | {"shift": f"{source}_up", "dataset": dataset}
-            cls.shift_validation_task_cls.modify_param_values(_params)
-            if _params["global_shift_inst"].source == source:
-                return True
-
-        return False
-
-
-class MultiConfigDatasetsProcessesShiftSourcesMixin(ShiftSourcesMixin, MultiConfigDatasetsProcessesMixin):
-
-    @classmethod
-    def validate_shift_source(cls, params: dict[str, Any], source: str) -> bool:
-        if not cls.shift_validation_task_cls:
-            return True
-
-        # run the task's parameter validation using the up shift and all configs and datasets
-        for i, config in enumerate(params["configs"]):
-            datasets = params["datasets"][i]
-            for dataset in datasets:
-                _params = params | {"config": config, "shift": f"{source}_up", "dataset": dataset}
-                cls.shift_validation_task_cls.modify_param_values(_params)
-                if _params["global_shift_inst"].source == source:
-                    return True
-
-        return False
 
 
 class ChunkedIOMixin(ConfigTask):

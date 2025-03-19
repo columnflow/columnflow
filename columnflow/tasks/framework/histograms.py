@@ -12,7 +12,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
-    VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, DatasetsProcessesShiftSourcesMixin,
+    VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin,
 )
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox, maybe_import
@@ -136,10 +136,12 @@ class HistogramsUserBase(
 
 
 class HistogramsUserSingleShiftBase(
-    # ConfigTask,
     ShiftTask,
     HistogramsUserBase,
 ):
+    # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
+    resolution_task_class = MergeHistograms
+
     # upstream requirements
     reqs = Requirements(
         MergeHistograms=MergeHistograms,
@@ -163,11 +165,11 @@ class HistogramsUserSingleShiftBase(
 
 
 class HistogramsUserMultiShiftBase(
-    DatasetsProcessesShiftSourcesMixin,
+    ShiftSourcesMixin,
     HistogramsUserBase,
 ):
-    # use the MergeHistograms task to validate shift sources against the requested dataset
-    shift_validation_task_cls = MergeHistograms
+    # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
+    resolution_task_class = MergeHistograms
 
     # upstream requirements
     reqs = Requirements(

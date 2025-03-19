@@ -16,7 +16,8 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
-    CategoriesMixin, MultiConfigDatasetsProcessesShiftSourcesMixin, HistHookMixin, MultiConfigDatasetsProcessesMixin,
+    CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
+    MLModelsMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -28,29 +29,28 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 from columnflow.hist_util import add_missing_shifts
 
 
-class PlotVariablesBase(
+class _PlotVariablesBase(
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,
-    # MLModelsMixin,
+    MLModelsMixin,
     WeightProducerClassMixin,
     CategoriesMixin,
     ProcessPlotSettingMixin,
-    MultiConfigDatasetsProcessesMixin,
     VariablePlotSettingMixin,
     HistHookMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    # single_config = True set via MultiConfigDatasetsProcessesMixin
+    """
+    Base classes for :py:class:`PlotVariablesBase`.
+    """
+
+
+class PlotVariablesBase(_PlotVariablesBase):
+    single_config = False
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
-
-    # upstream requirements
-    reqs = Requirements(
-        RemoteWorkflow.reqs,
-        MergeHistograms=MergeHistograms,
-    )
 
     exclude_index = True
 
@@ -240,6 +240,7 @@ class PlotVariablesBase(
             # axis selections and reductions
             _hists = OrderedDict()
             for process_inst in hists.keys():
+                expected_shifts = set(plot_shifts) & process_shift_map[process_inst.name]
                 h = hists[process_inst]
                 # selections
                 h = h[{
@@ -250,7 +251,7 @@ class PlotVariablesBase(
                     ],
                     "shift": [
                         hist.loc(s_name)
-                        for s_name in process_shift_map[process_inst.name]
+                        for s_name in expected_shifts
                         if s_name in h.axes["shift"]
                     ],
                 }]
@@ -297,7 +298,8 @@ class PlotVariablesBaseSingleShift(
     ShiftTask,
     PlotVariablesBase,
 ):
-
+    # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
+    resolution_task_class = MergeHistograms
     exclude_index = True
 
     # upstream requirements
@@ -328,6 +330,7 @@ class PlotVariablesBaseSingleShift(
                     req[config_inst.name][d] = self.reqs.MergeHistograms.req(
                         self,
                         config=config_inst.name,
+                        shift=self.global_shift_insts[config_inst].name,
                         dataset=d,
                         branch=-1,
                         _exclude={"branches"},
@@ -438,7 +441,7 @@ class PlotVariablesPerProcess2D(
 
 
 class PlotVariablesBaseMultiShifts(
-    MultiConfigDatasetsProcessesShiftSourcesMixin,
+    ShiftSourcesMixin,
     PlotVariablesBase,
 ):
     legend_title = luigi.Parameter(
@@ -448,8 +451,8 @@ class PlotVariablesBaseMultiShifts(
         "the plot, the process_inst label is used; empty default",
     )
 
-    # use the MergeHistograms task to validate shift sources against the requested dataset
-    shift_validation_task_cls = MergeHistograms
+    # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
+    resolution_task_class = MergeHistograms
 
     exclude_index = True
 

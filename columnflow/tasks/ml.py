@@ -21,6 +21,7 @@ from columnflow.tasks.framework.mixins import (
     MLModelDataMixin,
     MLModelTrainingMixin,
     MLModelMixin,
+    PreparationProducerMixin,
     ChunkedIOMixin,
     CategoriesMixin,
 )
@@ -47,6 +48,7 @@ class PrepareMLEvents(
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     allow_empty_ml_model = False
+    invokes_preparation_producer = True
 
     # upstream requirements
     reqs = Requirements(
@@ -61,9 +63,6 @@ class PrepareMLEvents(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # cache for producer inst
-        self._preparation_producer_inst = law.no_value
-
         # complain when this task is run for events that are not needed for training
         if not self.events_used_in_training(
             self.config_inst,
@@ -76,30 +75,6 @@ class PrepareMLEvents(
                 f"'{self.global_shift_inst.name}' is not intended to be run by "
                 f"{self.__class__.__name__}",
             )
-
-    @property
-    def preparation_producer_inst(self):
-        if self._preparation_producer_inst is not law.no_value:
-            # producer has already been cached
-            return self._preparation_producer_inst
-
-        producer = self.ml_model_inst.preparation_producer(self.analysis_inst)
-
-        if not producer:
-            # set producer inst to None when no producer is requested
-            self._preparation_producer_inst = None
-            return self._preparation_producer_inst
-        self._preparation_producer_inst = self.build_producer_insts([producer], {"task": self})[0]
-
-        # overwrite the sandbox when set
-        sandbox = self._preparation_producer_inst.get_sandbox()
-        if sandbox:
-            self.sandbox = sandbox
-            # rebuild the sandbox inst when already initialized
-            if self._sandbox_initialized:
-                self._initialize_sandbox(force=True)
-
-        return self._preparation_producer_inst
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -468,7 +443,10 @@ class MLTraining(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    # use the MergeMLEvents task to trigger upstream TaskArrayFunction initialization
+    resolution_task_class = MergeMLEvents
 
+    single_config = False
     allow_empty_ml_model = False
 
     # upstream requirements
@@ -575,11 +553,14 @@ class MLTraining(
 class MLEvaluation(
     ReducedEventsUser,
     ProducersMixin,
-    MLModelMixin,
+    PreparationProducerMixin,
     ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    # TODO: Needs to be chosen based on ml_model_cls.preparation_producer_in_ml_evaluation
+    invokes_preparation_producer = True
+
     sandbox = None
 
     allow_empty_ml_model = False
@@ -598,42 +579,9 @@ class MLEvaluation(
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # cache for producer inst
-        self._preparation_producer_inst = law.no_value
-
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
         # TODO: potentially reset
-
-    @property
-    def preparation_producer_inst(self):
-        if self._preparation_producer_inst is not law.no_value:
-            # producer has already been cached
-            return self._preparation_producer_inst
-
-        producer = None
-        if self.ml_model_inst.preparation_producer_in_ml_evaluation:
-            # only consider preparation_producer in MLEvaluation if requested by model
-            producer = self.ml_model_inst.preparation_producer(self.analysis_inst)
-
-        if not producer:
-            # set producer inst to None when no producer is requested
-            self._preparation_producer_inst = None
-            return self._preparation_producer_inst
-
-        self._preparation_producer_inst = self.build_producer_insts([producer], {"task": self})[0]
-
-        # check that preparation_producer does not clash with ml_model_inst sandbox
-        if (
-            self._preparation_producer_inst.sandbox and
-            self.sandbox != self._preparation_producer_inst.sandbox
-        ):
-            raise Exception(
-                f"Task {self.__class__.__name__} got different sandboxes from the MLModel ({self.sandbox}) "
-                f"than from the preparation_producer ({self._preparation_producer_inst.sandbox})",
-            )
-
-        return self._preparation_producer_inst
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -647,7 +595,7 @@ class MLEvaluation(
 
         # add producer dependent requirements
         if self.preparation_producer_inst:
-            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
+            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
 
         if not self.pilot and self.producer_insts:
             reqs["producers"] = [
@@ -668,7 +616,7 @@ class MLEvaluation(
             "events": self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch),
         }
         if self.preparation_producer_inst:
-            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires()
+            reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
 
         if self.producer_insts:
             reqs["producers"] = [

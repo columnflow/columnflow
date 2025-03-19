@@ -9,7 +9,7 @@ import order as od
 
 from columnflow.tasks.framework.base import AnalysisTask, RESOLVE_DEFAULT, ShiftTask, DatasetTask
 from columnflow.tasks.framework.mixins import (
-    VariablesMixin, CategoriesMixin, MultiConfigDatasetsProcessesMixin,
+    VariablesMixin, CategoriesMixin, DatasetsProcessesMixin,
 )
 
 
@@ -230,7 +230,7 @@ class AnalysisTaskTests(unittest.TestCase):
                 **self.base_params,
                 "categories": input_categories,
             }
-            resolved_params = CategoriesMixin.resolve_param_values(params=input_params)
+            resolved_params = CategoriesMixin.modify_param_values(params=input_params)
             # TODO: remove set() when order is fixed
             self.assertEqual(set(resolved_params["categories"]), set(expected_categories))
 
@@ -246,11 +246,13 @@ class AnalysisTaskTests(unittest.TestCase):
                 **self.base_params,
                 "variables": input_variables,
             }
-            resolved_params = VariablesMixin.resolve_param_values(params=input_params)
+            resolved_params = VariablesMixin.modify_param_values(params=input_params)
             # TODO: remove set() when order is fixed
             self.assertEqual(set(resolved_params["variables"]), set(expected_variables))
 
     def test_resolve_datasets_processes(self):
+        DatasetsProcessesMixin.single_config = False
+        DatasetsProcessesMixin.resolution_task_class = DatasetTask
         for input_processes, expected_processes in (
             ((("proc4",),), (("proc4",), ("proc4",))),
             ((("proc4",), ("proc5")), (("proc4",), ("proc5",))),
@@ -265,7 +267,7 @@ class AnalysisTaskTests(unittest.TestCase):
                 "processes": input_processes,
                 "datasets": (),
             }
-            resolved_params = MultiConfigDatasetsProcessesMixin.resolve_param_values(params=input_params)
+            resolved_params = DatasetsProcessesMixin.modify_param_values(params=input_params)
             self.assertEqual(resolved_params["processes"], expected_processes)
 
             # since there is a 1-to-1 mapping between processes and datasets, we can infer the datasets as well

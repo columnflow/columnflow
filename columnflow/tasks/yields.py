@@ -37,6 +37,7 @@ class _CreateYieldTable(
     """
 
     single_config = True
+    resolution_task_class = MergeHistograms
 
 
 class CreateYieldTable(_CreateYieldTable):

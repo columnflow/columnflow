@@ -20,6 +20,9 @@ from columnflow.util import DerivableMeta, Derivable, DotDict, is_pattern, is_re
 logger = law.logger.get_logger(__name__)
 
 
+default_dataset = law.config.get_expanded("analysis", "default_dataset")
+
+
 class ParameterType(enum.Enum):
     """
     Parameter type flag.
@@ -346,6 +349,14 @@ class InferenceModel(Derivable):
             return subclass
 
         return decorator(func) if func else decorator
+
+    @classmethod
+    def used_datasets(cls, config_inst: od.Config) -> list[str]:
+        """
+        Used datasets for which the `upstream_task_cls.resolve_instances` will be called.
+        Defaults to the default dataset.
+        """
+        return [default_dataset]
 
     @classmethod
     def model_spec(cls) -> DotDict:

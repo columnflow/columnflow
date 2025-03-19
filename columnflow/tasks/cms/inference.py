@@ -11,9 +11,11 @@ import order as od
 
 from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.inference import SerializeInferenceModelBase
+from columnflow.tasks.histograms import MergeHistograms
 
 
 class CreateDatacards(SerializeInferenceModelBase):
+    resolution_task_class = MergeHistograms
 
     def output(self):
         hooks_repr = self.hist_hooks_repr

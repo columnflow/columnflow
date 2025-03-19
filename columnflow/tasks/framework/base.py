@@ -27,6 +27,7 @@ from columnflow.types import Sequence, Callable, Any, T
 
 
 logger = law.logger.get_logger(__name__)
+logger_dev = law.logger.get_logger(f"{__name__}-dev")
 
 # default analysis and config related objects
 default_analysis = law.config.get_expanded("analysis", "default_analysis")
@@ -132,37 +133,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
         params = cls.resolve_param_values(params)
-        return params
-
-    @classmethod
-    def switch_to_analysis_inst_aux(cls, params: dict):
-        """
-        This function switches the default values from the config insts to the analysis inst to help
-        with the transition to the MultiConfigTask, for which the defaults need to be set in the
-        analysis inst.
-        """
-        if "config_insts" not in params:
-            return params
-
-        # TaskArrayFunctions that should be set via the analysis inst aux values
-        analysis_inst_aux = (
-            "default_calibrator", "default_selector", "default_selector_steps",
-            "default_producer", "default_ml_model",
-            "default_weight_producer", "default_inference_model",
-        )
-
-        # set defaults to the analysis inst if they are set in the config inst
-        # (assuming defaults are the same in all configs)
-        config_inst = params.get("config_insts")[0]
-        for default in analysis_inst_aux:
-            if config_inst.has_aux(default) and not params["analysis_inst"].has_aux(default):
-                law.logger.get_logger(cls.task_family).warning(
-                    f"The {default} aux value is set in the config, but not in the analysis. "
-                    "It is recommended to set this value in the analysis instead. The value in the "
-                    f"analysis inst will be set to '{config_inst.x(default)}'.",
-                )
-                params["analysis_inst"].set_aux(default, config_inst.x(default))
-
         return params
 
     @classmethod
@@ -1117,6 +1087,17 @@ class ConfigTask(AnalysisTask):
         brace_expand=True,
     )
 
+    # NOTE: maybe we need some different type of parameter to allow parsing/serializing TaskShifts
+    known_shifts = luigi.Parameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
+
+    exclude_params_index = {"known_shifts"}
+    exclude_params_repr = {"known_shifts"}
+    exclude_params_sandbox = {"known_shifts"}
+    exclude_params_remote_workflow = {"known_shifts"}
+
     # the field in the store parts behind which the new part is inserted
     # added here for subclasses that typically refer to the store part added by _this_ class
     config_store_anchor = "config"
@@ -1200,7 +1181,7 @@ class ConfigTask(AnalysisTask):
         return None
 
     @classmethod
-    def resolve_param_values(cls, params: dict) -> dict:
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
         if (analysis_inst := params.get("analysis_inst")):
@@ -1213,10 +1194,121 @@ class ConfigTask(AnalysisTask):
                 if "config_insts" not in params and "configs" in params:
                     params["config_insts"] = list(map(analysis_inst.get_config, params["configs"]))
 
-            # for backwards compatibility, we automatically switch the defaults from config to analysis inst
-            params = cls.switch_to_analysis_inst_aux(params)
+        # resolving of parameters that is required before ArrayFunctions etc. can be initialized
+        params = cls.resolve_param_values_pre_init(params)
+
+        # check if shifts are already known for *this* workflow
+        if params.get("known_shifts", None) and params.get("branch", -1) != -1:
+            logger_dev.debug(f"{cls.task_family}: shifts already known")
+        else:
+            if params.get("known_shifts", None) and params.get("branch", -1) == -1:
+                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
+            else:
+                logger_dev.debug(f"{cls.task_family}: shifts unknown")
+
+            # initialize ArrayFunctions etc. and collect known shifts
+            shifts = params["known_shifts"] = TaskShifts()
+            params = cls.resolve_instances(params, shifts)
+            params["known_shifts"] = shifts
+
+        # resolving of parameters that can only be performed after ArrayFunction initialization
+        params = cls.resolve_param_values_post_init(params)
+
+        # resolving of shifts
+        params = cls.resolve_shifts(params)
 
         return params
+
+    @classmethod
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        """
+        Build the array function instances.
+        For single-config/dataset tasks, resolve_instances is implemented by mixin classes such as the ProducersMixin.
+        For multi-config tasks, resolve_instances from the upstream task is called for each config instance.
+        If the resolve_instances function needs to be called for other combinations of parameters (e.g. per dataset),
+        it can be overwritten by the task class.
+
+        :param params: Dictionary of task parameters.
+        :param shifts: Collection of local and global shifts.
+        :return: Updated dictionary of task parameters.
+        """
+        cls.get_known_shifts(params, shifts)
+
+        if not cls.resolution_task_class:
+            params["known_shifts"] = shifts
+            return params
+
+        logger_dev.debug(
+            f"{cls.task_family}: uses ConfigTask.resolve_instances base implementation; "
+            f"upsteam_task_cls was defined as {cls.resolution_task_class}; ",
+        )
+        # base implementation for ConfigTasks that do not define any datasets.
+        # Needed for e.g. MergeShiftedHistograms
+        if cls.has_single_config():
+            _params = params.copy()
+            _params = cls.resolution_task_class.resolve_instances(params, shifts)
+            cls.resolution_task_class.get_known_shifts(_params, shifts)
+        else:
+            for config_inst in params["config_insts"]:
+                _params = {
+                    **params,
+                    "config_inst": config_inst,
+                    "config": config_inst.name,
+                }
+                _params = cls.resolution_task_class.resolve_instances(_params, shifts)
+                cls.resolution_task_class.get_known_shifts(_params, shifts)
+
+        params["known_shifts"] = shifts
+
+        return params
+
+    @classmethod
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        """
+        Resolve parameters before the array function instances have been initialized.
+
+        :param params: Dictionary of task parameters.
+        :return: Updated dictionary of task parameters.
+        """
+        return params
+
+    @classmethod
+    def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        """
+        Resolve parameters after the array function instances have been initialized.
+
+        :param params: Dictionary of task parameters.
+        :return: Updated dictionary of task parameters.
+        """
+        return params
+
+    @classmethod
+    def resolve_shifts(cls, params: dict[str, Any]) -> dict[str, Any]:
+        """
+        Resolve shifts
+
+        :param params: Dictionary of task parameters.
+        :return: Updated dictionary of task parameters.
+        """
+        # called within modify_param_values to resolve shifts after all other parameters have been resolved
+        return params
+
+    @classmethod
+    def get_known_shifts(
+        cls,
+        params: dict[str, Any],
+        shifts: TaskShifts,
+    ) -> None:
+        """
+        Adjusts the local and upstream fields of the *shifts* object to include shifts implemented
+        by _this_ task, and dependent shifts that are implemented by upstream tasks.
+
+        :param params: Dictionary of task parameters.
+        :param shifts: TaskShifts object to adjust.
+        """
+        return params
+
+    resolution_task_class = None
 
     @classmethod
     def _multi_sequence_repr(
@@ -1266,15 +1358,14 @@ class ConfigTask(AnalysisTask):
         return _repr + f"_{law.util.create_hash(all_values)}"
 
     @classmethod
-    def broadcast_to_configs(cls, params: dict[str, Any], param: str, n_config_insts: int) -> tuple[Any]:
-        value = params.get(param, law.no_value)
-        if not isinstance(value, tuple):
+    def broadcast_to_configs(cls, value: Any, name: str, n_config_insts: int) -> tuple[Any]:
+        if not isinstance(value, tuple) or not value:
             value = (value,)
         if len(value) == 1:
             value *= n_config_insts
         elif len(value) != n_config_insts:
             raise ValueError(
-                f"number of {param} sequences ({len(value)}) does not match number of configs "
+                f"number of {name} sequences ({len(value)}) does not match number of configs "
                 f"({n_config_insts})",
             )
         return value
@@ -1406,13 +1497,12 @@ class ShiftTask(ConfigTask):
     allow_empty_shift = False
 
     @classmethod
-    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
-        params = super().modify_param_values(params)
-        params = cls.resolve_shifts(params)
-        return params
+    def resolve_shifts(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_shifts(params)
 
-    @classmethod
-    def resolve_shifts(cls, params: dict[str, Any]) -> dict:
+        if "known_shifts" not in params:
+            raise Exception(f"{cls.task_family}: known shifts should be resolved before calling 'resolve_shifts'")
+        known_shifts = params["known_shifts"]
         # get configs
         config_insts = params.get("config_insts")
 
@@ -1426,11 +1516,11 @@ class ShiftTask(ConfigTask):
             shift_defined_in_config = False
             for config_inst in config_insts:
                 if requested_shift not in config_inst.shifts:
-                    logger.warning(f"shift {requested_shift} unknown to config {config_inst}")
+                    logger_dev.debug(f"shift {requested_shift} unknown to config {config_inst}")
                 else:
                     shift_defined_in_config = True
             if not shift_defined_in_config:
-                raise Exception(f"shift {requested_shift} unknown to all configs")
+                raise ValueError(f"shift {requested_shift} unknown to all configs")
 
             # actual shift resolution: compare the requested shift to known ones
             # local_shift -> the requested shift if implemented by the task itself, else nominal
@@ -1438,13 +1528,10 @@ class ShiftTask(ConfigTask):
             #                or an upsteam task (== global shift), else nominal
             global_shift = requested_shift
             if (local_shift := params.get("local_shift")) in {None, law.NO_STR}:
-                # determine the known shifts for this class
-                shifts = TaskShifts()
-                cls.get_known_shifts(params, shifts)
                 # check cases
-                if requested_shift in shifts.local:
+                if requested_shift in known_shifts.local:
                     local_shift = requested_shift
-                elif requested_shift in shifts.upstream:
+                elif requested_shift in known_shifts.upstream:
                     local_shift = "nominal"
                 else:
                     global_shift = "nominal"
@@ -1471,25 +1558,10 @@ class ShiftTask(ConfigTask):
 
             if cls.has_single_config():
                 config_inst = params["config_inst"]
-                params["global_shift_inst"] = get_shift_or_nominal(config_inst, params["shift"])
-                params["local_shift_inst"] = get_shift_or_nominal(config_inst, params["local_shift"])
+                params["global_shift_inst"] = params["global_shift_insts"][config_inst]
+                params["local_shift_inst"] = params["local_shift_insts"][config_inst]
 
         return params
-
-    @classmethod
-    def get_known_shifts(
-        cls,
-        params: dict[str, Any],
-        shifts: TaskShifts,
-    ) -> None:
-        """
-        Adjusts the local and upstream fields of the *shifts* object to include shifts implemented
-        by _this_ task, and dependent shifts that are implemented by upstream tasks.
-
-        :param params: Dictionary of task parameters.
-        :param shifts: TaskShifts object to adjust.
-        """
-        return None
 
     @classmethod
     def get_config_lookup_keys(
@@ -1555,8 +1627,8 @@ class DatasetTask(ShiftTask):
     file_merging = None
 
     @classmethod
-    def resolve_param_values(cls, params):
-        params = super().resolve_param_values(params)
+    def resolve_param_values_pre_init(cls, params):
+        params = super().resolve_param_values_pre_init(params)
 
         # store a reference to the dataset inst
         if "dataset_inst" not in params and "config_inst" in params and "dataset" in params:
@@ -2001,19 +2073,19 @@ def wrapper_factory(
             # get the target config instances
             if self.wrapper_has_configs:
                 configs = self.find_config_objects(
-                    self.configs,
-                    self.analysis_inst,
-                    od.Config,
-                    self.analysis_inst.x("config_groups", {}),
+                    names=self.configs,
+                    container=self.analysis_inst,
+                    object_cls=od.Config,
+                    groups_str="config_groups",
                 )
                 if not configs:
                     raise ValueError(f"no configs found in analysis {self.analysis_inst} matching {self.configs}")
                 if self.wrapper_has_skip_configs:
                     skip_configs = self.find_config_objects(
-                        self.skip_configs,
-                        self.analysis_inst,
-                        od.Config,
-                        self.analysis_inst.x("config_groups", {}),
+                        names=self.skip_configs,
+                        container=self.analysis_inst,
+                        object_cls=od.Config,
+                        groups_str="config_groups",
                     )
                     configs = [c for c in configs if c not in skip_configs]
                     if not configs:
@@ -2034,19 +2106,19 @@ def wrapper_factory(
                 # find all shifts
                 if self.wrapper_has_shifts:
                     shifts = self.find_config_objects(
-                        self.shifts,
-                        config_inst,
-                        od.Shift,
-                        config_inst.x("shift_groups", {}),
+                        names=self.shifts,
+                        container=config_inst,
+                        object_cls=od.Shift,
+                        groups_str="shift_groups",
                     )
                     if not shifts:
                         raise ValueError(f"no shifts found in config {config_inst} matching {self.shifts}")
                     if self.wrapper_has_skip_shifts:
                         skip_shifts = self.find_config_objects(
-                            self.skip_shifts,
-                            config_inst,
-                            od.Shift,
-                            config_inst.x("shift_groups", {}),
+                            names=self.skip_shifts,
+                            container=config_inst,
+                            object_cls=od.Shift,
+                            groups_str="shift_groups",
                         )
                         shifts = [s for s in shifts if s not in skip_shifts]
                     if not shifts:
@@ -2060,19 +2132,19 @@ def wrapper_factory(
                 # find all datasets
                 if self.wrapper_has_datasets:
                     datasets = self.find_config_objects(
-                        self.datasets,
-                        config_inst,
-                        od.Dataset,
-                        config_inst.x("dataset_groups", {}),
+                        names=self.datasets,
+                        container=config_inst,
+                        object_cls=od.Dataset,
+                        groups_str="dataset_groups",
                     )
                     if not datasets:
                         raise ValueError(f"no datasets found in config {config_inst} matching {self.datasets}")
                     if self.wrapper_has_skip_datasets:
                         skip_datasets = self.find_config_objects(
-                            self.skip_datasets,
-                            config_inst,
-                            od.Dataset,
-                            config_inst.x("dataset_groups", {}),
+                            names=self.skip_datasets,
+                            container=config_inst,
+                            object_cls=od.Dataset,
+                            groups_str="dataset_groups",
                         )
                         datasets = [d for d in datasets if d not in skip_datasets]
                         if not datasets:

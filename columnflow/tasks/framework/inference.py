@@ -12,7 +12,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin, InferenceModelMixin,
-    HistHookMixin,
+    HistHookMixin, MLModelsMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
@@ -26,7 +26,7 @@ class SerializeInferenceModelBase(
     CalibratorClassesMixin,
     SelectorClassMixin,
     ProducerClassesMixin,
-    # MLModelsMixin,
+    MLModelsMixin,
     WeightProducerClassMixin,
     InferenceModelMixin,
     HistHookMixin,
@@ -113,6 +113,7 @@ class SerializeInferenceModelBase(
         for config_inst in self.config_insts:
             if not (config_data := cat_obj.config_data.get(config_inst.name)):
                 continue
+
             # add merged shifted histograms for mc
             reqs[config_inst.name] = {
                 proc_obj.name: {
