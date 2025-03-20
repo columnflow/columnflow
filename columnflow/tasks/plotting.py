@@ -274,9 +274,10 @@ class PlotVariablesBase(_PlotVariablesBase):
             hists = dict(zip(process_insts, hists.values()))
 
             # correct luminosity label in case of multiple configs
-            config_inst = self.config_inst.copy(id=-1, name=f"{self.config_inst.name}_merged")
-
-            if len(self.config_insts) != 1:
+            if len(self.config_insts) == 1:
+                config_inst = self.config_inst
+            else:
+                config_inst = self.config_insts[0].copy(id=-1, name=f"{self.config_insts[0].name}_merged")
                 config_inst.x.luminosity = sum([_config_inst.x.luminosity for _config_inst in self.config_insts])
 
             # call the plot function

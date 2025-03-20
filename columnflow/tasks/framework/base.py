@@ -620,12 +620,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         return_single_value = True if param is None or isinstance(param, str) else False
 
-        def modify_type(value):
-            value = law.util.make_tuple(value)
-            if return_single_value:
-                return value[0]
-            return value
-
         # interpret missing parameters (e.g. NO_STR) as None
         # (special case: an empty string is usually an active decision, but counts as missing too)
         if law.is_no_param(param) or resolve_default or param == "":
@@ -645,11 +639,13 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 _param = param
                 # expand default when container is set
                 if _container and default_str:
-                    _param = _container.x(default_str, None if return_single_value else ())
+                    _param = _container.x(default_str, None)
                     # allow default to be a function, taking task parameters as input
                     if isinstance(_param, Callable):
                         _param = _param(cls, _container, task_params)
-                    _param = modify_type(_param)
+                    # handle empty values and return type
+                    if not return_single_value:
+                        _param = () if _param is None else law.util.make_tuple(_param)
 
                 params[_container] = _param
         else:
@@ -1311,6 +1307,8 @@ class ConfigTask(AnalysisTask):
         # manually add known shifts between workflows and branches
         if isinstance(inst, law.BaseWorkflow) and inst.__class__ == cls and getattr(inst, "known_shifts", None):
             params["known_shifts"] = inst.known_shifts
+
+        return params
 
     @classmethod
     def _multi_sequence_repr(
