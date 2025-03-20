@@ -1300,10 +1300,11 @@ class MLModelsMixin(ConfigTask):
     exclude_params_repr_empty = {"ml_models"}
 
     @property
-    def ml_models_repr(self):
-        """Returns a string representation of the ML models."""
-        ml_models_repr = "__".join([str(model_inst) for model_inst in self.ml_model_insts])
-        return ml_models_repr
+    def ml_models_repr(self) -> str:
+        """
+        Returns a string representation of the ML models.
+        """
+        return "__".join(map(str, self.ml_model_insts))
 
     @classmethod
     def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:

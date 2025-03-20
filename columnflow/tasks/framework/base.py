@@ -620,12 +620,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         return_single_value = True if param is None or isinstance(param, str) else False
 
-        def modify_type(value):
-            value = law.util.make_tuple(value)
-            if return_single_value:
-                return value[0]
-            return value
-
         # interpret missing parameters (e.g. NO_STR) as None
         # (special case: an empty string is usually an active decision, but counts as missing too)
         if law.is_no_param(param) or resolve_default or param == "":
@@ -645,11 +639,15 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 _param = param
                 # expand default when container is set
                 if _container and default_str:
-                    _param = _container.x(default_str, None if return_single_value else ())
+                    _param = _container.x(default_str, None)
                     # allow default to be a function, taking task parameters as input
                     if isinstance(_param, Callable):
                         _param = _param(cls, _container, task_params)
-                    _param = modify_type(_param)
+                    # handle empty values and return type
+                    if not return_single_value:
+                        _param = () if _param is None else law.util.make_tuple(_param)
+                    elif isinstance(_param, (list, tuple)):
+                        _param = _param[0] if _param else None
 
                 params[_container] = _param
         else:
@@ -1086,17 +1084,16 @@ class ConfigTask(AnalysisTask):
         description=f"names of analysis configs to use; default: '{default_config}'",
         brace_expand=True,
     )
-
-    # NOTE: maybe we need some different type of parameter to allow parsing/serializing TaskShifts
     known_shifts = luigi.Parameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
 
-    exclude_params_index = {"known_shifts"}
-    exclude_params_repr = {"known_shifts"}
+    exclude_params_req = {"known_shifts"}
     exclude_params_sandbox = {"known_shifts"}
     exclude_params_remote_workflow = {"known_shifts"}
+    exclude_params_index = {"known_shifts"}
+    exclude_params_repr = {"known_shifts"}
 
     # the field in the store parts behind which the new part is inserted
     # added here for subclasses that typically refer to the store part added by _this_ class
@@ -1197,14 +1194,9 @@ class ConfigTask(AnalysisTask):
         # resolving of parameters that is required before ArrayFunctions etc. can be initialized
         params = cls.resolve_param_values_pre_init(params)
 
-        # check if shifts are already known for *this* workflow
-        if params.get("known_shifts", None) and params.get("branch", -1) != -1:
-            logger_dev.debug(f"{cls.task_family}: shifts already known")
-        else:
-            if params.get("known_shifts", None) and params.get("branch", -1) == -1:
-                logger_dev.debug(f"{cls.task_family}: shifts already known, but this is branch -1")
-            else:
-                logger_dev.debug(f"{cls.task_family}: shifts unknown")
+        # check if shifts are already known
+        if params.get("known_shifts", None) is None:
+            logger_dev.debug(f"{cls.task_family}: shifts unknown")
 
             # initialize ArrayFunctions etc. and collect known shifts
             shifts = params["known_shifts"] = TaskShifts()
@@ -1309,6 +1301,16 @@ class ConfigTask(AnalysisTask):
         return params
 
     resolution_task_class = None
+
+    @classmethod
+    def req_params(cls, inst, *args, **kwargs):
+        params = super().req_params(inst, *args, **kwargs)
+
+        # manually add known shifts between workflows and branches
+        if isinstance(inst, law.BaseWorkflow) and inst.__class__ == cls and getattr(inst, "known_shifts", None):
+            params["known_shifts"] = inst.known_shifts
+
+        return params
 
     @classmethod
     def _multi_sequence_repr(
