@@ -89,7 +89,11 @@ class PrepareMLEvents(
         # add producers to requirements
         if not self.pilot and self.producer_insts:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                self.reqs.ProduceColumns.req(
+                    self,
+                    producer=producer_inst.cls_name,
+                    producer_inst=producer_inst,
+                )
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
@@ -104,7 +108,11 @@ class PrepareMLEvents(
 
         if self.producer_insts:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                self.reqs.ProduceColumns.req(
+                    self,
+                    producer=producer_inst.cls_name,
+                    producer_inst=producer_inst,
+                )
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
@@ -599,7 +607,11 @@ class MLEvaluation(
 
         if not self.pilot and self.producer_insts:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                self.reqs.ProduceColumns.req(
+                    self,
+                    producer=producer_inst.cls_name,
+                    producer_inst=producer_inst,
+                )
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
@@ -620,7 +632,11 @@ class MLEvaluation(
 
         if self.producer_insts:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                self.reqs.ProduceColumns.req(
+                    self,
+                    producer=producer_inst.cls_name,
+                    producer_inst=producer_inst,
+                )
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
