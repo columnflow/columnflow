@@ -102,7 +102,8 @@ class CreateDatacards(SerializeInferenceModelBase):
                 datacard_hists[cat_obj.name].setdefault(proc_obj.name, {}).setdefault(config_inst.name, {})
                 shift_hists: ShiftHists = datacard_hists[cat_obj.name][proc_obj.name][config_inst.name]
                 shift_hists["nominal"] = h_proc[{
-                    "shift": hist.loc(config_inst.get_shift("nominal").id),
+
+                    "shift": hist.loc(config_inst.get_shift("nominal").name),
                 }]
 
                 # no additional shifts need to be created for data
@@ -118,7 +119,7 @@ class CreateDatacards(SerializeInferenceModelBase):
                     shift_source = param_obj.config_data[config_inst.name].shift_source
                     for d in ["up", "down"]:
                         shift_hists[(param_obj.name, d)] = h_proc[{
-                            "shift": hist.loc(config_inst.get_shift(f"{shift_source}_{d}").id),
+                            "shift": hist.loc(config_inst.get_shift(f"{shift_source}_{d}").name),
                         }]
 
         # forward objects to the datacard writer
