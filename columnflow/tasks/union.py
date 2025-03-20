@@ -142,8 +142,8 @@ class UniteColumns(_UniteColumns):
         files = [inputs["events"]["events"].abspath]
         if self.producer_insts:
             files.extend([inp["columns"].abspath for inp in inputs["producers"]])
-        # if self.ml_model_insts:
-        #     files.extend([inp["mlcolumns"].abspath for inp in inputs["ml"]])
+        if self.ml_model_insts:
+            files.extend([inp["mlcolumns"].abspath for inp in inputs["ml"]])
 
         for (events, *columns), pos in self.iter_chunked_io(
             files,

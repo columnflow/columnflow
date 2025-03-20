@@ -201,8 +201,8 @@ class CreateHistograms(_CreateHistograms):
         file_targets = [inputs["events"]["events"]]
         if self.producer_insts:
             file_targets.extend([inp["columns"] for inp in inputs["producers"]])
-        # if self.ml_model_insts:
-        #     file_targets.extend([inp["mlcolumns"] for inp in inputs["ml"]])
+        if self.ml_model_insts:
+            file_targets.extend([inp["mlcolumns"] for inp in inputs["ml"]])
 
         # prepare inputs for localization
         with law.localize_file_targets(
