@@ -9,18 +9,18 @@ import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 # from columnflow.tasks.framework.mixins import ProducersMixin, MLModelsMixin, ChunkedIOMixin
-from columnflow.tasks.framework.mixins import ProducersMixin, ChunkedIOMixin
+from columnflow.tasks.framework.mixins import ProducersMixin, ChunkedIOMixin, MLModelsMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
-# from columnflow.tasks.ml import MLEvaluation
+from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
 
 
 class _UniteColumns(
     ReducedEventsUser,
     ProducersMixin,
-    # MLModelsMixin,
+    MLModelsMixin,
     ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -45,7 +45,7 @@ class UniteColumns(_UniteColumns):
         ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         ProduceColumns=ProduceColumns,
-        # MLEvaluation=MLEvaluation,
+        MLEvaluation=MLEvaluation,
     )
 
     def workflow_requires(self):
@@ -65,11 +65,11 @@ class UniteColumns(_UniteColumns):
                     for producer_inst in self.producer_insts
                     if producer_inst.produced_columns
                 ]
-            # if self.ml_model_insts:
-            #     reqs["ml"] = [
-            #         self.reqs.MLEvaluation.req(self, ml_model=m)
-            #         for m in self.ml_models
-            #     ]
+            if self.ml_model_insts:
+                reqs["ml"] = [
+                    self.reqs.MLEvaluation.req(self, ml_model=m)
+                    for m in self.ml_models
+                ]
 
         return reqs
 
@@ -86,11 +86,11 @@ class UniteColumns(_UniteColumns):
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
-        # if self.ml_model_insts:
-        #     reqs["ml"] = [
-        #         self.reqs.MLEvaluation.req(self, ml_model=m)
-        #         for m in self.ml_models
-        #     ]
+        if self.ml_model_insts:
+            reqs["ml"] = [
+                self.reqs.MLEvaluation.req(self, ml_model=m)
+                for m in self.ml_models
+            ]
 
         return reqs
 

@@ -20,7 +20,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
-# from columnflow.tasks.ml import MLEvaluation
+from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
 from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_to_strcat
 
@@ -51,7 +51,7 @@ class CreateHistograms(_CreateHistograms):
         ReducedEventsUser.reqs,
         RemoteWorkflow.reqs,
         ProduceColumns=ProduceColumns,
-        # MLEvaluation=MLEvaluation,
+        MLEvaluation=MLEvaluation,
     )
 
     missing_column_alias_strategy = "original"
@@ -79,11 +79,11 @@ class CreateHistograms(_CreateHistograms):
                     for producer_inst in self.producer_insts
                     if producer_inst.produced_columns
                 ]
-            # if self.ml_model_insts:
-            #     reqs["ml"] = [
-            #         self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
-            #         for ml_model_inst in self.ml_model_insts
-            #     ]
+            if self.ml_model_insts:
+                reqs["ml"] = [
+                    self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
+                    for ml_model_inst in self.ml_model_insts
+                ]
 
             # add weight_producer dependent requirements
             reqs["weight_producer"] = law.util.make_unique(law.util.flatten(
@@ -105,11 +105,11 @@ class CreateHistograms(_CreateHistograms):
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
-        # if self.ml_model_insts:
-        #     reqs["ml"] = [
-        #         self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
-        #         for ml_model_inst in self.ml_model_insts
-        #     ]
+        if self.ml_model_insts:
+            reqs["ml"] = [
+                self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
+                for ml_model_inst in self.ml_model_insts
+            ]
 
         # add weight_producer dependent requirements
         reqs["weight_producer"] = law.util.make_unique(law.util.flatten(
