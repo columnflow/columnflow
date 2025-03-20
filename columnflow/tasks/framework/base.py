@@ -646,7 +646,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     # handle empty values and return type
                     if not return_single_value:
                         _param = () if _param is None else law.util.make_tuple(_param)
-                    elif isinstance(_param, tuple):
+                    elif isinstance(_param, (list, tuple)):
                         _param = _param[0] if _param else None
 
                 params[_container] = _param
