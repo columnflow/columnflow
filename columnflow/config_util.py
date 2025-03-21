@@ -10,7 +10,7 @@ __all__ = []
 
 import re
 import itertools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import order as od
@@ -320,6 +320,39 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) ->
         ),
         [],
     )
+
+
+def group_shifts(
+    shifts: od.Shift | Sequence[od.Shift],
+) -> tuple[od.Shift | None, dict[str, tuple[od.Shift, od.Shift]]]:
+    """
+    Takes several :py:class:`order.Shift` instances *shifts* and groups them according to their
+    shift source. The nominal shift, if present, is returned separately. The remaining shifts are
+    grouped by their source and the corresponding up and down shifts are stored in a dictionary.
+    Example:
+    .. code-block:: python
+        # assuming the following shifts exist
+        group_shifts([nominal, x_up, y_up, y_down, x_down])
+        # -> (nominal, {"x": (x_up, x_down), "y": (y_up, y_down)})
+    An exception is raised in case a shift source is represented only by its up or down shift.
+    """
+    nominal = None
+    grouped = defaultdict(lambda: [None, None])
+
+    up_sources = set()
+    down_sources = set()
+    for shift in law.util.make_list(shifts):
+        if shift.name == "nominal":
+            nominal = shift
+        else:
+            grouped[shift.source][shift.is_up] = shift
+            (up_sources if shift.is_up else down_sources).add(shift.source)
+
+    # check completeness of shifts
+    if (diff := up_sources.symmetric_difference(down_sources)):
+        raise ValueError(f"shift sources {diff} are not complete and cannot be grouped")
+
+    return nominal, dict(grouped)
 
 
 def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
