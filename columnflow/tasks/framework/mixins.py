@@ -93,7 +93,7 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the calibrator class.
         """
-        return self.array_function_cls_repr(self.calibrator, Calibrator)
+        return self.array_function_cls_repr(self.calibrator)
 
     def store_parts(self) -> law.util.InsertableDict:
         """
