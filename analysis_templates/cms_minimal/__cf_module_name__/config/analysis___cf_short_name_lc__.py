@@ -115,6 +115,7 @@ verify_config_processes(cfg, warn=True)
 cfg.x.default_calibrator = "example"
 cfg.x.default_selector = "example"
 cfg.x.default_selector_steps = []
+cfg.x.default_reducer = "cf_default"
 cfg.x.default_producer = "example"
 cfg.x.default_weight_producer = "example"
 cfg.x.default_ml_model = None

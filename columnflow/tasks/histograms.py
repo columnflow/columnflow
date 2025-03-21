@@ -11,7 +11,7 @@ import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorClassesMixin, CalibratorsMixin, SelectorClassMixin, SelectorMixin,
+    CalibratorClassesMixin, CalibratorsMixin, SelectorClassMixin, SelectorMixin, ReducerClassMixin, ReducerMixin,
     ProducerClassesMixin, ProducersMixin, VariablesMixin, DatasetShiftSourcesMixin,
     WeightProducerClassMixin, WeightProducerMixin, ChunkedIOMixin,
     MLModelsMixin,
@@ -339,6 +339,7 @@ CreateHistogramsWrapper = wrapper_factory(
 class _MergeHistograms(
     CalibratorsMixin,
     SelectorMixin,
+    ReducerMixin,
     ProducersMixin,
     MLModelsMixin,
     WeightProducerMixin,
@@ -465,6 +466,7 @@ class _MergeShiftedHistograms(
     DatasetShiftSourcesMixin,
     CalibratorClassesMixin,
     SelectorClassMixin,
+    ReducerClassMixin,
     ProducerClassesMixin,
     MLModelsMixin,
     WeightProducerClassMixin,

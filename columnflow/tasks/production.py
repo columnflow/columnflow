@@ -114,7 +114,7 @@ class ProduceColumns(_ProduceColumns):
 
         # define columns that will be written
         write_columns = self.producer_inst.produced_columns
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
         # prepare inputs for localization
         with law.localize_file_targets(

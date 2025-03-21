@@ -585,6 +585,7 @@ class ColumnCollection(enum.Flag):
     ALL_FROM_CALIBRATOR = enum.auto()
     ALL_FROM_CALIBRATORS = enum.auto()
     ALL_FROM_SELECTOR = enum.auto()
+    ALL_FROM_REDUCER = enum.auto()
     ALL_FROM_PRODUCER = enum.auto()
     ALL_FROM_PRODUCERS = enum.auto()
     ALL_FROM_ML_EVALUATION = enum.auto()
@@ -1355,13 +1356,13 @@ def ak_copy(ak_array: ak.Array) -> ak.Array:
 
 class RouteFilter(object):
     """
-    Shallow helper class that handles removal of routes in an awkward array that do not match those
-    in *keep_routes*. Each route can either be a :py:class:`Route` instance, or anything that is
-    accepted by its constructor. Example:
+    Shallow helper class that handles the filtering of routes in an awkward array that do (not) match those in
+    *remove_routes* (*keep_routes*). Each route can either be a :py:class:`Route` instance, or anything that is accepted
+    by its constructor. Example:
 
     .. code-block:: python
 
-        route_filter = RouteFilter(["Jet.pt", "Jet.eta"])
+        route_filter = RouteFilter(keep=["Jet.pt", "Jet.eta"])
         events = route_filter(events)
 
         print(get_ak_routes(events))
@@ -1370,42 +1371,60 @@ class RouteFilter(object):
         #    "Jet.eta",
         # ]
 
-    .. py:attribute:: keep_routes
+    .. py:attribute:: keep
 
         type: list
 
         The routes to keep.
 
-    .. py:attribute:: remove_routes
+    .. py:attribute:: remove
 
-        type: None, set
+        type: list
 
-        A set of :py:class:`Route` instances that are removed, defined after the first call to this
-        instance.
+        The routes to remove. Evaluated after routes to keep.
     """
 
-    def __init__(self, keep_routes: Sequence[Route | str]):
+    def __init__(
+        self,
+        *,
+        keep: Sequence[Route | str] | None = None,
+        remove: Sequence[Route | str] | None = None,
+        cache: bool = True,
+    ) -> None:
         super().__init__()
 
-        self.keep_routes = list(keep_routes)
-        self.remove_routes = None
+        self.keep = list(keep) if keep else []
+        self.remove = list(remove) if remove else []
+        self.cache = cache
+
+        self._remove_routes = None
 
     def __call__(self, ak_array: ak.Array) -> ak.Array:
-        # manually remove colums that should not be kept
-        if self.remove_routes is None:
-            # convert routes to keep into string columns for pattern checks
-            keep_columns = [Route(route).column for route in self.keep_routes]
+        # potentially get routes to remove from cache
+        remove_routes = self._remove_routes if self.cache else None
+
+        # determine when empty
+        if remove_routes is None:
+            # convert routes to strings for pattern checks
+            keep_columns = [Route(route).column for route in self.keep]
+            remove_columns = [Route(route).column for route in self.remove]
 
             # determine routes to remove
-            self.remove_routes = {
-                route
-                for route in get_ak_routes(ak_array)
-                if not law.util.multi_match(route.column, keep_columns)
+            remove_routes = {
+                r for r in get_ak_routes(ak_array)
+                if (
+                    (keep_columns and not law.util.multi_match(r.column, keep_columns)) or
+                    (remove_columns and law.util.multi_match(r.column, remove_columns))
+                )
             }
 
         # apply the filtering
-        for route in self.remove_routes:
-            ak_array = remove_ak_column(ak_array, route)
+        for r in remove_routes:
+            ak_array = remove_ak_column(ak_array, r)
+
+        # add routes to cache for next call
+        if self.cache and self._remove_routes is None:
+            self._remove_routes = remove_routes
 
         return ak_array
 

@@ -19,6 +19,7 @@ from columnflow.tasks.framework.base import ConfigTask, DatasetTask, TaskShifts,
 from columnflow.tasks.framework.parameters import SettingsParameter, DerivableInstParameter, DerivableInstsParameter
 from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
+from columnflow.reduction import Reducer
 from columnflow.production import Producer
 from columnflow.weight import WeightProducer
 from columnflow.ml import MLModel
@@ -608,6 +609,177 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
 
         if collection == ColumnCollection.ALL_FROM_SELECTOR:
             columns |= self.selector_inst.produced_columns
+
+        return columns
+
+
+class ReducerClassMixin(ArrayFunctionClassMixin):
+    """
+    Mixin to include and access single :py:class:`~columnflow.reduction.Reducer` class.
+    """
+
+    reducer = luigi.Parameter(
+        default=RESOLVE_DEFAULT,
+        description="the name of the reducer to be applied; default: value of the 'default_reducer' analysis aux",
+    )
+
+    @classmethod
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_pre_init(params)
+
+        # resolve the default class if necessary
+        if (container := cls._get_config_container(params)):
+            params["reducer"] = cls.resolve_config_default(
+                param=params.get("reducer"),
+                task_params=params,
+                container=container,
+                default_str="default_reducer",
+                multi_strategy="same",
+            ) or "cf_default"
+
+        return params
+
+    @classmethod
+    def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
+        # prefer --reducer set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"reducer"}
+        return super().req_params(inst, **kwargs)
+
+    @property
+    def reducer_repr(self) -> str:
+        """
+        Return a string representation of the reducer class.
+        """
+        return self.array_function_cls_repr(self.reducer)
+
+    def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
+        parts = super().store_parts()
+        parts.insert_after(self.config_store_anchor, "reducer", f"red__{self.reducer_repr}")
+        return parts
+
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: ReducerClassMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the reducer name
+        reducer = (
+            inst_or_params.get("reducer")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "reducer", None)
+        )
+        if reducer not in (law.NO_STR, None, ""):
+            keys["reducer"] = f"red_{reducer}"
+
+        return keys
+
+
+class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
+    """
+    Mixin to include and access a single :py:class:`~columnflow.reduction.Reducer` instance.
+    """
+
+    reducer_inst = DerivableInstParameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
+
+    exclude_params_index = {"reducer_inst"}
+    exclude_params_repr = {"reducer_inst"}
+    exclude_params_sandbox = {"reducer_inst"}
+    exclude_params_remote_workflow = {"reducer_inst"}
+
+    # decides whether the task itself invokes the reducer
+    invokes_reducer = False
+
+    @classmethod
+    def get_reducer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        return cls.get_array_function_dict(params)
+
+    @classmethod
+    def build_reducer_inst(
+        cls,
+        reducer: str,
+        params: dict[str, Any] | None = None,
+    ) -> Reducer:
+        """
+        Instantiate and return the :py:class:`~columnflow.reduction.Reducer` instance.
+
+        :param reducer: Name of the reducer class to instantiate.
+        :param params: Arguments forwarded to the reducer constructor.
+        :raises RuntimeError: If the reducer class is not :py:attr:`~columnflow.reduction.Reducer.exposed`.
+        :return: The reducer instance.
+        """
+        reducer_cls = Reducer.get_cls(reducer)
+        if not reducer_cls.exposed:
+            raise RuntimeError(f"cannot use unexposed reducer '{reducer}' in {cls.__name__}")
+
+        inst_dict = cls.get_reducer_dict(params) if params else None
+        return reducer_cls(inst_dict=inst_dict)
+
+    @classmethod
+    def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
+        # add the reducer instance
+        if not params.get("reducer_inst"):
+            params["reducer_inst"] = cls.build_reducer_inst(params["reducer"], params)
+
+        params = super().resolve_instances(params, shifts)
+
+        return params
+
+    @classmethod
+    def get_known_shifts(
+        cls,
+        params: dict[str, Any],
+        shifts: TaskShifts,
+    ) -> None:
+        """
+        Updates the set of known *shifts* implemented by *this* and upstream tasks.
+
+        :param config_inst: Config instance.
+        :param params: Dictionary of task parameters.
+        :param shifts: TaskShifts object to adjust.
+        """
+        # get the reducer, update it and add its shifts
+        reducer_shifts = params["reducer_inst"].all_shifts
+        (shifts.local if cls.invokes_reducer else shifts.upstream).update(reducer_shifts)
+
+        super().get_known_shifts(params, shifts)
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        # overwrite the sandbox when set
+        if self.invokes_reducer and (sandbox := self.reducer_inst.get_sandbox()):
+            self.reset_sandbox(sandbox)
+
+    def _array_function_post_init(self, **kwargs) -> None:
+        self.reducer_inst.run_post_init(task=self, **kwargs)
+        super()._array_function_post_init(**kwargs)
+
+    @property
+    def reducer_repr(self) -> str:
+        """
+        Return a string representation of the reducer instance.
+        """
+        return self.array_function_inst_repr(self.reducer_inst)
+
+    def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
+        """
+        Finds the columns to keep based on the *collection*.
+
+        :param collection: The collection of columns.
+        :return: Set of columns to keep.
+        """
+        columns = super().find_keep_columns(collection)
+
+        if collection == ColumnCollection.ALL_FROM_REDUCER:
+            columns |= self.reducer_inst.produced_columns
 
         return columns
 
@@ -1428,7 +1600,9 @@ class WeightProducerClassMixin(ArrayFunctionClassMixin):
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        parts.insert_after(self.config_store_anchor, "weight_producer", f"weight__{self.weight_producer_repr}")
+        # NOTE: anticipate that WeightProducer will be generalized to HistProducer, so use "hist" rather than "weight"
+        #       already for output paths to be forward-compatible
+        parts.insert_after(self.config_store_anchor, "weight_producer", f"hist__{self.weight_producer_repr}")
         return parts
 
     @classmethod
@@ -1445,7 +1619,8 @@ class WeightProducerClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "weight_producer", None)
         )
         if producer not in (law.NO_STR, None, ""):
-            keys["weight_producer"] = f"weight_{producer}"
+            # NOTE: use "hist", same as in store_parts
+            keys["weight_producer"] = f"hist_{producer}"
 
         return keys
 

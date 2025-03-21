@@ -14,6 +14,7 @@ from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetT
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin,
     SelectorMixin,
+    ReducerMixin,
     ProducersMixin,
     CalibratorClassesMixin,
     SelectorClassMixin,
@@ -167,7 +168,7 @@ class PrepareMLEvents(
 
         # define columns that will to be written
         write_columns = set.union(*self.ml_model_inst.used_columns.values())
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
         # define columns that need to be read
         read_columns = {Route("deterministic_seed")}
@@ -289,6 +290,7 @@ PrepareMLEventsWrapper = wrapper_factory(
 class MergeMLStats(
     CalibratorsMixin,
     SelectorMixin,
+    ReducerMixin,
     ProducersMixin,
     MLModelDataMixin,
     law.LocalWorkflow,
@@ -358,6 +360,7 @@ MergeMLStatsWrapper = wrapper_factory(
 class MergeMLEvents(
     CalibratorsMixin,
     SelectorMixin,
+    ReducerMixin,
     ProducersMixin,
     MLModelDataMixin,
     law.tasks.ForestMerge,
@@ -703,7 +706,7 @@ class MLEvaluation(
 
         # define columns that will be written
         write_columns = set.union(*self.ml_model_inst.produced_columns.values())
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
         # iterate over chunks of events and columns
         file_targets = [inputs["events"]["events"]]

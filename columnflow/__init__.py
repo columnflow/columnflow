@@ -106,6 +106,12 @@ if not env_is_rtd:
             logger.debug(f"loading selection module '{m}'")
             maybe_import(m.strip())
 
+    import columnflow.reduction  # noqa
+    if law.config.has_option("analysis", "reduction_modules"):
+        for m in law.config.get_expanded("analysis", "reduction_modules", [], split_csv=True):
+            logger.debug(f"loading reduction module '{m}'")
+            maybe_import(m.strip())
+
     import columnflow.categorization  # noqa
     if law.config.has_option("analysis", "categorization_modules"):
         for m in law.config.get_expanded("analysis", "categorization_modules", [], split_csv=True):
