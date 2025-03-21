@@ -88,14 +88,15 @@ def draw_syst_error_bands(
         for _h in syst_hists:
             # when the shift is present, the flipped shift must exist as well
             shift_ax = _h.axes["shift"]
-            shift_name = nominal_shift.name
-            if shift_inst.id in shift_ax:
-                if shift_pairs[shift_inst].id not in shift_ax:
+            if shift_inst.name in shift_ax:
+                if shift_pairs[shift_inst].name not in shift_ax:
                     raise RuntimeError(
                         f"shift {shift_inst} found in histogram but {shift_pairs[shift_inst]} is missing; "
-                        f"existing shift ids: {','.join(map(str, list(shift_ax)))}",
+                        f"existing shifts: {','.join(map(str, list(shift_ax)))}",
                     )
                 shift_name = shift_inst.name
+            else:
+                shift_name = nominal_shift.name
             # store the slice
             _h = _h[{"shift": hist.loc(shift_name)}]
             if shift_inst not in shift_stacks:
