@@ -33,7 +33,7 @@ logger_dev = law.logger.get_logger(f"{__name__}-dev")
 
 class ArrayFunctionClassMixin(ConfigTask):
 
-    def array_function_cls_repr(self, array_function) -> None:
+    def array_function_cls_repr(self, array_function) -> str:
         """
         Central definition of how to obtain representation of array function from the name
 
@@ -93,7 +93,7 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the calibrator class.
         """
-        return self.array_function_cls_repr(self.calibrator, Calibrator)
+        return self.array_function_cls_repr(self.calibrator)
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -203,8 +203,8 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
             self.reset_sandbox(sandbox)
 
     def _array_function_post_init(self, **kwargs) -> None:
-        super()._array_function_post_init(**kwargs)
         self.calibrator_inst.run_post_init(task=self, **kwargs)
+        super()._array_function_post_init(**kwargs)
 
     @property
     def calibrator_repr(self) -> str:
@@ -365,9 +365,9 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         super().get_known_shifts(params, shifts)
 
     def _array_function_post_init(self, **kwargs) -> None:
-        super()._array_function_post_init(**kwargs)
         for calibrator_inst in self.calibrator_insts or []:
             calibrator_inst.run_post_init(task=self, **kwargs)
+        super()._array_function_post_init(**kwargs)
 
     @property
     def calibrators_repr(self) -> str:
@@ -578,8 +578,8 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
             self.reset_sandbox(sandbox)
 
     def _array_function_post_init(self, **kwargs) -> None:
-        super()._array_function_post_init(**kwargs)
         self.selector_inst.run_post_init(task=self, **kwargs)
+        super()._array_function_post_init(**kwargs)
 
     @property
     def selector_repr(self) -> str:
@@ -759,8 +759,8 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
             self.reset_sandbox(sandbox)
 
     def _array_function_post_init(self, **kwargs) -> None:
-        super()._array_function_post_init(**kwargs)
         self.producer_inst.run_post_init(task=self, **kwargs)
+        super()._array_function_post_init(**kwargs)
 
     @property
     def producer_repr(self) -> str:
@@ -921,9 +921,9 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         super().get_known_shifts(params, shifts)
 
     def _array_function_post_init(self, **kwargs) -> None:
-        super()._array_function_post_init(**kwargs)
         for producer_inst in self.producer_insts or []:
             producer_inst.run_post_init(task=self, **kwargs)
+        super()._array_function_post_init(**kwargs)
 
     @property
     def producers_repr(self) -> str:
@@ -1535,8 +1535,8 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
             self.reset_sandbox(sandbox)
 
     def _array_function_post_init(self, **kwargs) -> None:
-        super()._array_function_post_init(**kwargs)
         self.weight_producer_inst.run_post_init(task=self, **kwargs)
+        super()._array_function_post_init(**kwargs)
 
     @property
     def weight_producer_repr(self) -> str:
