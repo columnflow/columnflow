@@ -8,8 +8,7 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-# from columnflow.tasks.framework.mixins import ProducersMixin, MLModelsMixin, ChunkedIOMixin
-from columnflow.tasks.framework.mixins import ProducersMixin, ChunkedIOMixin, MLModelsMixin
+from columnflow.tasks.framework.mixins import ProducersMixin, MLModelsMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
@@ -132,7 +131,7 @@ class UniteColumns(_UniteColumns):
             r for r in write_columns
             if not law.util.multi_match(r.column, skip_columns, mode=any)
         }
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
         # define columns that need to be read
         read_columns = write_columns | set(mandatory_coffea_columns)

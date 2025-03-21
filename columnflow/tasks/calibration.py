@@ -127,7 +127,7 @@ class CalibrateEvents(_CalibrateEvents):
 
         # define columns that will be written
         write_columns = self.calibrator_inst.produced_columns
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)

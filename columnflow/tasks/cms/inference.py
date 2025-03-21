@@ -15,6 +15,7 @@ from columnflow.tasks.histograms import MergeHistograms
 
 
 class CreateDatacards(SerializeInferenceModelBase):
+
     resolution_task_class = MergeHistograms
 
     def output(self):

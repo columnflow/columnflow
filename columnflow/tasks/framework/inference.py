@@ -11,8 +11,8 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin, InferenceModelMixin,
-    HistHookMixin, MLModelsMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    InferenceModelMixin, HistHookMixin, MLModelsMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
@@ -25,6 +25,7 @@ hist = maybe_import("hist")
 class SerializeInferenceModelBase(
     CalibratorClassesMixin,
     SelectorClassMixin,
+    ReducerClassMixin,
     ProducerClassesMixin,
     MLModelsMixin,
     WeightProducerClassMixin,

@@ -15,7 +15,7 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
-    CalibratorClassesMixin, SelectorClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
     CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
     MLModelsMixin,
 )
@@ -32,6 +32,7 @@ from columnflow.hist_util import add_missing_shifts
 class _PlotVariablesBase(
     CalibratorClassesMixin,
     SelectorClassMixin,
+    ReducerClassMixin,
     ProducerClassesMixin,
     MLModelsMixin,
     WeightProducerClassMixin,
