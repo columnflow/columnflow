@@ -1081,7 +1081,7 @@ class ConfigTask(AnalysisTask):
     )
     configs = law.CSVParameter(
         default=(default_config,),
-        description=f"names of analysis configs to use; default: '{default_config}'",
+        description=f"comma-separated names of analysis configs to use; default: '{default_config}'",
         brace_expand=True,
     )
     known_shifts = luigi.Parameter(
