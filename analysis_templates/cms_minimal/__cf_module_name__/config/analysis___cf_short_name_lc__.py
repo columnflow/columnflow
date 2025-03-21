@@ -111,13 +111,14 @@ for dataset_name in dataset_names:
 # verify that the root process of all datasets is part of any of the registered processes
 verify_config_processes(cfg, warn=True)
 
-# default objects, such as calibrator, selector, producer, ml model, inference model, etc
-ana.x.default_calibrator = "example"
-ana.x.default_selector = "example"
-ana.x.default_producer = "example"
-ana.x.default_weight_producer = "example"
-ana.x.default_ml_model = None
-ana.x.default_inference_model = "example"
+# default objects, such as calibrator, selector, reducer, producer, ml model, inference model, etc
+cfg.x.default_calibrator = "example"
+cfg.x.default_selector = "example"
+cfg.x.default_selector_steps = []
+cfg.x.default_producer = "example"
+cfg.x.default_weight_producer = "example"
+cfg.x.default_ml_model = None
+cfg.x.default_inference_model = "example"
 cfg.x.default_categories = ("incl",)
 cfg.x.default_variables = ("n_jet", "jet1_pt")
 
