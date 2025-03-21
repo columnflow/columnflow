@@ -635,7 +635,7 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
                 container=container,
                 default_str="default_reducer",
                 multi_strategy="same",
-            )
+            ) or "cf_default"
 
         return params
 
