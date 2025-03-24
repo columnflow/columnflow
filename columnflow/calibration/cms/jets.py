@@ -851,6 +851,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     )
 
     # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
+    smear_factors = ak.nan_to_none(smear_factors)
     smear_factors = ak.fill_none(smear_factors, 0.0)
 
     # store pt and phi of the full jet system
