@@ -12,5 +12,4 @@
 
     empty
     stats
-    util
     cms/index
