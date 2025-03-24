@@ -12,7 +12,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, VariablesMixin,
-    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin,
+    ShiftSourcesMixin, WeightProducerMixin, ChunkedIOMixin, ParamsCacheMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
@@ -24,6 +24,7 @@ from columnflow.hist_util import create_hist_from_variables
 
 
 class CreateHistograms(
+    ParamsCacheMixin,
     VariablesMixin,
     WeightProducerMixin,
     MLModelsMixin,
@@ -287,6 +288,7 @@ CreateHistogramsWrapper = wrapper_factory(
 
 
 class MergeHistograms(
+    ParamsCacheMixin,
     VariablesMixin,
     WeightProducerMixin,
     MLModelsMixin,

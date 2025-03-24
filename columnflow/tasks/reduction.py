@@ -15,7 +15,7 @@ import luigi
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ChunkedIOMixin,
+    CalibratorsMixin, SelectorStepsMixin, ChunkedIOMixin, ParamsCacheMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
@@ -30,6 +30,7 @@ default_keep_reduced_events = law.config.get_expanded("analysis", "default_keep_
 
 
 class ReduceEvents(
+    ParamsCacheMixin,
     SelectorStepsMixin,
     CalibratorsMixin,
     ChunkedIOMixin,

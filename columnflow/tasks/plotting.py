@@ -14,7 +14,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorStepsMixin, ProducersMixin, MLModelsMixin, WeightProducerMixin,
-    CategoriesMixin, ShiftSourcesMixin, HistHookMixin,
+    CategoriesMixin, ShiftSourcesMixin, HistHookMixin, ParamsCacheMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -26,6 +26,7 @@ from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 
 
 class PlotVariablesBase(
+    ParamsCacheMixin,
     HistHookMixin,
     VariablePlotSettingMixin,
     ProcessPlotSettingMixin,
