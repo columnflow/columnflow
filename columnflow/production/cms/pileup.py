@@ -83,18 +83,25 @@ def pu_weight(
             f"entries with pile-up weights above {outlier_threshold:.0f}"
         )
 
-        if outlier_action == "remove":
-            msg += f"; the columns {column_name} and mc_weight have been set to 0 for these events"
-            events = fill_at_f32(events, outlier_mask, column_name, 0)
-            logger.warning(msg)
-        elif outlier_action == "warning":
+        if outlier_action == "warning":
             logger.warning(msg)
         elif outlier_action == "error":
             raise ValueError(msg)
 
     if outlier_action == "remove":
-        # set mc_weight weights to 0 for events with pile up weights above threshold
+
+        occurances = ak.sum(any_outlier_mask)
+        frac = occurances / len(any_outlier_mask) * 100
+        msg = (
+            f"in dataset {self.dataset_inst.name}, there are {occurances} ({frac:.2f}%) "
+            f"entries with any pile-up weight variation above {outlier_threshold:.0f}"
+        )
+
+        msg += f"; the columns {column_name} (nominal/up/down) have been set to 0 for these events"
+
         events = fill_at_f32(events, any_outlier_mask, "mc_weight", 0)
+        for column_name in ("pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"):
+            events = fill_at_f32(events, any_outlier_mask, column_name, 0)
 
     return events
 
