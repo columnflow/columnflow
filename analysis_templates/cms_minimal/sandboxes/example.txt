@@ -1,8 +1,8 @@
 # version 1
 
-git+https://github.com/CoffeaTeam/coffea.git@b9356b9#egg=coffea
-awkward~=2.0
-dask-awkward~=2023.1
-uproot~=5.0
-tabulate~=0.9
-tensorflow~=2.11
+# use packages from columnar sandbox as baseline
+-r ../modules/columnflow/sandboxes/columnar.txt
+
+# add numpy and tensorflow with exact version requirement
+numpy==1.26.4
+tensorflow==2.11.0
