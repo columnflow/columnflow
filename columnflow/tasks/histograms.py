@@ -12,9 +12,8 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, CalibratorsMixin, SelectorClassMixin, SelectorMixin, ReducerClassMixin, ReducerMixin,
-    ProducerClassesMixin, ProducersMixin, VariablesMixin, DatasetShiftSourcesMixin,
-    WeightProducerClassMixin, WeightProducerMixin, ChunkedIOMixin,
-    MLModelsMixin,
+    ProducerClassesMixin, ProducersMixin, VariablesMixin, DatasetShiftSourcesMixin, HistProducerClassMixin,
+    HistProducerMixin, ChunkedIOMixin, MLModelsMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
@@ -22,14 +21,13 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
-from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_to_strcat
 
 
 class _CreateHistograms(
     ReducedEventsUser,
     ProducersMixin,
     MLModelsMixin,
-    WeightProducerMixin,
+    HistProducerMixin,
     ChunkedIOMixin,
     VariablesMixin,
     law.LocalWorkflow,
@@ -56,11 +54,27 @@ class CreateHistograms(_CreateHistograms):
 
     missing_column_alias_strategy = "original"
     category_id_columns = {"category_ids"}
-    invokes_weight_producer = True
+    invokes_hist_producer = True
 
     @law.util.classproperty
     def mandatory_columns(cls) -> set[str]:
         return set(cls.category_id_columns) | {"process_id"}
+
+    @classmethod
+    def check_histogram_compatibility(cls, h) -> None:
+        # expected axis names and types
+        import hist
+        expected = {
+            "category": hist.axis.StrCategory,
+            "shift": hist.axis.StrCategory,
+            "process": hist.axis.IntCategory,
+        }
+        axes = {ax.name: ax for ax in h.axes}
+        for axis_name, axis_type in expected.items():
+            if not (ax := axes.get(axis_name)):
+                raise Exception(f"missing axis '{axis_name}' in histogram: {h}")
+            if not isinstance(ax, axis_type):
+                raise ValueError(f"axis '{axis_name}' must have type '{axis_type}', found '{type(ax)}'")
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -85,9 +99,9 @@ class CreateHistograms(_CreateHistograms):
                     for ml_model_inst in self.ml_model_insts
                 ]
 
-            # add weight_producer dependent requirements
-            reqs["weight_producer"] = law.util.make_unique(law.util.flatten(
-                self.weight_producer_inst.run_requires(task=self),
+            # add hist_producer dependent requirements
+            reqs["hist_producer"] = law.util.make_unique(law.util.flatten(
+                self.hist_producer_inst.run_requires(task=self),
             ))
 
         return reqs
@@ -111,9 +125,9 @@ class CreateHistograms(_CreateHistograms):
                 for ml_model_inst in self.ml_model_insts
             ]
 
-        # add weight_producer dependent requirements
-        reqs["weight_producer"] = law.util.make_unique(law.util.flatten(
-            self.weight_producer_inst.run_requires(task=self),
+        # add hist_producer dependent requirements
+        reqs["hist_producer"] = law.util.make_unique(law.util.flatten(
+            self.hist_producer_inst.run_requires(task=self),
         ))
 
         return reqs
@@ -134,7 +148,6 @@ class CreateHistograms(_CreateHistograms):
         from columnflow.columnar_util import (
             Route, update_ak_array, add_ak_aliases, has_ak_column, attach_coffea_behavior,
         )
-        from columnflow.hist_util import fill_hist
 
         # prepare inputs
         inputs = self.input()
@@ -148,20 +161,14 @@ class CreateHistograms(_CreateHistograms):
         # declare output: dict of histograms
         histograms = {}
 
-        # run the weight_producer setup when not skipping
-        skip_weight_producer = (
-            callable(self.weight_producer_inst.skip_func) and
-            self.weight_producer_inst.skip_func()
+        # run the hist_producer setup
+        self._array_function_post_init()
+        hist_producer_reqs = self.hist_producer_inst.run_requires(task=self)
+        reader_targets = self.hist_producer_inst.run_setup(
+            task=self,
+            reqs=hist_producer_reqs,
+            inputs=luigi.task.getpaths(hist_producer_reqs),
         )
-        reader_targets = {}
-        if not skip_weight_producer:
-            self._array_function_post_init()
-            producer_reqs = self.weight_producer_inst.run_requires(task=self)
-            reader_targets = self.weight_producer_inst.run_setup(
-                task=self,
-                reqs=producer_reqs,
-                inputs=luigi.task.getpaths(producer_reqs),
-            )
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -173,7 +180,7 @@ class CreateHistograms(_CreateHistograms):
         # define columns that need to be read
         read_columns = {Route("process_id")}
         read_columns |= set(map(Route, self.category_id_columns))
-        read_columns |= set(self.weight_producer_inst.used_columns)
+        read_columns |= set(self.hist_producer_inst.used_columns)
         read_columns |= set(map(Route, aliases.values()))
         read_columns |= {
             Route(inp)
@@ -194,7 +201,8 @@ class CreateHistograms(_CreateHistograms):
             ))
         }
 
-        # empty float array to use when input files have no entries
+        # empty arrays to use when input files have no entries
+        empty_i32 = ak.Array(np.array([], dtype=np.int32))
         empty_f32 = ak.Array(np.array([], dtype=np.float32))
 
         # iterate over chunks of events and diffs
@@ -205,15 +213,12 @@ class CreateHistograms(_CreateHistograms):
             file_targets.extend([inp["mlcolumns"] for inp in inputs["ml"]])
 
         # prepare inputs for localization
-        with law.localize_file_targets(
-            [*file_targets, *reader_targets.values()],
-            mode="r",
-        ) as inps:
+        with law.localize_file_targets([*file_targets, *reader_targets.values()], mode="r") as inps:
             for (events, *columns), pos in self.iter_chunked_io(
                 [inp.abspath for inp in inps],
                 source_type=len(file_targets) * ["awkward_parquet"] + [None] * len(reader_targets),
                 read_columns=(len(file_targets) + len(reader_targets)) * [read_columns],
-                chunk_size=self.weight_producer_inst.get_min_chunk_size(),
+                chunk_size=self.hist_producer_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs
                 if self.check_overlapping_inputs:
@@ -230,14 +235,9 @@ class CreateHistograms(_CreateHistograms):
                     missing_strategy=self.missing_column_alias_strategy,
                 )
 
-                # attach coffea behavior aiding functional variable expressions
+                # invoke the hist producer, potentially updating columns and creating the event weight
                 events = attach_coffea_behavior(events)
-
-                # build the full event weight
-                if not skip_weight_producer:
-                    events, weight = self.weight_producer_inst(events, task=self)
-                else:
-                    weight = ak.Array(np.ones(len(events), dtype=np.float32))
+                events, weight = self.hist_producer_inst(events, task=self)
 
                 # merge category ids and check that they are defined as leaf categories
                 category_ids = ak.concatenate(
@@ -248,8 +248,8 @@ class CreateHistograms(_CreateHistograms):
                 if any(cat_id not in category_map for cat_id in unique_category_ids):
                     undefined_category_ids = set(unique_category_ids) - set(category_map)
                     raise ValueError(
-                        f"Category ids {', '.join(undefined_category_ids)} in category id column "
-                        "are not defined as leaf categories in the config_inst",
+                        f"category ids {', '.join(undefined_category_ids)} in category id column are not defined as "
+                        "leaf categories in the config_inst",
                     )
 
                 # define and fill histograms, taking into account multiple axes
@@ -259,9 +259,7 @@ class CreateHistograms(_CreateHistograms):
 
                     if var_key not in histograms:
                         # create the histogram in the first chunk
-                        histograms[var_key] = create_columnflow_hist(
-                            *variable_insts,
-                        )
+                        histograms[var_key] = self.hist_producer_inst.run_create_hist(variable_insts, task=self)
 
                     # mask events and weights when selection expressions are found
                     masked_events = events
@@ -272,9 +270,7 @@ class CreateHistograms(_CreateHistograms):
                         if sel == "1":
                             continue
                         if not callable(sel):
-                            raise ValueError(
-                                f"invalid selection '{sel}', for now only callables are supported",
-                            )
+                            raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
                         mask = sel(masked_events)
                         masked_events = masked_events[mask]
                         masked_weights = masked_weights[mask]
@@ -284,6 +280,7 @@ class CreateHistograms(_CreateHistograms):
                     fill_data = {
                         "category": masked_category_ids,
                         "process": masked_events.process_id,
+                        "shift": self.global_shift_inst.id,
                         "weight": masked_weights,
                     }
                     for variable_inst in variable_insts:
@@ -293,30 +290,24 @@ class CreateHistograms(_CreateHistograms):
                             route = Route(expr)
                             def expr(events, *args, **kwargs):
                                 if len(events) == 0 and not has_ak_column(events, route):
-                                    return empty_f32
+                                    return empty_i32 if variable_inst.discrete_x else empty_f32
                                 return route.apply(events, null_value=variable_inst.null_value)
                         # apply it
                         fill_data[variable_inst.name] = expr(masked_events)
 
-                    # fill it
-                    fill_hist(
-                        histograms[var_key],
-                        fill_data,
-                        last_edge_inclusive=self.last_edge_inclusive,
-                        fill_kwargs={"shift": self.global_shift_inst.name},
-                    )
+                    # let the hist producer fill it
+                    self.hist_producer_inst.run_fill_hist(histograms[var_key], fill_data, task=self)
 
-        # change category axis from int to str
+        # post-process the histograms
         for var_key in self.variable_tuples.keys():
-            histograms[var_key] = translate_hist_intcat_to_strcat(
-                histograms[var_key],
-                "category",
-                category_map,
-            )
+            histograms[var_key] = self.hist_producer_inst.run_post_process_hist(histograms[var_key], task=self)
 
-        # teardown the weight producer
-        if not skip_weight_producer:
-            self.weight_producer_inst.run_teardown(task=self)
+            # check the format after post-processing if no merged preprocessing will take place
+            if not callable(self.hist_producer_inst.post_process_merged_hist_func):
+                self.check_histogram_compatibility(histograms[var_key])
+
+        # teardown the hist producer
+        self.hist_producer_inst.run_teardown(task=self)
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")
@@ -342,7 +333,7 @@ class _MergeHistograms(
     ReducerMixin,
     ProducersMixin,
     MLModelsMixin,
-    WeightProducerMixin,
+    HistProducerMixin,
     VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
@@ -372,6 +363,8 @@ class MergeHistograms(_MergeHistograms):
         RemoteWorkflow.reqs,
         CreateHistograms=CreateHistograms,
     )
+
+    invokes_hist_producer = True
 
     @classmethod
     def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
@@ -446,8 +439,17 @@ class MergeHistograms(_MergeHistograms):
         for variable_name in self.iter_progress(variable_names, len(variable_names), reach=(50, 100)):
             self.publish_message(f"merging histograms for '{variable_name}'")
 
+            # merge them
             variable_hists = [h[variable_name] for h in hists]
             merged = sum(variable_hists[1:], variable_hists[0].copy())
+
+            # post-process the merged histogram
+            merged = self.hist_producer_inst.run_post_process_merged_hist(merged, task=self)
+
+            # ensure the format is compatible
+            CreateHistograms.check_histogram_compatibility(merged)
+
+            # write the output
             outputs["hists"][variable_name].dump(merged, formatter="pickle")
 
         # optionally remove inputs
@@ -469,7 +471,7 @@ class _MergeShiftedHistograms(
     ReducerClassMixin,
     ProducerClassesMixin,
     MLModelsMixin,
-    WeightProducerClassMixin,
+    HistProducerClassMixin,
     VariablesMixin,
     law.LocalWorkflow,
     RemoteWorkflow,

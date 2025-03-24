@@ -21,14 +21,16 @@ from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
 from columnflow.reduction import Reducer
 from columnflow.production import Producer
-from columnflow.weight import WeightProducer
+from columnflow.histograming import HistProducer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler
-from columnflow.util import maybe_import, DotDict
+from columnflow.util import maybe_import, DotDict, get_docs_url, get_code_url
 
 ak = maybe_import("awkward")
 
+
+logger = law.logger.get_logger(__name__)
 logger_dev = law.logger.get_logger(f"{__name__}-dev")
 
 
@@ -635,7 +637,20 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
                 container=container,
                 default_str="default_reducer",
                 multi_strategy="same",
-            ) or "cf_default"
+            )
+
+            # !! to be removed in a future release
+            if not params["reducer"]:
+                # fallback to cf's default and trigger a verbose warning
+                params["reducer"] = "cf_default"
+                docs_url = get_docs_url("user_guide", "02_03_transition.html")
+                code_url = get_code_url("columnflow", "reduction", "default.py")
+                logger.warning_once(
+                    "reducer_undefined",
+                    "the resolution of the '--reducer' parameter resulted in an empty value, most likely caused by a "
+                    f"missing auxiliary field 'default_reducer' in your configuration; see {docs_url} for more "
+                    f"information; using '{params['reducer']}' ({code_url}) as a fallback",
+                )
 
         return params
 
@@ -1408,6 +1423,7 @@ class MLModelMixin(MLModelMixinBase):
 
 
 class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
+
     preparation_producer_inst = DerivableInstParameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
@@ -1422,10 +1438,6 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
     @classmethod
     def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
         return cls.get_array_function_dict(params)
-
-    # @property
-    # def preparation_producer(self):
-    #     return self.ml_model_inst.preparation_producer(self.analysis_inst)
 
     build_producer_inst = ProducerMixin.build_producer_inst
 
@@ -1555,15 +1567,14 @@ class MLModelsMixin(ConfigTask):
         return columns
 
 
-class WeightProducerClassMixin(ArrayFunctionClassMixin):
+class HistProducerClassMixin(ArrayFunctionClassMixin):
     """
-    Mixin to include and access single :py:class:`~columnflow.weight.WeightProducer` class.
+    Mixin to include and access single :py:class:`~columnflow.histograming.HistProducer` class.
     """
 
-    weight_producer = luigi.Parameter(
+    hist_producer = luigi.Parameter(
         default=RESOLVE_DEFAULT,
-        description="the name of the weight producer to be applied; default: value of the "
-        "'default_weight_producer' config",
+        description="the name of the hist producer to be applied; default: value of the 'default_hist_producer' config",
     )
 
     @classmethod
@@ -1572,111 +1583,119 @@ class WeightProducerClassMixin(ArrayFunctionClassMixin):
 
         # resolve the default class if necessary
         if (container := cls._get_config_container(params)):
-            params["weight_producer"] = cls.resolve_config_default(
-                param=params.get("weight_producer"),
+            params["hist_producer"] = cls.resolve_config_default(
+                param=params.get("hist_producer"),
                 task_params=params,
                 container=container,
-                default_str="default_weight_producer",
+                default_str="default_hist_producer",
                 multi_strategy="same",
             )
+
+            # !! to be removed in a future release
+            if not params["hist_producer"]:
+                # fallback to cf's default and trigger a verbose warning
+                params["hist_producer"] = "cf_default"
+                docs_url = get_docs_url("user_guide", "02_03_transition.html")
+                code_url = get_code_url("columnflow", "histograming", "default.py")
+                logger.warning_once(
+                    "hist_producer_undefined",
+                    "the resolution of the '--hist-producer' parameter resulted in an empty value, most likely caused "
+                    f"by a missing auxiliary field 'default_hist_producer' in your configuration; see {docs_url} for "
+                    f"more information; using '{params['hist_producer']}' ({code_url}) as a fallback",
+                )
 
         return params
 
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
-        # prefer --weight-producer set on task-level via cli
-        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"weight_producer"}
+        # prefer --hist-producer set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"hist_producer"}
         return super().req_params(inst, **kwargs)
 
     @property
-    def weight_producer_repr(self) -> str:
+    def hist_producer_repr(self) -> str:
         """
-        Return a string representation of the weight producer class.
+        Return a string representation of the hist producer class.
         """
-        return self.array_function_cls_repr(self.weight_producer)
+        return self.array_function_cls_repr(self.hist_producer)
 
     def store_parts(self) -> law.util.InsertableDict:
         """
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        # NOTE: anticipate that WeightProducer will be generalized to HistProducer, so use "hist" rather than "weight"
-        #       already for output paths to be forward-compatible
-        parts.insert_after(self.config_store_anchor, "weight_producer", f"hist__{self.weight_producer_repr}")
+        parts.insert_after(self.config_store_anchor, "hist_producer", f"hist__{self.hist_producer_repr}")
         return parts
 
     @classmethod
     def get_config_lookup_keys(
         cls,
-        inst_or_params: WeightProducerClassMixin | dict[str, Any],
+        inst_or_params: HistProducerClassMixin | dict[str, Any],
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
 
-        # add the weight producer name
+        # add the hist producer name
         producer = (
-            inst_or_params.get("weight_producer")
+            inst_or_params.get("hist_producer")
             if isinstance(inst_or_params, dict)
-            else getattr(inst_or_params, "weight_producer", None)
+            else getattr(inst_or_params, "hist_producer", None)
         )
         if producer not in (law.NO_STR, None, ""):
-            # NOTE: use "hist", same as in store_parts
-            keys["weight_producer"] = f"hist_{producer}"
+            keys["hist_producer"] = f"hist_{producer}"
 
         return keys
 
 
-class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
+class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
     """
-    Mixin to include and access a single :py:class:`~columnflow.weight.WeightProducer` instance.
+    Mixin to include and access a single :py:class:`~columnflow.histograming.HistProducer` instance.
     """
 
-    weight_producer_inst = DerivableInstParameter(
+    hist_producer_inst = DerivableInstParameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
 
-    exclude_params_index = {"weight_producer_inst"}
-    exclude_params_repr = {"weight_producer_inst"}
-    exclude_params_sandbox = {"weight_producer_inst"}
-    exclude_params_remote_workflow = {"weight_producer_inst"}
+    exclude_params_index = {"hist_producer_inst"}
+    exclude_params_repr = {"hist_producer_inst"}
+    exclude_params_sandbox = {"hist_producer_inst"}
+    exclude_params_remote_workflow = {"hist_producer_inst"}
 
-    # decides whether the task itself invokes the weight_producer
-    invokes_weight_producer = False
+    # decides whether the task itself invokes the hist_producer
+    invokes_hist_producer = False
 
     @classmethod
-    def get_weight_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+    def get_hist_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
         return cls.get_array_function_dict(params)
 
     @classmethod
-    def build_weight_producer_inst(
+    def build_hist_producer_inst(
         cls,
-        weight_producer: str,
+        hist_producer: str,
         params: dict[str, Any] | None = None,
     ) -> Producer:
         """
-        Instantiate and return the :py:class:`~columnflow.weight.WeightProducer` instance.
+        Instantiate and return the :py:class:`~columnflow.histograming.HistProducer` instance.
 
-        :param producer: Name of the weight producer class to instantiate.
-        :param params: Arguments forwarded to the weight producer constructor.
-        :raises RuntimeError: If the weight producer class is not
-            :py:attr:`~columnflow.weight.WeightProducer.exposed`.
-        :return: The weight producer instance.
+        :param producer: Name of the hist producer class to instantiate.
+        :param params: Arguments forwarded to the hist producer constructor.
+        :raises RuntimeError: If the hist producer class is not
+            :py:attr:`~columnflow.histograming.HistProducer.exposed`.
+        :return: The hist producer instance.
         """
-        weight_producer_cls = WeightProducer.get_cls(weight_producer)
-        if not weight_producer_cls.exposed:
-            raise RuntimeError(
-                f"cannot use unexposed weight_producer '{weight_producer}' in {cls.__name__}",
-            )
+        hist_producer_cls = HistProducer.get_cls(hist_producer)
+        if not hist_producer_cls.exposed:
+            raise RuntimeError(f"cannot use unexposed hist_producer '{hist_producer}' in {cls.__name__}")
 
-        inst_dict = cls.get_weight_producer_dict(params) if params else None
-        return weight_producer_cls(inst_dict=inst_dict)
+        inst_dict = cls.get_hist_producer_dict(params) if params else None
+        return hist_producer_cls(inst_dict=inst_dict)
 
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
-        # add the weight producer instance
-        if not params.get("weight_producer_inst"):
-            params["weight_producer_inst"] = cls.build_weight_producer_inst(
-                params["weight_producer"],
+        # add the hist producer instance
+        if not params.get("hist_producer_inst"):
+            params["hist_producer_inst"] = cls.build_hist_producer_inst(
+                params["hist_producer"],
                 params,
             )
 
@@ -1696,9 +1715,9 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
-        # get the weight producer, update it and add its shifts
-        weight_producer_shifts = params["weight_producer_inst"].all_shifts
-        (shifts.local if cls.invokes_weight_producer else shifts.upstream).update(weight_producer_shifts)
+        # get the hist producer, update it and add its shifts
+        hist_producer_shifts = params["hist_producer_inst"].all_shifts
+        (shifts.local if cls.invokes_hist_producer else shifts.upstream).update(hist_producer_shifts)
 
         super().get_known_shifts(params, shifts)
 
@@ -1706,19 +1725,19 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         super().__init__(*args, **kwargs)
 
         # overwrite the sandbox when set
-        if self.invokes_weight_producer and (sandbox := self.weight_producer_inst.get_sandbox()):
+        if self.invokes_hist_producer and (sandbox := self.hist_producer_inst.get_sandbox()):
             self.reset_sandbox(sandbox)
 
     def _array_function_post_init(self, **kwargs) -> None:
-        self.weight_producer_inst.run_post_init(task=self, **kwargs)
+        self.hist_producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
     @property
-    def weight_producer_repr(self) -> str:
+    def hist_producer_repr(self) -> str:
         """
-        Return a string representation of the weight producer instance.
+        Return a string representation of the hist producer instance.
         """
-        return self.array_function_inst_repr(self.weight_producer_inst)
+        return self.array_function_inst_repr(self.hist_producer_inst)
 
 
 class InferenceModelClassMixin(ConfigTask):
