@@ -6,6 +6,8 @@ Building Blocks
 
    calibrators.md
    selectors.md
+   reducers.md
    producers.md
    categories.md
+   histograms.md
    config_objects.md
