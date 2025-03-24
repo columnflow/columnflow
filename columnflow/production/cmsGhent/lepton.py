@@ -196,7 +196,7 @@ def lepton_weights_init(self: Producer) -> None:
         if not hasattr(self, key):
             setattr(self, key, value)
     self.uses |= self.lepton_config.uses
-    self.produces |= self.produced_weights
+    self.produces |= self.lepton_config.produced_weights
 
 
 @lepton_weights.requires
@@ -325,4 +325,4 @@ def bundle_lepton_weights_init(self: Producer) -> None:
             self.config_naming(config),
             cls_dict=dict(lepton_config=config),
         ))
-        self.produces.extend(self.produced_weights)
+        self.produces.update(config.produced_weights)
