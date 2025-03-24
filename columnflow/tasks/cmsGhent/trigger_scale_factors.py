@@ -69,7 +69,7 @@ class TriggerConfigMixin(ConfigTask):
         for var in tcfg.variable_names:
             # 1d efficiencies and sf
             if include_1d:
-                yield var
+                yield (var,)
 
             # fully binned efficiency in  main variables with additional variables
             if var in tcfg.main_variables[1:] or len(tcfg.main_variables) == len(tcfg.variables) == 1:
