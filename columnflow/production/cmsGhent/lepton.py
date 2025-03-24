@@ -284,8 +284,8 @@ MuonBaseWeightConfig = LeptonWeightConfig(
 )
 
 
-@MuonBaseWeightConfig.input(uses={"Muon.{pt,eta}"})
-def muon_mva_input(events):
+@MuonBaseWeightConfig.input(uses={"Muon.{pt,eta,phi}"})
+def muon_input(events):
     return {
         "pt": events.Muon.pt,
         "eta": events.Muon.eta,
@@ -296,6 +296,7 @@ def muon_mva_input(events):
 #
 # bundle of all lepton weight producers
 #
+
 
 @producer(
     # only run on mc
