@@ -35,7 +35,7 @@ Original source hosted at [GitHub](https://github.com/columnflow/columnflow).
 
 <!-- marker-before-note -->
 
-## ❗️ Note on 0.2 → 0.3 transition
+## ❗️ Note on v0.2 → v0.3 transition
 
 The 0.3 release introduces many performance fixes and new features such as
 
@@ -45,7 +45,7 @@ The 0.3 release introduces many performance fixes and new features such as
 - statistical inference models with support for merging data of different campaigns.
 
 However, some of these changes are potentially breaking existing code.
-Checkout the [0.2 → 0.3 transition guide](https://columnflow.readthedocs.io/en/latest/user_guide/02_03_transition.html) as well as the [release notes](https://github.com/columnflow/columnflow/releases/tag/v0.3.0) for a detailed overview of the changes and how to adapt your code.
+Checkout the [v0.2 → v0.3 transition guide](https://columnflow.readthedocs.io/en/latest/user_guide/02_03_transition.html) as well as the [release notes](https://github.com/columnflow/columnflow/releases/tag/v0.3.0) for a detailed overview of the changes and how to adapt your code.
 
 Version 0.2 continues to be available via the [`legacy/v0.2`](https://github.com/columnflow/columnflow/tree/legacy/v0.2) branch, with the latest release being [v0.2.5](https://github.com/columnflow/columnflow/releases/tag/v0.2.5).
 
@@ -136,7 +136,7 @@ For a better overview of the tasks that are triggered by the commands below, che
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/riga"><img src="https://avatars.githubusercontent.com/u/1908734?v=4?s=100" width="100px;" alt="Marcel Rieger"/><br /><sub><b>Marcel Rieger</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Ariga" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Documentation">📖</a> <a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/riga"><img src="https://avatars.githubusercontent.com/u/1908734?v=4?s=100" width="100px;" alt="Marcel Rieger"/><br /><sub><b>Marcel Rieger</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Ariga" title="Reviewed Pull Requests">👀</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mafrahm"><img src="https://avatars.githubusercontent.com/u/49306645?v=4?s=100" width="100px;" alt="Mathis Frahm"/><br /><sub><b>Mathis Frahm</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=mafrahm" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Amafrahm" title="Reviewed Pull Requests">👀</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/dsavoiu"><img src="https://avatars.githubusercontent.com/u/17005255?v=4?s=100" width="100px;" alt="Daniel Savoiu"/><br /><sub><b>Daniel Savoiu</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=dsavoiu" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Adsavoiu" title="Reviewed Pull Requests">👀</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/pkausw"><img src="https://avatars.githubusercontent.com/u/26219567?v=4?s=100" width="100px;" alt="pkausw"/><br /><sub><b>pkausw</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=pkausw" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Apkausw" title="Reviewed Pull Requests">👀</a></td>
