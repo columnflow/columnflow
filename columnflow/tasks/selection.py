@@ -11,7 +11,7 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin
+from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin, ParamsCacheMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
@@ -32,6 +32,7 @@ default_create_selection_hists = law.config.get_expanded_bool(
 
 
 class SelectEvents(
+    ParamsCacheMixin,
     SelectorMixin,
     CalibratorsMixin,
     ChunkedIOMixin,

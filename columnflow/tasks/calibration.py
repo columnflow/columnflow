@@ -8,7 +8,7 @@ import luigi
 import law
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedIOMixin
+from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedIOMixin, ParamsCacheMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
@@ -17,6 +17,7 @@ ak = maybe_import("awkward")
 
 
 class CalibrateEvents(
+    ParamsCacheMixin,
     CalibratorMixin,
     ChunkedIOMixin,
     DatasetTask,
@@ -33,6 +34,7 @@ class CalibrateEvents(
 
     # default sandbox, might be overwritten by calibrator function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+    cache_param_sep = ["calibrator"]
 
     # upstream requirements
     reqs = Requirements(

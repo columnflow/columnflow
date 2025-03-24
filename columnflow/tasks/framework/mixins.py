@@ -25,6 +25,7 @@ from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler
 from columnflow.util import maybe_import, DotDict
+from columnflow.timing import Timer
 
 ak = maybe_import("awkward")
 
@@ -2646,3 +2647,83 @@ class MergeHistogramMixin(
         # optionally remove inputs
         if self.remove_previous:
             inputs.remove()
+
+
+class ParamsCacheMixin:
+
+    # the get_param_values is called again for every value of this parameter (config by default included)
+    cache_param_sep = []
+
+    # dict to store cached params for different tasks
+    cache_param_values = dict()
+
+    time_get_params = luigi.BoolParameter(
+        default=False,
+        description="Whether to report the time taken to load get the parameters",
+    )
+
+    no_cached_params = luigi.BoolParameter(
+        default=False,
+        description="Return normal call to get_param_values and report if it differs from cached output",
+    )
+
+    check_cached_params = luigi.BoolParameter(
+        default=False,
+        description="Return normal call to get_param_values and report if it differs from cached output",
+    )
+
+    @classmethod
+    def cache_tag(cls, kwargs):
+        tag = cls.__name__
+        for p in ["config"] + list(cls.cache_param_sep):
+            if kwargs.get(p, None):
+                tag += f"__{p}_{kwargs[p]}"
+        return tag
+
+    @classmethod
+    def get_param_values(cls, params, args, kwargs):
+
+        tag = cls.cache_tag(kwargs)
+        cache = cls.cache_param_values.setdefault(tag, [])
+        if cache:
+            # return cached params but overwrite branch(es), dataset, and output/status options
+            dct_update = dict(branch=int(kwargs.get("branch", -1)))
+            if "dataset" in kwargs:
+                dct_update["dataset"] = kwargs["dataset"]
+            cached_out = cache[0] | dct_update | {
+                k: kwargs.get(k, ()) for k in
+                ["print_output", "branches", "print_status", "remove_output", "fetch_output"]
+            }
+
+        # call the normal get_param_values first time, or by request
+        if any([
+            check_cached_params := kwargs.get("check_cached_params", False),
+            no_cached_params := kwargs.get("no_cached_params", False),
+            first_call := not cache,
+        ]):
+            if time_get_params := kwargs.get("time_get_params", False):
+                tmr = Timer(f"{tag} get_param_values")
+
+            out = super().get_param_values(params, args, kwargs)
+
+            if time_get_params:
+                tmr("end of call")
+
+            dct_out = dict(out)
+
+        # store first call to cache
+        if first_call:
+            cache.append(dct_out)
+            cls.cache_param_values[cls.cache_tag(dct_out)] = cache
+        # compare cached output to normal call
+        elif check_cached_params:
+            for key, value in dct_out.items():
+                cached_val = cached_out.get(key, None)
+                if cached_val != value:
+                    logger.warning(
+                        "normal call to get_param_values yielded output that differs from cached output\n"
+                        f"Normal call -> {key} [key]: {value}\n"
+                        f"Cached call -> {key} [key]: {cached_val}",
+                    )
+
+        return out if no_cached_params or first_call else list(cached_out.items())
