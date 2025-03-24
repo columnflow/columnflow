@@ -850,6 +850,9 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         smear_factors_stochastic,
     )
 
+    # ensure array with correctionlib output 'Nan' are set to 0.0 in the next line
+    smear_factors = ak.nan_to_none(smear_factors)
+
     # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
     smear_factors = ak.fill_none(smear_factors, 0.0)
 
