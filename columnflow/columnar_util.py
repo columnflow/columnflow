@@ -23,12 +23,11 @@ from collections import namedtuple, OrderedDict, deque, defaultdict
 
 import law
 import order as od
-from law.util import InsertableDict
 
 from columnflow.types import Sequence, Callable, Any, T, Generator
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
-    get_source_code, real_path,
+    get_source_code, real_path, freeze, get_docs_url,
 )
 
 np = maybe_import("numpy")
@@ -586,6 +585,7 @@ class ColumnCollection(enum.Flag):
     ALL_FROM_CALIBRATOR = enum.auto()
     ALL_FROM_CALIBRATORS = enum.auto()
     ALL_FROM_SELECTOR = enum.auto()
+    ALL_FROM_REDUCER = enum.auto()
     ALL_FROM_PRODUCER = enum.auto()
     ALL_FROM_PRODUCERS = enum.auto()
     ALL_FROM_ML_EVALUATION = enum.auto()
@@ -1356,13 +1356,13 @@ def ak_copy(ak_array: ak.Array) -> ak.Array:
 
 class RouteFilter(object):
     """
-    Shallow helper class that handles removal of routes in an awkward array that do not match those
-    in *keep_routes*. Each route can either be a :py:class:`Route` instance, or anything that is
-    accepted by its constructor. Example:
+    Shallow helper class that handles the filtering of routes in an awkward array that do (not) match those in
+    *remove_routes* (*keep_routes*). Each route can either be a :py:class:`Route` instance, or anything that is accepted
+    by its constructor. Example:
 
     .. code-block:: python
 
-        route_filter = RouteFilter(["Jet.pt", "Jet.eta"])
+        route_filter = RouteFilter(keep=["Jet.pt", "Jet.eta"])
         events = route_filter(events)
 
         print(get_ak_routes(events))
@@ -1371,42 +1371,60 @@ class RouteFilter(object):
         #    "Jet.eta",
         # ]
 
-    .. py:attribute:: keep_routes
+    .. py:attribute:: keep
 
         type: list
 
         The routes to keep.
 
-    .. py:attribute:: remove_routes
+    .. py:attribute:: remove
 
-        type: None, set
+        type: list
 
-        A set of :py:class:`Route` instances that are removed, defined after the first call to this
-        instance.
+        The routes to remove. Evaluated after routes to keep.
     """
 
-    def __init__(self, keep_routes: Sequence[Route | str]):
+    def __init__(
+        self,
+        *,
+        keep: Sequence[Route | str] | None = None,
+        remove: Sequence[Route | str] | None = None,
+        cache: bool = True,
+    ) -> None:
         super().__init__()
 
-        self.keep_routes = list(keep_routes)
-        self.remove_routes = None
+        self.keep = list(keep) if keep else []
+        self.remove = list(remove) if remove else []
+        self.cache = cache
+
+        self._remove_routes = None
 
     def __call__(self, ak_array: ak.Array) -> ak.Array:
-        # manually remove colums that should not be kept
-        if self.remove_routes is None:
-            # convert routes to keep into string columns for pattern checks
-            keep_columns = [Route(route).column for route in self.keep_routes]
+        # potentially get routes to remove from cache
+        remove_routes = self._remove_routes if self.cache else None
+
+        # determine when empty
+        if remove_routes is None:
+            # convert routes to strings for pattern checks
+            keep_columns = [Route(route).column for route in self.keep]
+            remove_columns = [Route(route).column for route in self.remove]
 
             # determine routes to remove
-            self.remove_routes = {
-                route
-                for route in get_ak_routes(ak_array)
-                if not law.util.multi_match(route.column, keep_columns)
+            remove_routes = {
+                r for r in get_ak_routes(ak_array)
+                if (
+                    (keep_columns and not law.util.multi_match(r.column, keep_columns)) or
+                    (remove_columns and law.util.multi_match(r.column, remove_columns))
+                )
             }
 
         # apply the filtering
-        for route in self.remove_routes:
-            ak_array = remove_ak_column(ak_array, route)
+        for r in remove_routes:
+            ak_array = remove_ak_column(ak_array, r)
+
+        # add routes to cache for next call
+        if self.cache and self._remove_routes is None:
+            self._remove_routes = remove_routes
 
         return ak_array
 
@@ -1464,9 +1482,11 @@ class ArrayFunction(Derivable):
     instance-level, the full sets of :py:attr:`used_columns` and :py:attr:`produced_columns` are
     simply resolvable through attributes.
 
-    *call_func* defines the function being invoked when the instance is *called*. An additional
-    initialization function can be wrapped through a decorator (similiar to ``property`` setters) as
-    shown in the example below. They constitute a mechanism to update the :py:attr:`uses` and
+    *call_func* defines the function being invoked when the instance is *called*. Additional
+    initialization functions can be registered through a decorator (similiar to ``property``
+    setters) as shown in the example below. ``pre_init`` is invoked prior to any dependecy
+    registration. One use case is the forwarding of dependency keyword arguments via
+    :py:attr:`deps_kwargs`. ``init`` constitutes a mechanism to update the :py:attr:`uses` and
     :py:attr:`produces` sets to declare dependencies in a more dynamic way.
 
     .. code-block:: python
@@ -1594,6 +1614,12 @@ class ArrayFunction(Derivable):
 
         The wrapped function to be called on arrays.
 
+    .. py:attribute: pre_init_func
+
+        type: callable
+
+        The registered function called before any dependency initialization, or *None*.
+
     .. py:attribute: init_func
 
         type: callable
@@ -1610,6 +1636,7 @@ class ArrayFunction(Derivable):
 
     # class-level attributes as defaults
     call_func = None
+    pre_init_func = None
     init_func = None
     skip_func = None
 
@@ -1726,6 +1753,17 @@ class ArrayFunction(Derivable):
         cls.init_func = func
 
     @classmethod
+    def pre_init(cls, func: Callable[[], None]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`pre_init_func`
+        which is invoked prior to any dependency creation. The function should not accept positional
+        arguments.
+
+        The decorator does not return the wrapped function.
+        """
+        cls.pre_init_func = func
+
+    @classmethod
     def skip(cls, func: Callable[[], bool]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:meth:`skip_func`
@@ -1739,6 +1777,7 @@ class ArrayFunction(Derivable):
     def __init__(
         self,
         call_func: Callable | None = law.no_value,
+        pre_init_func: Callable | None = law.no_value,
         init_func: Callable | None = law.no_value,
         skip_func: Callable | None = law.no_value,
         check_used_columns: bool | None = None,
@@ -1753,6 +1792,8 @@ class ArrayFunction(Derivable):
         # add class-level attributes as defaults for unset arguments (no_value)
         if call_func == law.no_value:
             call_func = self.__class__.call_func
+        if pre_init_func == law.no_value:
+            pre_init_func = self.__class__.pre_init_func
         if init_func == law.no_value:
             init_func = self.__class__.init_func
         if skip_func == law.no_value:
@@ -1767,6 +1808,8 @@ class ArrayFunction(Derivable):
         # when a custom funcs are passed, bind them to this instance
         if call_func:
             self.call_func = call_func.__get__(self, self.__class__)
+        if pre_init_func:
+            self.pre_init_func = pre_init_func.__get__(self, self.__class__)
         if init_func:
             self.init_func = init_func.__get__(self, self.__class__)
         if skip_func:
@@ -1808,8 +1851,8 @@ class ArrayFunction(Derivable):
         # dictionary of dependency class to instance, set in create_dependencies
         self.deps = DotDict()
 
-        # dictionary of keyword arguments mapped to dependenc classes to be forwarded to their init
-        self.deps_kwargs = defaultdict(dict)  # TODO: avoid using `defaultdict`
+        # dictionary of keyword arguments mapped to dependent classes to are forwarded to their init
+        self.deps_kwargs = defaultdict(DotDict)
 
         # deferred part of the initialization
         if deferred_init:
@@ -1820,6 +1863,23 @@ class ArrayFunction(Derivable):
         Item access to dependencies.
         """
         return self.deps[dep_cls]
+
+    def _iter_dependency_set(self, objects: set[Any]) -> Generator[Any, None, None]:
+        q = deque(objects)
+        while q:
+            obj = q.popleft()
+            # evaluate deferred columns
+            if isinstance(obj, self.DeferredColumn):
+                obj = obj(self)
+            # when obj is falsy, skip it
+            if not obj:
+                continue
+            # when obj is a set of objects, include them in the iteration
+            if isinstance(obj, set):
+                q.extendleft(obj)
+                continue
+            # yield it
+            yield obj
 
     def has_dep(self, dep_cls: DerivableMeta) -> bool:
         """
@@ -1861,10 +1921,14 @@ class ArrayFunction(Derivable):
             # add the next dependencies
             extend(dep.deps.values())
 
-    def deferred_init(self, instance_cache: dict | None = None) -> dict:
+    def deferred_init(self, instance_cache: dict | None = None) -> None:
         """
         Controls the deferred part of the initialization process.
         """
+        # run this instance's pre init function which might update dep kwargs
+        if callable(self.pre_init_func):
+            self.pre_init_func()
+
         # create dependencies once
         instance_cache = instance_cache or {}
         self.create_dependencies(instance_cache)
@@ -1874,16 +1938,7 @@ class ArrayFunction(Derivable):
             self.init_func()
 
         # instantiate dependencies again, but only perform updates
-        # self.create_dependencies(instance_cache, only_update=True)
-
-        # NOTE: the above does not correctly propagate `deps_kwargs` to the dependencies.
-        # As a workaround, instantiate all dependencies fully a second time by
-        # invalidating the instance cache and setting `only_update` to False
-        instance_cache = {}
-        self.create_dependencies(instance_cache, only_update=False)
-
-        # NOTE: return value currently not being used anywhere -> remove?
-        return instance_cache
+        self.create_dependencies(instance_cache, only_update=True)
 
     def create_dependencies(
         self,
@@ -1892,7 +1947,7 @@ class ArrayFunction(Derivable):
     ) -> None:
         """
         Walks through all dependencies configured in the :py:attr:`_dependency_sets` and fills
-        :py:attr:`deps` as well as separate sets, corresponding to the classes defined in
+        :py:attr:`deps` as well as separate sets, corresponding to the attributes defined in
         :py:attr:`_dependency_sets` (e.g. :py:attr:`uses` -> :py:attr:`uses_instances`).
 
         *instance_cache* is a dictionary that is serves as a cache to prevent same classes being
@@ -1901,30 +1956,33 @@ class ArrayFunction(Derivable):
         def add_dep(cls_or_inst):
             is_cls = ArrayFunction.derived_by(cls_or_inst)
             cls = cls_or_inst if is_cls else cls_or_inst.__class__
-            if not only_update or cls not in self.deps:
-                # create or get the instance
-                if is_cls:
-                    # use the cache
-                    if cls not in instance_cache:
-                        # create the instance first without its deps, then cache it but do not
-                        # create its own deps yet within the deferred init
-                        inst = self.instantiate_dependency(cls, deferred_init=False)
-                        instance_cache[cls] = inst
-                    inst = instance_cache[cls]
-                else:
-                    inst = cls_or_inst
 
-                # optionally skip the instance
-                if callable(inst.skip_func) and inst.skip_func():
-                    self.deps.pop(cls, None)
-                    return None
+            # skip when the dependency is already present
+            if only_update and cls in self.deps:
+                return self.deps[cls]
 
-                # run the deferred init that creates its own deps
-                inst.deferred_init(instance_cache)
+            # create or get the instance
+            if is_cls:
+                # use the cache
+                if cls not in instance_cache:
+                    # create the instance first without its deps, then cache it but do not
+                    # create its own deps yet within the deferred init
+                    inst = self.instantiate_dependency(cls, deferred_init=False)
+                    instance_cache[cls] = inst
+                inst = instance_cache[cls]
+            else:
+                inst = cls_or_inst
 
-                # store it
-                self.deps[cls] = inst
+            # optionally skip the instance
+            if callable(inst.skip_func) and inst.skip_func():
+                self.deps.pop(cls, None)
+                return None
 
+            # run the deferred init that creates its own deps
+            inst.deferred_init(instance_cache)
+
+            # store and return it
+            self.deps[cls] = inst
             return self.deps[cls]
 
         # track dependent classes that are handled in the following
@@ -1936,39 +1994,20 @@ class ArrayFunction(Derivable):
             instances.clear()
 
             # go through all dependent objects and create instances of classes, considering caching
-            objs = list(getattr(self, attr))
-            while objs:
-                obj = objs.pop(0)
-
-                # obj might be a deferred column
-                if isinstance(obj, self.DeferredColumn):
-                    obj = obj(self)
-
-                # when obj is falsy, skip it
-                if not obj:
-                    continue
-
-                # when obj is a set of objects, i.e., it cannot be understood as a Route,
-                # extend the loop and start over, otherwise handle obj as is
-                if isinstance(obj, set):
-                    objs = list(obj) + objs
-                    continue
-
-                # handle other types
+            for obj in self._iter_dependency_set(getattr(self, attr)):
+                # handle array functions
                 if ArrayFunction.derived_by(obj) or isinstance(obj, ArrayFunction):
                     obj = add_dep(obj)
                     if obj:
                         added_deps.append(obj.__class__)
                         instances.add(self.IOFlagged(obj, self.IOFlag.AUTO))
 
+                # handle flagged array functions
                 elif isinstance(obj, self.IOFlagged):
                     obj = self.IOFlagged(add_dep(obj.wrapped), obj.io_flag)
                     if obj:
                         added_deps.append(obj.wrapped.__class__)
                         instances.add(obj)
-
-                else:
-                    instances.add(obj)
 
         # synchronize dependencies
         # this might remove deps that were present in self.deps already before this method is called
@@ -1978,11 +2017,7 @@ class ArrayFunction(Derivable):
                 if cls not in added_deps:
                     del self.deps[cls]
 
-    def instantiate_dependency(
-        self,
-        cls: DerivableMeta,
-        **kwargs: Any,
-    ) -> ArrayFunction:
+    def instantiate_dependency(self, cls: DerivableMeta, **kwargs) -> ArrayFunction:
         """
         Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*. The
         latter update optional keyword arguments in :py:attr:`self.deps_kwargs` and are then
@@ -2030,18 +2065,30 @@ class ArrayFunction(Derivable):
         # declare _this_ call cached
         _cache.add(self.IOFlagged(self, io_flag))
 
-        # add columns of all dependent objects
-        for obj in (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances):
-            if isinstance(obj, (ArrayFunction, self.IOFlagged)):
-                # don't propagate to dependencies
-                if not dependencies:
-                    continue
+        # add normal columns
+        objs = self.uses if io_flag == self.IOFlag.USES else self.produces
+        for obj in self._iter_dependency_set(objs):
+            # skip objects that do not refer to simple columns
+            if ArrayFunction.derived_by(obj) or isinstance(obj, (ArrayFunction, self.IOFlagged)):
+                continue
 
-                flagged = obj
+            if isinstance(obj, str):
+                # expand braces in strings
+                columns |= set(map(Route, law.util.brace_expand(obj)))
+            else:
+                # let Route handle everything else
+                columns.add(Route(obj))
+
+        # add columns of all dependent instances
+        if dependencies:
+            objs = (self.uses_instances if io_flag == self.IOFlag.USES else self.produces_instances)
+            for obj in objs:
                 if isinstance(obj, ArrayFunction):
                     flagged = self.IOFlagged(obj, io_flag)
                 elif obj.io_flag == self.IOFlag.AUTO:
                     flagged = self.IOFlagged(obj.wrapped, io_flag)
+                else:
+                    flagged = obj
 
                 # skip when already cached
                 if flagged in _cache:
@@ -2049,12 +2096,6 @@ class ArrayFunction(Derivable):
 
                 # add the columns
                 columns |= flagged.wrapped._get_columns(flagged.io_flag, _cache=_cache)
-            elif isinstance(obj, str):
-                # expand braces in strings
-                columns |= set(map(Route, law.util.brace_expand(obj)))
-            else:
-                # let Route handle it
-                columns.add(Route(obj))
 
         return columns
 
@@ -2063,19 +2104,25 @@ class ArrayFunction(Derivable):
 
     @property
     def used_columns(self) -> set[Route]:
-        return self._get_used_columns()
+        try:
+            return self._get_used_columns()
+        except AttributeError as e:
+            raise Exception(str(e)) from e
 
     def _get_produced_columns(self, _cache: set | None = None) -> set[Route]:
         return self._get_columns(io_flag=self.IOFlag.PRODUCES, _cache=_cache)
 
     @property
     def produced_columns(self) -> set[Route]:
-        return self._get_produced_columns()
+        try:
+            return self._get_produced_columns()
+        except AttributeError as e:
+            raise Exception(str(e)) from e
 
     def _check_columns(self, ak_array: ak.Array, io_flag: IOFlag) -> None:
         """
-        Check if awkward array contains at least one column matching each
-        entry in 'uses' or 'produces' and raise Exception if none were found.
+        Check if awkward array contains at least one column matching each entry in 'uses' or
+        'produces' and raise Exception if none were found.
         """
         # get own columns, i.e, routes that are non-optional
         routes = [
@@ -2111,12 +2158,12 @@ class ArrayFunction(Derivable):
         """
         # check if the call_func is callable
         if not callable(self.call_func):
-            raise Exception(f"call_func of {self} is not callable")
+            raise Exception(f"call_func of '{self}' is not callable")
 
         # raise in case the call is actually being skipped
         if callable(self.skip_func) and self.skip_func():
             raise Exception(
-                f"skip_func of {self} returned True, cannot invoke call_func; skip_func code: \n\n"
+                f"skip_func of '{self}' returned True, cannot invoke call_func; skip_func code:\n\n"
                 f"{get_source_code(self.skip_func, indent=4)}",
             )
 
@@ -2213,7 +2260,29 @@ def skip_column(
     return tagged_column("skip", *routes)
 
 
-class TaskArrayFunction(ArrayFunction):
+class TaskArrayFunctionMeta(DerivableMeta):
+
+    def __new__(metacls, cls_name: str, bases: tuple, cls_dict: dict) -> TaskArrayFunctionMeta:
+        # add an instance cache if not disabled
+        cls_dict.setdefault("cache_instances", True)
+        cls_dict["_instances"] = {} if cls_dict["cache_instances"] else None
+
+        return super().__new__(metacls, cls_name, bases, cls_dict)
+
+    def __call__(cls, *args, **kwargs) -> TaskArrayFunction:
+        # when not caching instances, return right away
+        if not cls.cache_instances:
+            return super().__call__(*args, **kwargs)
+
+        # build the cache key from the inst_dict in kwargs
+        key = freeze((cls, kwargs.get("inst_dict", {})))
+        if key not in cls._instances:
+            cls._instances[key] = super().__call__(*args, **kwargs)
+
+        return cls._instances[key]
+
+
+class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
     """
     Subclass of :py:class:`ArrayFunction` providing an interface to certain task features such as
     declaring dependent or produced shifts, task requirements, and defining a custom setup
@@ -2228,33 +2297,33 @@ class TaskArrayFunction(ArrayFunction):
     `py:attr:`shifts` itself.
 
     As opposed to more basic :py:class:`ArrayFunction`'s, instances of *this* class have a direct
-    interface to tasks and can influence their behavior - and vice-versa. For this purpose, custom
-    task requirements, and a setup of objects resulting from these requirements can be defined in a
-    similar, programmatic way. Also, they might define an optional *sandbox* that is required to run
-    this array function.
+    interface to tasks and can influence their behavior - and vice-versa. For this purpose, a
+    ``post-init`` hook receiving the task, custom task requirements, the setup of objects resulting
+    from these requirements, and a teardown method can be defined in a similar, programmatic way.
+    Also, they might define an optional *sandbox* that is required to run this array function.
 
     Exmple:
 
     .. code-block:: python
 
-        class my_func(ArrayFunction):
+        class my_func(TaskArrayFunction):
             uses = {"Jet.pt"}
             produces = {"Jet.pt_weighted"}
 
-            def call_func(self, events):
+            def call_func(self, events, **kwargs):
                 # self.weights is defined below
                 events["Jet", "pt_weighted"] = events.Jet.pt * self.weights
 
         # define requirements that (e.g.) compute the weights
         @my_func.requires
-        def requires(self, reqs):
+        def requires(self, task, reqs):
             # fill the requirements dict
             reqs["weights_task"] = SomeWeightsTask.req(self.task)
             reqs["columns_task"] = SomeColumnsTask.req(self.task)
 
         # define the setup step that loads event weights from the required task
         @my_func.setup
-        def setup(self, reqs, inputs, reader_targets):
+        def setup(self, task, reqs, inputs, reader_targets):
             # load the weights once, inputs is corresponding to what we added to reqs above
             weights = inputs["weights_task"].load(formatter="json")
 
@@ -2300,6 +2369,13 @@ class TaskArrayFunction(ArrayFunction):
 
         The resolved, flat set of dependent or produced shifts.
 
+    .. py:attribute: post_init_func
+
+        type: callable
+
+        The registered function defining actions to be taken after the initialization and before
+        the actual setup, or *None*.
+
     .. py:attribute: requires_func
 
         type: callable
@@ -2311,6 +2387,12 @@ class TaskArrayFunction(ArrayFunction):
         type: callable
 
         The registered function performing the custom setup step, or *None*.
+
+    .. py:attribute:: teardown_func
+
+        type: callable
+
+        The registered function performing a custom teardown step, or *None*.
 
     .. py:attribute:: sandbox
 
@@ -2336,19 +2418,15 @@ class TaskArrayFunction(ArrayFunction):
     """
 
     # class-level attributes as defaults
+    post_init_func = None
     requires_func = None
     setup_func = None
+    teardown_func = None
     sandbox = None
     call_force = None
     max_chunk_size = None
     shifts = set()
     _dependency_sets = ArrayFunction._dependency_sets | {"shifts"}
-
-    def __str__(self) -> str:
-        """
-        Returns a string representation of this TaskArrayFunction instance.
-        """
-        return self.cls_name
 
     @staticmethod
     def pick_cached_result(cached_result: T, *args, **kwargs) -> T:
@@ -2378,12 +2456,33 @@ class TaskArrayFunction(ArrayFunction):
         return events, *cached_result[1:]
 
     @classmethod
+    def post_init(cls, func: Callable[[dict], None]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`post_init_func`
+        which receives the task instance. The function should accept one argument:
+
+            - *task*, the invoking task instance.
+
+        The decorator does not return the wrapped function.
+
+        .. note::
+
+            When the task invoking the requirement is workflow, be aware that both the actual
+            workflow instance as well as branch tasks might call the wrapped function. When the
+            requirements should differ between them, make sure to use the
+            :py:meth:`BaseWorkflow.is_workflow` and :py:meth:`BaseWorkflow.is_branch` methods to
+            distinguish the cases.
+        """
+        cls.post_init_func = func
+
+    @classmethod
     def requires(cls, func: Callable[[dict], None]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:meth:`requires_func`
-        which is used to define additional task requirements. The function should accept one
-        positional argument:
+        which is used to define additional task requirements. The function should accept two
+        arguments:
 
+            - *task*, the invoking task instance.
             - *reqs*, a dictionary into which requirements should be inserted.
 
         The decorator does not return the wrapped function.
@@ -2402,9 +2501,10 @@ class TaskArrayFunction(ArrayFunction):
     def setup(cls, func: Callable[[dict], None]) -> None:
         """
         Decorator to wrap a function *func* that should be registered as :py:meth:`setup_func`
-        which is used to perform a custom setup of objects. The function should accept two
-        positional arguments:
+        which is used to perform a custom setup of objects. The function should accept four
+        arguments:
 
+            - *task*, the invoking task instance.
             - *reqs*, a dictionary containing the required tasks as defined by the custom
             :py:meth:`requires_func`.
             - *inputs*, a dictionary containing the outputs created by the tasks in *reqs*.
@@ -2415,11 +2515,26 @@ class TaskArrayFunction(ArrayFunction):
         """
         cls.setup_func = func
 
+    @classmethod
+    def teardown(cls, func: Callable[[dict], None]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`teardown_func`
+        which is used to perform a custom teardown of objects at the end of processing. The function
+        should accept one argument:
+
+            - *task*, the invoking task instance.
+
+        The decorator does not return the wrapped function.
+        """
+        cls.teardown_func = func
+
     def __init__(
         self,
         *args,
+        post_init_func: Callable | law.NoValue | None = law.no_value,
         requires_func: Callable | law.NoValue | None = law.no_value,
         setup_func: Callable | law.NoValue | None = law.no_value,
+        teardown_func: Callable | law.NoValue | None = law.no_value,
         sandbox: str | law.NoValue | None = law.no_value,
         call_force: bool | law.NoValue | None = law.no_value,
         max_chunk_size: int | None = law.no_value,
@@ -2433,10 +2548,14 @@ class TaskArrayFunction(ArrayFunction):
         super().__init__(*args, **kwargs)
 
         # add class-level attributes as defaults for unset arguments (no_value)
+        if post_init_func == law.no_value:
+            post_init_func = self.__class__.post_init_func
         if requires_func == law.no_value:
             requires_func = self.__class__.requires_func
         if setup_func == law.no_value:
             setup_func = self.__class__.setup_func
+        if teardown_func == law.no_value:
+            teardown_func = self.__class__.teardown_func
         if sandbox == law.no_value:
             sandbox = self.__class__.sandbox
         if call_force == law.no_value:
@@ -2447,10 +2566,17 @@ class TaskArrayFunction(ArrayFunction):
             pick_cached_result = self.__class__.pick_cached_result
 
         # when custom funcs are passed, bind them to this instance
+        if post_init_func:
+            self.post_init_func = post_init_func.__get__(self, self.__class__)
         if requires_func:
             self.requires_func = requires_func.__get__(self, self.__class__)
         if setup_func:
             self.setup_func = setup_func.__get__(self, self.__class__)
+        if teardown_func:
+            self.teardown_func = teardown_func.__get__(self, self.__class__)
+
+        # remember if certain custom functions were called
+        self._post_init_called = False
 
         # other attributes
         self.sandbox = sandbox
@@ -2469,14 +2595,33 @@ class TaskArrayFunction(ArrayFunction):
         if attr in self.inst_dict:
             return self.inst_dict[attr]
 
+        # extra warnings for a limited period of time to ensure a smooth transition to the new
+        # task array function interface
+        if attr in {"task", "global_shift_inst", "local_shift_inst"}:
+            docs_url1 = get_docs_url("user_guide", "task_array_functions.html")
+            docs_url2 = get_docs_url("user_guide", "02_03_transition.html")
+            logger.warning_once(
+                f"taf_interface_deprected_{attr}",
+                f"direct access to attribute '{attr}' was removed in favor of a) using the 'task' "
+                "instance passed as an argument to most task array function hooks, or b) using the "
+                "correct task array function hook for the specific use case (e.g. pre_init() or "
+                f"post_init() instead of init()); see {docs_url1} and {docs_url2} for more info",
+            )
+
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
+
+    def __str__(self) -> str:
+        """
+        Returns a string representation of this TaskArrayFunction instance.
+        """
+        return self.cls_name
 
     def instantiate_dependency(self, cls: DerivableMeta, **kwargs: Any) -> TaskArrayFunction:
         """
         Controls the instantiation of a dependency given by its *cls* and arbitrary *kwargs*,
         updated by *this* instances :py:attr:`inst_dict`.
         """
-        # add inst_dict when cls is a TaskArrayFunction itself
+        # add a reference to the same inst_dict when cls is a TaskArrayFunction itself
         if TaskArrayFunction.derived_by(cls):
             kwargs.setdefault("inst_dict", self.inst_dict)
 
@@ -2534,82 +2679,140 @@ class TaskArrayFunction(ArrayFunction):
 
     @property
     def all_shifts(self) -> set[str]:
-        return self._get_all_shifts()
+        try:
+            return self._get_all_shifts()
+        except AttributeError as e:
+            raise Exception(str(e)) from e
+
+    def run_post_init(
+        self,
+        task: law.Task,
+        force: bool = False,
+        _cache: set | None = None,
+    ) -> None:
+        """
+        Recursively runs the :py:meth:`post_init_func` of this instance and all dependencies.
+        """
+        # create the call cache
+        if _cache is None:
+            _cache = set()
+
+        # run the requirements of all dependent objects
+        for dep in self.get_dependencies():
+            if isinstance(dep, TaskArrayFunction):
+                dep.run_post_init(task, force=force, _cache=_cache)
+
+        # run this instance's post init function
+        if self not in _cache and callable(self.post_init_func):
+            _cache.add(self)
+            if not self._post_init_called or force:
+                self.post_init_func(task=task)
+            self._post_init_called = True
 
     def run_requires(
         self,
-        reqs: dict | None = None,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]] | None = None,
         _cache: set | None = None,
-    ) -> dict:
+    ) -> dict[str, DotDict[str, Any]]:
         """
         Recursively runs the :py:meth:`requires_func` of this instance and all dependencies. *reqs*
         defaults to an empty dictionary which should be filled to store the requirements.
         """
-        # default requirements
+        # defaults
         if reqs is None:
-            reqs = DotDict()
+            reqs = {}
 
         # create the call cache
         if _cache is None:
             _cache = set()
 
-        # run this instance's requires function
-        if callable(self.requires_func):
-            if self.cls_name not in reqs:
-                reqs[self.cls_name] = DotDict()
-            self.requires_func(reqs[self.cls_name])
-
         # run the requirements of all dependent objects
         for dep in self.get_dependencies():
-            if isinstance(dep, TaskArrayFunction) and dep not in _cache:
-                _cache.add(dep)
-                dep.run_requires(reqs=reqs, _cache=_cache)
+            if isinstance(dep, TaskArrayFunction):
+                dep.run_requires(task, reqs=reqs, _cache=_cache)
+
+        # run this instance's requires function
+        if self not in _cache and callable(self.requires_func):
+            _cache.add(self)
+            if self.cls_name not in reqs:
+                reqs[self.cls_name] = DotDict()
+            self.requires_func(task=task, reqs=reqs[self.cls_name])
 
         return reqs
 
     def run_setup(
         self,
-        reqs: dict,
-        inputs: dict,
-        reader_targets: InsertableDict[str, law.FileSystemFileTarget] | None = None,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]] | None = None,
+        inputs: dict[str, Any] | None = None,
+        reader_targets: law.util.InsertableDict[str, law.FileSystemFileTarget] | None = None,
         _cache: set | None = None,
-    ) -> dict[str, law.FileSystemTarget]:
+    ) -> law.util.InsertableDict[str, law.FileSystemFileTarget]:
         """
         Recursively runs the :py:meth:`setup_func` of this instance and all dependencies. *reqs*
         corresponds to the requirements created by :py:func:`run_requires`, and *inputs* are their
         outputs. *reader_targets* defaults to an empty InsertableDict which should be filled to
         store targets of columnar data that are to be included in an event chunk loop.
         """
-        # default column targets
+        # defaults
+        if reqs is None:
+            reqs = {}
+        if inputs is None:
+            inputs = {}
         if reader_targets is None:
-            reader_targets = DotDict()
+            reader_targets = law.util.InsertableDict()
 
         # create the call cache
         if _cache is None:
             _cache = set()
 
+        # run the setup of all dependent objects
+        for dep in self.get_dependencies():
+            if isinstance(dep, TaskArrayFunction):
+                dep.run_setup(
+                    task,
+                    reqs=reqs,
+                    inputs=inputs,
+                    reader_targets=reader_targets,
+                    _cache=_cache,
+                )
+
         # run this instance's setup function
         if callable(self.setup_func):
+            _cache.add(self)
             if self.cls_name not in reqs:
                 reqs[self.cls_name] = DotDict()
             if self.cls_name not in inputs:
                 inputs[self.cls_name] = DotDict()
-            self.setup_func(reqs[self.cls_name], inputs[self.cls_name], reader_targets)
-
-        # run the setup of all dependent objects
-        for dep in self.get_dependencies():
-            if isinstance(dep, TaskArrayFunction) and dep not in _cache:
-                _cache.add(dep)
-                dep.run_setup(reqs, inputs, reader_targets, _cache=_cache)
+            self.setup_func(
+                task=task,
+                reqs=reqs[self.cls_name],
+                inputs=inputs[self.cls_name],
+                reader_targets=reader_targets,
+            )
 
         return reader_targets
 
-    def __call__(
-        self,
-        *args,
-        call_force: bool | None = None,
-        **kwargs,
-    ) -> Any:
+    def run_teardown(self, task: law.Task, _cache: set | None = None) -> None:
+        """
+        Recursively runs the :py:meth:`teardown_func` of this instance and all dependencies.
+        """
+        # create the call cache
+        if _cache is None:
+            _cache = set()
+
+        # run the teardown of all dependent objects
+        for dep in self.get_dependencies():
+            if isinstance(dep, TaskArrayFunction):
+                dep.run_teardown(task, _cache=_cache)
+
+        # run this instance's teardown function
+        if self not in _cache and callable(self.teardown_func):
+            _cache.add(self)
+            self.teardown_func(task=task)
+
+    def __call__(self, *args, call_force: bool | None = None, **kwargs) -> Any:
         """
         Calls the wrapped :py:meth:`call_func` with all *args* and *kwargs*. The latter is updated
         with :py:attr:`call_kwargs` when set, but giving priority to existing *kwargs*.
@@ -2675,10 +2878,11 @@ class TaskArrayFunction(ArrayFunction):
             f"multiple sandboxes found while traversing dependencies of {self.cls_name}: "
             f"{','.sandboxes}"
         )
-        if not raise_on_collision:
-            logger.warning(f"{msg}; using the first one")
-            return sandboxes[0]
-        raise Exception(msg)
+        if raise_on_collision:
+            raise Exception(msg)
+
+        logger.warning(f"{msg}; using the first one")
+        return sandboxes[0]
 
     def get_min_chunk_size(self) -> int | None:
         """
@@ -2702,7 +2906,7 @@ class NoThreadPool(object):
 
     class SyncResult(object):
 
-        def __init__(self, return_value: Any):
+        def __init__(self, return_value: Any) -> None:
             super().__init__()
             self.return_value = return_value
 
@@ -2712,7 +2916,7 @@ class NoThreadPool(object):
         def get(self) -> Any:
             return self.return_value
 
-    def __init__(self, processes: int):
+    def __init__(self, processes: int) -> None:
         super().__init__()
 
         self._processes = processes
@@ -2752,12 +2956,12 @@ class TaskQueue(object):
     # task object
     Task = namedtuple("Task", ["func", "args", "kwargs"])
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
         self._tasks = {}
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return bool(self._tasks)
 
     def add(
@@ -2818,7 +3022,7 @@ class DaskArrayReader(object):
         path: str,
         open_options: dict | None = None,
         materialization_strategy: MaterializationStrategy = MaterializationStrategy.PARTITIONS,
-    ):
+    ) -> None:
         super().__init__()
 
         open_options = open_options or {}

@@ -14,9 +14,13 @@ import order as od
 import yaml
 
 from columnflow.types import Generator, Callable, TextIO, Sequence, Any
-from columnflow.util import (
-    DerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher,
-)
+from columnflow.util import DerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url
+
+
+logger = law.logger.get_logger(__name__)
+
+
+default_dataset = law.config.get_expanded("analysis", "default_dataset")
 
 
 class ParameterType(enum.Enum):
@@ -49,11 +53,11 @@ class ParameterType(enum.Enum):
 
         :returns: *True* if the parameter type is a rate type, *False* otherwise.
         """
-        return self in (
+        return self in {
             self.rate_gauss,
             self.rate_uniform,
             self.rate_unconstrained,
-        )
+        }
 
     @property
     def is_shape(self: ParameterType) -> bool:
@@ -62,9 +66,9 @@ class ParameterType(enum.Enum):
 
         :returns: *True* if the parameter type is a shape type, *False* otherwise.
         """
-        return self in (
+        return self in {
             self.shape,
-        )
+        }
 
 
 class ParameterTransformation(enum.Enum):
@@ -105,9 +109,9 @@ class ParameterTransformation(enum.Enum):
 
         :returns: *True* if the transformation is derived from shape, *False* otherwise.
         """
-        return self in (
+        return self in {
             self.effect_from_shape,
-        )
+        }
 
     @property
     def from_rate(self: ParameterTransformation) -> bool:
@@ -116,15 +120,14 @@ class ParameterTransformation(enum.Enum):
 
         :returns: *True* if the transformation is derived from rate, *False* otherwise.
         """
-        return self in (
+        return self in {
             self.effect_from_rate,
-        )
+        }
 
 
 class ParameterTransformations(tuple):
     """
-    Container around a sequence of :py:class:`ParameterTransformation`'s with a few convenience
-    methods.
+    Container around a sequence of :py:class:`ParameterTransformation`'s with a few convenience methods.
 
     :param transformations: A sequence of :py:class:`ParameterTransformation` or their string names.
     """
@@ -139,7 +142,7 @@ class ParameterTransformations(tuple):
         :param transformations: A sequence of :py:class:`ParameterTransformation` or their string names.
         :returns: A new instance of :py:class:`ParameterTransformations`.
         """
-        # TODO: at this point one could object / complain in case incompatible transfos are used
+        # TODO: at this point one could object / complain in case incompatible trafos are used
         transformations = [
             (t if isinstance(t, ParameterTransformation) else ParameterTransformation[t])
             for t in transformations
@@ -149,7 +152,7 @@ class ParameterTransformations(tuple):
         return super().__new__(cls, transformations)
 
     @property
-    def any_from_shape(self: ParameterTransformations) -> bool:
+    def any_from_shape(self) -> bool:
         """
         Checks if any transformation is derived from shape.
 
@@ -158,7 +161,7 @@ class ParameterTransformations(tuple):
         return any(t.from_shape for t in self)
 
     @property
-    def any_from_rate(self: ParameterTransformations) -> bool:
+    def any_from_rate(self) -> bool:
         """
         Checks if any transformation is derived from rate.
 
@@ -170,6 +173,11 @@ class ParameterTransformations(tuple):
 class FlowStrategy(enum.Enum):
     """
     Strategy to handle over- and underflow bin contents.
+
+    :cvar ignore: Ignore over- and underflow bins.
+    :cvar warn: Issue a warning when over- and underflow bins are encountered.
+    :cvar remove: Remove over- and underflow bins.
+    :cvar move: Move over- and underflow bins to the first and last bin, respectively.
     """
 
     ignore = "ignore"
@@ -183,53 +191,72 @@ class FlowStrategy(enum.Enum):
 
 class InferenceModel(Derivable):
     """
-    Interface to statistical inference models with connections to config objects (such as
-    py:class:`order.Config` or :py:class:`order.Dataset`).
+    Interface to statistical inference models with connections to config objects (such as py:class:`order.Config` or
+    :py:class:`order.Dataset`).
 
-    The internal structure to describe a model looks as follows (in yaml style) and is accessible
-    through :py:attr:`model` as well as property access to its top-level objects.
+    The internal structure to describe a model looks as follows (in yaml style) and is accessible through
+    :py:attr:`model` as well as property access to its top-level objects.
 
     .. code-block:: yaml
 
         categories:
           - name: cat1
-            config_category: 1e
-            config_variable: ht
-            config_data_datasets: [data_mu_a]
+            postfix: null
+            config_data:
+              22pre_v14:
+                category: 1e
+                variable: ht
+                data_datasets: [data_mu_a]
             data_from_processes: []
-            flow_strategy: warn
             mc_stats: 10
+            flow_strategy: warn
+            rate_precision: 5
+            empty_bin_value: 1e-05
             processes:
               - name: HH
-                config_process: hh
                 is_signal: True
-                config_mc_datasets: [hh_ggf]
+                config_data:
+                  22pre_v14:
+                    process: hh
+                    mc_datasets: [hh_ggf]
                 scale: 1.0
                 is_dynamic: False
                 parameters:
                   - name: lumi
                     type: rate_gauss
                     effect: 1.02
-                    config_shift_source: null
+                    effect_precision: 4
+                    config_data: {}
+                    transformations: []
                   - name: pu
                     type: rate_gauss
                     effect: [0.97, 1.02]
-                    config_shift_source: null
+                    effect_precision: 4
+                    config_data: {}
+                    transformations: []
                   - name: pileup
                     type: shape
                     effect: 1.0
-                    config_shift_source: minbias_xs
+                    effect_precision: 4
+                    config_data:
+                      22pre_v14:
+                        shift_source: minbias_xs
+                    transformations: []
               - name: tt
                 is_signal: False
-                config_process: ttbar
-                config_mc_datasets: [tt_sl, tt_dl, tt_fh]
+                config_data:
+                  22pre_v14:
+                    process: tt
+                    mc_datasets: [tt_sl, tt_dl, tt_fh]
                 scale: 1.0
                 is_dynamic: False
                 parameters:
                   - name: lumi
                     type: rate_gauss
                     effect: 1.02
-                    config_shift_source: null
+                    effect_precision: 4
+                    config_data: {}
+                    transformations: []
 
           - name: cat2
             ...
@@ -245,17 +272,11 @@ class InferenceModel(Derivable):
 
         The unique name of this model.
 
-    .. py:attribute:: config_inst
+    .. py:attribute:: config_insts
 
-        type: order.Config, None
+        type: list[order.Config]
 
-        Reference to the :py:class:`order.Config` object.
-
-    .. py:attribute:: config_callbacks
-
-        type: list
-
-        A list of callables that are invoked after :py:meth:`set_config` was called.
+        Reference to :py:class:`order.Config` objects.
 
     .. py:attribute:: model
 
@@ -275,15 +296,15 @@ class InferenceModel(Derivable):
 
         @classmethod
         def _map_repr(cls, dumper: yaml.Dumper, data: dict) -> str:
-            return dumper.represent_dict(dict(data))
+            return dumper.represent_dict(data if isinstance(data, dict) else dict(data))
 
         @classmethod
         def _list_repr(cls, dumper: yaml.Dumper, data: list) -> str:
-            return dumper.represent_list(list(data))
+            return dumper.represent_list(data if isinstance(data, list) else list(data))
 
         @classmethod
         def _str_repr(cls, dumper: yaml.Dumper, data: str) -> str:
-            return dumper.represent_str(str(data))
+            return dumper.represent_str(data if isinstance(data, str) else str(data))
 
         def __init__(self, *args, **kwargs) -> None:
             super().__init__(*args, **kwargs)
@@ -330,6 +351,14 @@ class InferenceModel(Derivable):
         return decorator(func) if func else decorator
 
     @classmethod
+    def used_datasets(cls, config_inst: od.Config) -> list[str]:
+        """
+        Used datasets for which the `upstream_task_cls.resolve_instances` will be called.
+        Defaults to the default dataset.
+        """
+        return [default_dataset]
+
+    @classmethod
     def model_spec(cls) -> DotDict:
         """
         Returns a dictionary representing the top-level structure of the model.
@@ -346,38 +375,39 @@ class InferenceModel(Derivable):
     def category_spec(
         cls,
         name: str,
-        config_category: str | None = None,
-        config_variable: str | None = None,
-        config_data_datasets: Sequence[str] | None = None,
+        config_data: dict[str, DotDict] | None = None,
         data_from_processes: Sequence[str] | None = None,
         flow_strategy: FlowStrategy | str = FlowStrategy.warn,
         mc_stats: int | float | tuple | None = None,
+        postfix: str | None = None,
         empty_bin_value: float = 1e-5,
+        rate_precision: int = 5,
     ) -> DotDict:
         """
         Returns a dictionary representing a category (interchangeably called bin or channel in other
         tools), forwarding all arguments.
 
         :param name: The name of the category in the model.
-        :param config_category: The name of the source category in the config to use.
-        :param config_variable: The name of the variable in the config to use.
-        :param config_data_datasets: List of names or patterns of datasets in the config to use for
-            real data.
-        :param data_from_processes: Optional list of names of :py:meth:`process_spec` objects that,
-            when *config_data_datasets* is not defined, make up a fake data contribution.
-        :param flow_strategy: A :py:class:`FlowStrategy` instance describing the strategy to handle
-              over- and underflow bin contents.
-        :param mc_stats: Either *None* to disable MC stat uncertainties, or an integer, a float or
-            a tuple thereof to control the options of MC stat options.
+        :param config_data: Dictionary mapping names of :py:class:`order.Config` objects to dictionaries following the
+            :py:meth:`category_config_spec` that wrap settings like category, variable and real datasets in that config.
+        :param data_from_processes: Optional list of names of :py:meth:`process_spec` objects that, when
+            *config_data_datasets* is not defined, make up a fake data contribution.
+        :param flow_strategy: A :py:class:`FlowStrategy` instance describing the strategy to handle over- and underflow
+            bin contents.
+        :param mc_stats: Either *None* to disable MC stat uncertainties, or an integer, a float or a tuple thereof to
+            control the options of MC stat options.
+        :param postfix: A postfix that is appended to (e.g.) file names created for this model.
         :param empty_bin_value: When bins have no content, they are filled with this value.
+        :param rate_precision: The precision of reported rates.
         :returns: A dictionary representing the category.
-
         """
         return DotDict([
             ("name", str(name)),
-            ("config_category", str(config_category) if config_category else None),
-            ("config_variable", str(config_variable) if config_variable else None),
-            ("config_data_datasets", list(map(str, config_data_datasets or []))),
+            ("config_data", (
+                {k: cls.category_config_spec(**v) for k, v in config_data.items()}
+                if config_data
+                else {}
+            )),
             ("data_from_processes", list(map(str, data_from_processes or []))),
             ("flow_strategy", (
                 flow_strategy
@@ -385,7 +415,9 @@ class InferenceModel(Derivable):
                 else FlowStrategy[flow_strategy]
             )),
             ("mc_stats", mc_stats),
+            ("postfix", str(postfix) if postfix else None),
             ("empty_bin_value", empty_bin_value),
+            ("rate_precision", rate_precision),
             ("processes", []),
         ])
 
@@ -393,9 +425,8 @@ class InferenceModel(Derivable):
     def process_spec(
         cls,
         name: str,
-        config_process: str | None = None,
         is_signal: bool = False,
-        config_mc_datasets: Sequence[str] | None = None,
+        config_data: dict[str, DotDict] | None = None,
         scale: float | int = 1.0,
         is_dynamic: bool = False,
     ) -> DotDict:
@@ -404,18 +435,21 @@ class InferenceModel(Derivable):
 
         :param name: The name of the process in the model.
         :param is_signal: A boolean flag deciding whether this process describes signal.
-        :param config_process: The name of the source process in the config to use.
-        :param config_mc_datasets: List of names or patterns of MC datasets in the config to use.
+        :param config_data: Dictionary mapping names of :py:class:`order.Config` objects to dictionaries following the
+            :py:meth:`process_config_spec` that wrap settings like process and mc datasets in that config.
         :param scale: A float value to scale the process, defaulting to 1.0.
-        :param is_dynamic: A boolean flag deciding whether this process is dynamic, i.e., whether it
-            is created on-the-fly.
+        :param is_dynamic: A boolean flag deciding whether this process is dynamic, i.e., whether it is created
+            on-the-fly.
         :returns: A dictionary representing the process.
         """
         return DotDict([
             ("name", str(name)),
             ("is_signal", bool(is_signal)),
-            ("config_process", str(config_process) if config_process else None),
-            ("config_mc_datasets", list(map(str, config_mc_datasets or []))),
+            ("config_data", (
+                {k: cls.process_config_spec(**v) for k, v in config_data.items()}
+                if config_data
+                else {}
+            )),
             ("scale", float(scale)),
             ("is_dynamic", bool(is_dynamic)),
             ("parameters", []),
@@ -426,29 +460,36 @@ class InferenceModel(Derivable):
         cls,
         name: str,
         type: ParameterType | str,
-        transformations: Sequence[ParameterTransformation | str] = (ParameterTransformation.none,),
-        config_shift_source: str | None = None,
+        transformations: Sequence[ParameterTransformation | str] = (),
+        config_data: dict[str, DotDict] | None = None,
         effect: Any | None = 1.0,
+        effect_precision: int = 4,
     ) -> DotDict:
         """
         Returns a dictionary representing a (nuisance) parameter, forwarding all arguments.
 
         :param name: The name of the parameter in the model.
         :param type: A :py:class:`ParameterType` instance describing the type of this parameter.
-        :param transformations: A sequence of :py:class:`ParameterTransformation` instances
-            describing transformations to be applied to the effect of this parameter.
-        :param config_shift_source: The name of a systematic shift source in the config that this
-            parameter corresponds to.
-        :param effect: An arbitrary object describing the effect of the parameter (e.g. float for
-            symmetric rate effects, 2-tuple for down/up variation, etc).
+        :param transformations: A sequence of :py:class:`ParameterTransformation` instances describing transformations
+            to be applied to the effect of this parameter.
+        :param config_data: Dictionary mapping names of :py:class:`order.Config` objects to dictionaries following the
+            :py:meth:`parameter_config_spec` that wrap settings like corresponding shift source in that config.
+        :param effect: An arbitrary object describing the effect of the parameter (e.g. float for symmetric rate
+            effects, 2-tuple for down/up variation, etc).
+        :param effect_precision: The precision of reported effects.
         :returns: A dictionary representing the parameter.
         """
         return DotDict([
             ("name", str(name)),
             ("type", type if isinstance(type, ParameterType) else ParameterType[type]),
             ("transformations", ParameterTransformations(transformations)),
-            ("config_shift_source", str(config_shift_source) if config_shift_source else None),
+            ("config_data", (
+                {k: cls.parameter_config_spec(**v) for k, v in config_data.items()}
+                if config_data
+                else {}
+            )),
             ("effect", effect),
+            ("effect_precision", effect_precision),
         ])
 
     @classmethod
@@ -467,6 +508,60 @@ class InferenceModel(Derivable):
         return DotDict([
             ("name", str(name)),
             ("parameter_names", list(map(str, parameter_names or []))),
+        ])
+
+    @classmethod
+    def category_config_spec(
+        cls,
+        category: str | None = None,
+        variable: str | None = None,
+        data_datasets: Sequence[str] | None = None,
+    ) -> DotDict:
+        """
+        Returns a dictionary representing configuration specific data, forwarding all arguments.
+
+        :param category: The name of the source category in the config to use.
+        :param variable: The name of the variable in the config to use.
+        :param data_datasets: List of names or patterns of datasets in the config to use for real data.
+        :returns: A dictionary representing category specific settings.
+        """
+        return DotDict([
+            ("category", str(category) if category else None),
+            ("variable", str(variable) if variable else None),
+            ("data_datasets", list(map(str, data_datasets or []))),
+        ])
+
+    @classmethod
+    def process_config_spec(
+        cls,
+        process: str | None = None,
+        mc_datasets: Sequence[str] | None = None,
+    ) -> DotDict:
+        """
+        Returns a dictionary representing configuration specific data, forwarding all arguments.
+
+        :param process: The name of the process in the config to use.
+        :param mc_datasets: List of names or patterns of datasets in the config to use for mc.
+        :returns: A dictionary representing process specific settings.
+        """
+        return DotDict([
+            ("process", str(process) if process else None),
+            ("mc_datasets", list(map(str, mc_datasets or []))),
+        ])
+
+    @classmethod
+    def parameter_config_spec(
+        cls,
+        shift_source: str | None = None,
+    ) -> DotDict:
+        """
+        Returns a dictionary representing configuration specific data, forwarding all arguments.
+
+        :param shift_source: The name of a systematic shift source in the config.
+        :returns: A dictionary representing parameter specific settings.
+        """
+        return DotDict([
+            ("shift_source", str(shift_source) if shift_source else None),
         ])
 
     @classmethod
@@ -498,11 +593,14 @@ class InferenceModel(Derivable):
             f"'{param_obj.type}' and transformations {param_obj.transformations}",
         )
 
-    def __init__(self, config_inst: od.Config) -> None:
+    def __init__(self, config_insts: list[od.Config]) -> None:
         super().__init__()
 
         # store attributes
-        self.config_inst = config_inst
+        self.config_insts = config_insts
+
+        # temporary attributes for as long as we issue deprecation warnings
+        self.__config_inst = None
 
         # model info
         self.model = self.model_spec()
@@ -531,6 +629,28 @@ class InferenceModel(Derivable):
     # property access to top-level objects
     #
 
+    # !! to be removed in a future release
+    @property
+    def config_inst(self) -> od.Config:
+        if self.__config_inst:
+            return self.__config_inst
+
+        # trigger a verbose warning in case the deprecated attribute is accessed
+        docs_url = get_docs_url("user_guide", "02_03_transition.html")
+        api_url = get_docs_url("api", "inference", "index.html", anchor="columnflow.inference.InferenceModel")
+        logger.warning_once(
+            "inference_model_deprected_config_inst",
+            "access to attribute 'config_inst' in inference model was removed; use 'config_insts' instead; also, make "
+            "sure to use the new 'config_data' attribute in 'add_category()' for a more fine-grained control over the "
+            f"composition of your inference model categories; see {docs_url} and {api_url} for more info",
+        )
+
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute 'config_inst'")
+
+    @config_inst.setter
+    def config_inst(self, config_inst: od.Config) -> None:
+        self.__config_inst = config_inst
+
     @property
     def categories(self) -> DotDict:
         return self.model.categories
@@ -547,6 +667,7 @@ class InferenceModel(Derivable):
         self,
         category: str | Sequence[str] | None = None,
         only_names: bool = False,
+        match_mode: Callable = any,
     ) -> list[DotDict | str]:
         """
         Returns a list of categories whose name match *category*. *category* can be a string, a
@@ -555,12 +676,14 @@ class InferenceModel(Derivable):
 
         :param category: A string, pattern, or sequence of them to match category names.
         :param only_names: A boolean flag to return only names of categories if set to *True*.
+        :param match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: A list of matching categories or their names.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
 
-        match = pattern_matcher(category_pattern or "*")
+        match = pattern_matcher(category_pattern or "*", mode=match_mode)
         return [
             (category.name if only_names else category)
             for category in self.categories
@@ -571,6 +694,7 @@ class InferenceModel(Derivable):
         self,
         category: str | Sequence[str],
         only_name: bool = False,
+        match_mode: Callable = any,
         silent: bool = False,
     ) -> DotDict | str:
         """
@@ -580,15 +704,17 @@ class InferenceModel(Derivable):
         *True*, only the name of the category is returned rather than a structured dictionary.
 
         :param category: A string, pattern, or sequence of them to match category names.
-        :param silent: A boolean flag to return *None* instead of raising an exception if no or
-            more than one category is found.
         :param only_name: A boolean flag to return only the name of the category if set to *True*.
+        :param match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param silent: A boolean flag to return *None* instead of raising an exception if no or more than one category
+            is found.
         :returns: A single matching category or its name.
         """
         # rename arguments to make their meaning explicit
         category_name = category
 
-        categories = self.get_categories(category_name, only_names=only_name)
+        categories = self.get_categories(category_name, only_names=only_name, match_mode=match_mode)
 
         # length checks
         if not categories:
@@ -605,19 +731,22 @@ class InferenceModel(Derivable):
     def has_category(
         self,
         category: str | Sequence[str],
+        match_mode: Callable = any,
     ) -> bool:
         """
         Returns *True* if a category whose name matches *category* is existing, and *False*
         otherwise. *category* can be a string, a pattern, or sequence of them.
 
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if a matching category exists, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
 
         # simple length check
-        return len(self.get_categories(category_pattern)) > 0
+        return len(self.get_categories(category_pattern, only_names=True, match_mode=match_mode)) > 0
 
     def add_category(self, *args, **kwargs) -> None:
         """
@@ -640,17 +769,20 @@ class InferenceModel(Derivable):
     def remove_category(
         self,
         category: str | Sequence[str],
+        match_mode: Callable = any,
     ) -> bool:
         """
         Removes one or more categories whose names match *category*.
 
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if at least one category was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
 
-        match = pattern_matcher(category_pattern)
+        match = pattern_matcher(category_pattern, mode=match_mode)
         n_before = len(self.categories)
         self.categories[:] = [
             category
@@ -675,6 +807,8 @@ class InferenceModel(Derivable):
         category: str | Sequence[str] | None = None,
         only_names: bool = False,
         flat: bool = False,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
     ) -> dict[str, DotDict | str] | list[str]:
         """
         Returns a dictionary of processes whose names match *process*, mapped to the name of the
@@ -687,6 +821,10 @@ class InferenceModel(Derivable):
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to filter categories.
         :param only_names: A boolean flag to return only names of processes if set to *True*.
+        :param match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :param flat: A boolean flag to return a flat, unique list of process names if set to *True*.
         :returns: A dictionary of processes mapped to the category name, or a list of process names.
         """
@@ -699,10 +837,10 @@ class InferenceModel(Derivable):
             only_names = True
 
         # get matching categories first
-        categories = self.get_categories(category_pattern)
+        categories = self.get_categories(category_pattern, match_mode=category_match_mode)
 
         # look for the process pattern in each of them
-        match = pattern_matcher(process_pattern or "*")
+        match = pattern_matcher(process_pattern or "*", mode=match_mode)
         pairs = (
             (category.name, [
                 (process.name if only_names else process)
@@ -726,6 +864,8 @@ class InferenceModel(Derivable):
         process: str | Sequence[str],
         category: str | Sequence[str] | None = None,
         only_name: bool = False,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
         silent: bool = False,
     ) -> DotDict | str:
         """
@@ -739,9 +879,13 @@ class InferenceModel(Derivable):
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
-        :param silent: A boolean flag to return *None* instead of raising an exception if no or
-            more than one process is found.
         :param only_name: A boolean flag to return only the name of the process if set to *True*.
+        :param match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param silent: A boolean flag to return *None* instead of raising an exception if no or more than one process is
+            found.
         :returns: A single matching process or its name.
         :raises ValueError: If no process or more than one process is found and *silent* is *False*.
         """
@@ -753,6 +897,8 @@ class InferenceModel(Derivable):
             process_name,
             category=category_pattern,
             only_names=only_name,
+            match_mode=match_mode,
+            category_match_mode=category_match_mode,
         )
 
         # checks
@@ -786,6 +932,8 @@ class InferenceModel(Derivable):
         self,
         process: str | Sequence[str],
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
     ) -> bool:
         """
         Returns *True* if a process whose name matches *process*, and optionally whose category's
@@ -794,6 +942,10 @@ class InferenceModel(Derivable):
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if a matching process exists, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
@@ -801,12 +953,19 @@ class InferenceModel(Derivable):
         category_pattern = category
 
         # simple length check
-        return len(self.get_processes(process_pattern, category=category_pattern)) > 0
+        return len(self.get_processes(
+            process_pattern,
+            category=category_pattern,
+            only_names=True,
+            match_mode=match_mode,
+            category_match_mode=category_match_mode,
+        )) > 0
 
     def add_process(
         self,
         *args,
         category: str | Sequence[str] | None = None,
+        category_match_mode: Callable = any,
         silent: bool = False,
         **kwargs,
     ) -> None:
@@ -820,11 +979,12 @@ class InferenceModel(Derivable):
 
         :param args: Positional arguments used to create the process.
         :param category: A string, pattern, or sequence of them to match category names.
-        :param silent: A boolean flag to suppress exceptions if a process with the same name
-            already exists.
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param silent: A boolean flag to suppress exceptions if a process with the same name already exists.
         :param kwargs: Keyword arguments used to create the process.
-        :raises ValueError: If a process with the same name already exists in one of the
-            categories and *silent* is *False*.
+        :raises ValueError: If a process with the same name already exists in one of the categories and *silent* is
+            *False*.
         """
         # rename arguments to make their meaning explicit
         category_pattern = category
@@ -832,7 +992,7 @@ class InferenceModel(Derivable):
         process = self.process_spec(*args, **kwargs)
 
         # get categories the process should be added to
-        categories = self.get_categories(category_pattern)
+        categories = self.get_categories(category_pattern, match_mode=category_match_mode)
 
         # check for duplicates
         target_categories = []
@@ -854,6 +1014,8 @@ class InferenceModel(Derivable):
         self,
         process: str | Sequence[str],
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
     ) -> bool:
         """
         Removes one or more processes whose names match *process*, and optionally whose category's
@@ -862,6 +1024,10 @@ class InferenceModel(Derivable):
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if at least one process was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
@@ -869,9 +1035,9 @@ class InferenceModel(Derivable):
         category_pattern = category
 
         # get categories the process should be removed from
-        categories = self.get_categories(category_pattern)
+        categories = self.get_categories(category_pattern, match_mode=category_match_mode)
 
-        match = pattern_matcher(process_pattern)
+        match = pattern_matcher(process_pattern, mode=match_mode)
         removed_any = False
         for category in categories:
             n_before = len(category.processes)
@@ -897,6 +1063,9 @@ class InferenceModel(Derivable):
         parameter: str | Sequence[str] | None = None,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
+        process_match_mode: Callable = any,
         only_names: bool = False,
         flat: bool = False,
     ) -> dict[str, dict[str, DotDict | str]] | list[str]:
@@ -912,10 +1081,15 @@ class InferenceModel(Derivable):
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param process_match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
         :param only_names: A boolean flag to return only names of parameters if set to *True*.
         :param flat: A boolean flag to return a flat, unique list of parameter names if set to *True*.
-        :returns: A dictionary of parameters mapped to category and process names, or a list of
-            parameter names.
+        :returns: A dictionary of parameters mapped to category and process names, or a list of parameter names.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
@@ -927,10 +1101,15 @@ class InferenceModel(Derivable):
             only_names = True
 
         # get matching processes (mapped to matching categories)
-        processes = self.get_processes(process=process_pattern, category=category_pattern)
+        processes = self.get_processes(
+            process=process_pattern,
+            category=category_pattern,
+            match_mode=process_match_mode,
+            category_match_mode=category_match_mode,
+        )
 
         # look for the process pattern in each pair
-        match = pattern_matcher(parameter_pattern or "*")
+        match = pattern_matcher(parameter_pattern or "*", mode=match_mode)
         parameters = DotDict()
         for category_name, _processes in processes.items():
             pairs = (
@@ -961,6 +1140,9 @@ class InferenceModel(Derivable):
         parameter: str | Sequence[str],
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
+        process_match_mode: Callable = any,
         only_name: bool = False,
         silent: bool = False,
     ) -> DotDict | str:
@@ -976,9 +1158,15 @@ class InferenceModel(Derivable):
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param process_match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
         :param only_name: A boolean flag to return only the name of the parameter if set to *True*.
-        :param silent: A boolean flag to return *None* instead of raising an exception if no or more
-            than one parameter is found.
+        :param silent: A boolean flag to return *None* instead of raising an exception if no or more than one parameter
+            is found.
         :returns: A single matching parameter or its name.
         :raises ValueError: If no parameter or more than one parameter is found and *silent* is *False*.
         """
@@ -991,6 +1179,9 @@ class InferenceModel(Derivable):
             parameter_name,
             process=process_pattern,
             category=category_pattern,
+            match_mode=match_mode,
+            category_match_mode=category_match_mode,
+            process_match_mode=process_match_mode,
             only_names=only_name,
         )
 
@@ -1038,6 +1229,9 @@ class InferenceModel(Derivable):
         parameter: str | Sequence[str],
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
+        process_match_mode: Callable = any,
     ) -> bool:
         """
         Returns *True* if a parameter whose name matches *parameter*, and optionally whose
@@ -1048,6 +1242,12 @@ class InferenceModel(Derivable):
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param process_match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if a matching parameter exists, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
@@ -1060,6 +1260,9 @@ class InferenceModel(Derivable):
             parameter_pattern,
             process=process_pattern,
             category=category_pattern,
+            match_mode=match_mode,
+            category_match_mode=category_match_mode,
+            process_match_mode=process_match_mode,
         )) > 0
 
     def add_parameter(
@@ -1067,29 +1270,34 @@ class InferenceModel(Derivable):
         *args,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        category_match_mode: Callable = any,
+        process_match_mode: Callable = any,
         group: str | Sequence[str] | None = None,
         **kwargs,
     ) -> DotDict:
         """
-        Adds a new parameter to all categories and processes whose names match *category* and
-        *process*, with all *args* and *kwargs* used to create the structured parameter dictionary
-        via :py:meth:`parameter_spec`. Both *process* and *category* can be a string, a pattern, or
-        sequence of them.
+        Adds a parameter to all categories and processes whose names match *category* and *process*, with all *args* and
+        *kwargs* used to create the structured parameter dictionary via :py:meth:`parameter_spec`. Both *process* and
+        *category* can be a string, a pattern, or sequence of them.
 
-        When *group* is given, the parameter is added to one or more parameter groups via
+        If a parameter with the same name already exists in one of the processes throughout the categories, an exception
+        is raised.
+
+        When *group* is given and the parameter is new, it is added to one or more parameter groups via
         :py:meth:`add_parameter_to_group`.
-
-        If a parameter with the same name already exists in one of the processes throughout the
-        categories, an exception is raised.
 
         :param args: Positional arguments used to create the parameter.
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param process_match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
         :param group: A string, pattern, or sequence of them to specify parameter groups.
         :param kwargs: Keyword arguments used to create the parameter.
         :returns: The created parameter.
-        :raises ValueError: If a parameter with the same name already exists in one of the processes
-            throughout the categories.
+        :raises ValueError: If a parameter with the same name already exists in one of the processes throughout the
+            categories.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
@@ -1098,7 +1306,12 @@ class InferenceModel(Derivable):
         parameter = self.parameter_spec(*args, **kwargs)
 
         # get processes (mapped to categories) the parameter should be added to
-        processes = self.get_processes(process=process_pattern, category=category_pattern)
+        processes = self.get_processes(
+            process=process_pattern,
+            category=category_pattern,
+            match_mode=process_match_mode,
+            category_match_mode=category_match_mode,
+        )
 
         # check for duplicates
         for category_name, _processes in processes.items():
@@ -1125,6 +1338,9 @@ class InferenceModel(Derivable):
         parameter: str | Sequence[str],
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
+        process_match_mode: Callable = any,
     ) -> bool:
         """
         Removes one or more parameters whose names match *parameter*, and optionally whose
@@ -1134,6 +1350,12 @@ class InferenceModel(Derivable):
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param process_match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if at least one parameter was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
@@ -1142,9 +1364,14 @@ class InferenceModel(Derivable):
         category_pattern = category
 
         # get processes (mapped to categories) the parameter should be removed from
-        processes = self.get_processes(process=process_pattern, category=category_pattern)
+        processes = self.get_processes(
+            process=process_pattern,
+            category=category_pattern,
+            match_mode=process_match_mode,
+            category_match_mode=category_match_mode,
+        )
 
-        match = pattern_matcher(parameter_pattern)
+        match = pattern_matcher(parameter_pattern, mode=match_mode)
         removed_any = False
         for _processes in processes.values():
             for process in _processes:
@@ -1169,6 +1396,7 @@ class InferenceModel(Derivable):
     def get_parameter_groups(
         self,
         group: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
         only_names: bool = False,
     ) -> list[DotDict | str]:
         """
@@ -1179,13 +1407,15 @@ class InferenceModel(Derivable):
         structured dictionaries.
 
         :param group: A string, pattern, or sequence of them to match group names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
+            :py:func:`pattern_matcher`).
         :param only_names: A boolean flag to return only names of parameter groups if set to *True*.
         :returns: A list of parameter groups or their names.
         """
         # rename arguments to make their meaning explicit
         group_pattern = group
 
-        match = pattern_matcher(group_pattern or "*")
+        match = pattern_matcher(group_pattern or "*", mode=match_mode)
         return [
             (group.name if only_names else group)
             for group in self.parameter_groups
@@ -1195,6 +1425,7 @@ class InferenceModel(Derivable):
     def get_parameter_group(
         self,
         group: str | Sequence[str],
+        match_mode: Callable = any,
         only_name: bool = False,
     ) -> DotDict | str:
         """
@@ -1206,6 +1437,8 @@ class InferenceModel(Derivable):
         structured dictionary.
 
         :param group: A string, pattern, or sequence of them to match group names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
+            :py:func:`pattern_matcher`).
         :param only_name: A boolean flag to return only the name of the parameter group if set to *True*.
         :returns: A single matching parameter group or its name.
         :raises ValueError: If no parameter group or more than one parameter group is found.
@@ -1213,7 +1446,7 @@ class InferenceModel(Derivable):
         # rename arguments to make their meaning explicit
         group_name = group
 
-        groups = self.get_parameter_groups(group_name, only_names=only_name)
+        groups = self.get_parameter_groups(group_name, match_mode=match_mode, only_names=only_name)
 
         # checks
         if not groups:
@@ -1226,19 +1459,22 @@ class InferenceModel(Derivable):
     def has_parameter_group(
         self,
         group: str | Sequence[str],
+        match_mode: Callable = any,
     ) -> bool:
         """
         Returns *True* if a parameter group whose name matches *group* exists, and *False*
         otherwise. *group* can be a string, a pattern, or sequence of them.
 
         :param group: A string, pattern, or sequence of them to match group names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if a matching parameter group exists, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         group_pattern = group
 
         # simeple length check
-        return len(self.get_parameter_groups(group_pattern)) > 0
+        return len(self.get_parameter_groups(group_pattern, match_mode=match_mode)) > 0
 
     def add_parameter_group(self, *args, **kwargs) -> None:
         """
@@ -1262,6 +1498,7 @@ class InferenceModel(Derivable):
     def remove_parameter_group(
         self,
         group: str | Sequence[str],
+        match_mode: Callable = any,
     ) -> bool:
         """
         Removes one or more parameter groups whose names match *group*. *group* can be a string, a
@@ -1269,12 +1506,14 @@ class InferenceModel(Derivable):
         otherwise.
 
         :param group: A string, pattern, or sequence of them to match group names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if at least one group was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
         group_pattern = group
 
-        match = pattern_matcher(group_pattern)
+        match = pattern_matcher(group_pattern, mode=match_mode)
         n_before = len(self.parameter_groups)
         self.parameter_groups[:] = [
             group
@@ -1289,6 +1528,8 @@ class InferenceModel(Derivable):
         self,
         parameter: str | Sequence[str],
         group: str | Sequence[str],
+        match_mode: Callable = any,
+        parameter_match_mode: Callable = any,
     ) -> bool:
         """
         Adds a parameter named *parameter* to one or multiple parameter groups whose names match
@@ -1299,6 +1540,10 @@ class InferenceModel(Derivable):
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param group: A string, pattern, or sequence of them to match group names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param parameter_match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if at least one parameter was added to a group, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
@@ -1306,7 +1551,7 @@ class InferenceModel(Derivable):
         group_pattern = group
 
         # stop when there are no matching groups
-        groups = self.get_parameter_groups(group_pattern)
+        groups = self.get_parameter_groups(group_pattern, match_mode=match_mode)
         if not groups:
             return False
 
@@ -1314,7 +1559,7 @@ class InferenceModel(Derivable):
         _is_pattern = lambda s: is_pattern(s) or is_regex(s)
         parameter_pattern = law.util.make_list(parameter_pattern)
         if any(map(_is_pattern, parameter_pattern)):
-            parameter_names = self.get_parameters(parameter_pattern, flat=True)
+            parameter_names = self.get_parameters(parameter_pattern, flat=True, match_mode=parameter_match_mode)
         else:
             parameter_names = parameter_pattern
 
@@ -1332,6 +1577,8 @@ class InferenceModel(Derivable):
         self,
         parameter: str | Sequence[str],
         group: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        parameter_match_mode: Callable = any,
     ) -> bool:
         """
         Removes all parameters matching *parameter* from parameter groups whose names match *group*.
@@ -1340,6 +1587,10 @@ class InferenceModel(Derivable):
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param group: A string, pattern, or sequence of them to match group names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param parameter_match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if at least one parameter was removed, *False* otherwise.
         """
         # rename arguments to make their meaning explicit
@@ -1347,11 +1598,11 @@ class InferenceModel(Derivable):
         group_pattern = group
 
         # stop when there are no matching groups
-        groups = self.get_parameter_groups(group_pattern)
+        groups = self.get_parameter_groups(group_pattern, match_mode=match_mode)
         if not groups:
             return False
 
-        match = pattern_matcher(parameter_pattern)
+        match = pattern_matcher(parameter_pattern, mode=parameter_match_mode)
         removed_any = False
         for group in groups:
             n_before = len(group.parameter_names)
@@ -1371,24 +1622,29 @@ class InferenceModel(Derivable):
     def get_categories_with_process(
         self,
         process: str | Sequence[str],
+        match_mode: Callable = any,
     ) -> list[str]:
         """
         Returns a flat list of category names that contain processes matching *process*. *process*
         can be a string, a pattern, or sequence of them.
 
         :param process: A string, pattern, or sequence of them to match process names.
+        :param match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: A list of category names containing matching processes.
         """
         # rename arguments to make their meaning explicit
         process_pattern = process
 
         # plain name lookup
-        return list(self.get_processes(process=process_pattern, only_names=True).keys())
+        return list(self.get_processes(process=process_pattern, match_mode=match_mode, only_names=True).keys())
 
     def get_processes_with_parameter(
         self,
         parameter: str | Sequence[str],
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
         flat: bool = True,
     ) -> list[str] | dict[str, list[str]]:
         """
@@ -1400,6 +1656,10 @@ class InferenceModel(Derivable):
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :param flat: A boolean flag to return a flat, unique list of process names if set to *True*.
         :returns: A dictionary of process names mapped to category names, or a flat list of process names.
         """
@@ -1410,6 +1670,8 @@ class InferenceModel(Derivable):
         processes = self.get_parameters(
             parameter=parameter_pattern,
             category=category_pattern,
+            match_mode=match_mode,
+            category_match_mode=category_match_mode,
             only_names=True,
         )
 
@@ -1429,6 +1691,8 @@ class InferenceModel(Derivable):
         self,
         parameter: str | Sequence[str],
         process: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        process_match_mode: Callable = any,
         flat: bool = True,
     ) -> list[str] | dict[str, list[str]]:
         """
@@ -1440,6 +1704,10 @@ class InferenceModel(Derivable):
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param process_match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
         :param flat: A boolean flag to return a flat, unique list of category names if set to *True*.
         :returns: A dictionary of category names mapped to process names, or a flat list of category names.
         """
@@ -1450,6 +1718,8 @@ class InferenceModel(Derivable):
         categories = self.get_parameters(
             parameter=parameter_pattern,
             process=process_pattern,
+            match_mode=match_mode,
+            process_match_mode=process_match_mode,
             only_names=True,
         )
 
@@ -1468,18 +1738,21 @@ class InferenceModel(Derivable):
     def get_groups_with_parameter(
         self,
         parameter: str | Sequence[str],
+        match_mode: Callable = any,
     ) -> list[str]:
         """
         Returns a list of names of parameter groups that contain a parameter whose name matches
         *parameter*. *parameter* can be a string, a pattern, or sequence of them.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: A list of names of parameter groups containing the matching parameter.
         """
         # rename arguments to make their meaning explicit
         parameter_pattern = parameter
 
-        match = pattern_matcher(parameter_pattern)
+        match = pattern_matcher(parameter_pattern, mode=match_mode)
         return [
             group.name
             for group in self.parameter_groups
@@ -1518,19 +1791,23 @@ class InferenceModel(Derivable):
     def remove_dangling_parameters_from_groups(
         self,
         keep_parameters: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
     ) -> None:
         """
         Removes names of parameters from parameter groups that are not assigned to any process in
         any category.
 
         :param keep_parameters: A string, pattern, or sequence of them to specify parameters to keep.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
         """
         # get a list of all parameters
         parameter_names = self.get_parameters("*", flat=True)
 
-        # get list of parameters to keep
+        # get set of parameters to keep
+        _keep_parameters = set()
         if keep_parameters:
-            keep_parameters = self.get_parameters(keep_parameters, flat=True)
+            _keep_parameters = set(self.get_parameters(keep_parameters, match_mode=match_mode, flat=True))
 
         # go through groups and remove dangling parameters
         for group in self.parameter_groups:
@@ -1539,7 +1816,7 @@ class InferenceModel(Derivable):
                 for parameter_name in group.parameter_names
                 if (
                     parameter_name in parameter_names or
-                    (keep_parameters and parameter_name in keep_parameters)
+                    (_keep_parameters and parameter_name in _keep_parameters)
                 )
             ]
 
@@ -1561,6 +1838,8 @@ class InferenceModel(Derivable):
         self,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
     ) -> Generator[tuple[DotDict, DotDict], None, None]:
         """
         Generator that iteratively yields all processes whose names match *process*, optionally
@@ -1569,9 +1848,18 @@ class InferenceModel(Derivable):
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: A generator yielding 2-tuples of category name and process object.
         """
-        processes = self.get_processes(process=process, category=category)
+        processes = self.get_processes(
+            process=process,
+            category=category,
+            match_mode=match_mode,
+            category_match_mode=category_match_mode,
+        )
         for category_name, processes in processes.items():
             for process in processes:
                 yield (category_name, process)
@@ -1581,6 +1869,9 @@ class InferenceModel(Derivable):
         parameter: str | Sequence[str] | None = None,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
+        process_match_mode: Callable = any,
     ) -> Generator[tuple[DotDict, DotDict, DotDict], None, None]:
         """
         Generator that iteratively yields all parameters whose names match *parameter*, optionally
@@ -1590,9 +1881,22 @@ class InferenceModel(Derivable):
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param process_match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: A generator yielding 3-tuples of category name, process name, and parameter object.
         """
-        parameters = self.get_parameters(parameter=parameter, process=process, category=category)
+        parameters = self.get_parameters(
+            parameter=parameter,
+            process=process,
+            category=category,
+            match_mode=match_mode,
+            category_match_mode=category_match_mode,
+            process_match_mode=process_match_mode,
+        )
         for category_name, parameters in parameters.items():
             for process_name, parameters in parameters.items():
                 for parameter in parameters:
@@ -1607,6 +1911,8 @@ class InferenceModel(Derivable):
         scale: int | float,
         process: str | Sequence[str] | None = None,
         category: str | Sequence[str] | None = None,
+        match_mode: Callable = any,
+        category_match_mode: Callable = any,
     ) -> bool:
         """
         Sets the scale attribute of all processes whose names match *process*, optionally in all
@@ -1615,10 +1921,19 @@ class InferenceModel(Derivable):
         :param scale: The scale value to set for the matching processes.
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
+        :param match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
+            :py:func:`pattern_matcher`).
+        :param category_match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
+            :py:func:`pattern_matcher`).
         :returns: *True* if at least one process was found and scaled, *False* otherwise.
         """
         found = False
-        for _, process in self.iter_processes(process=process, category=category):
+        for _, process in self.iter_processes(
+            process=process,
+            category=category,
+            match_mode=match_mode,
+            category_match_mode=category_match_mode,
+        ):
             process.scale = float(scale)
             found = True
         return found

@@ -12,8 +12,9 @@ import abc
 import law
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, primes, InsertableDict
+from columnflow.util import maybe_import, primes, DotDict
 from columnflow.columnar_util import Route, set_ak_column, optional_column as optional
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -137,7 +138,7 @@ def deterministic_event_seeds(self, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @deterministic_event_seeds.init
-def deterministic_event_seeds_init(self) -> None:
+def deterministic_event_seeds_init(self, **kwargs) -> None:
     """
     Producer initialization that adds columns to the set of *used* columns based on the
     *event_columns*, *object_count_columns*, and *object_columns* lists.
@@ -150,9 +151,11 @@ def deterministic_event_seeds_init(self) -> None:
 @deterministic_event_seeds.setup
 def deterministic_event_seeds_setup(
     self,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     """
     Setup function that defines conventions methods needed during the producer function.
@@ -227,15 +230,17 @@ class deterministic_object_seeds(Producer):
 
         return events
 
-    def init_func(self) -> None:
+    def init_func(self, **kwargs) -> None:
         self.uses |= {f"{self.object_field}.pt"}
         self.produces |= {f"{self.object_field}.deterministic_seed"}
 
     def setup_func(
         self,
-        reqs: dict,
-        inputs: dict,
-        reader_targets: InsertableDict,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]],
+        inputs: dict[str, Any],
+        reader_targets: law.util.InsertableDict,
+        **kwargs,
     ) -> None:
         """Setup before entering the event chunk loop.
 

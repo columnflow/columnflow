@@ -28,6 +28,8 @@ from columnflow.plotting.plot_util import (
     blind_sensitive_bins,
     join_labels,
 )
+from columnflow.hist_util import add_missing_shifts
+
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -161,6 +163,11 @@ def plot_shifted_variable(
     hists = apply_process_settings(hists, process_settings)
     hists = apply_density_to_hists(hists, density)
 
+    # add missing shifts to all histograms
+    all_shifts = set.union(*[set(h.axes["shift"]) for h in hists.values()])
+    for h in hists.values():
+        add_missing_shifts(h, all_shifts, str_axis="shift", nominal_bin="nominal")
+
     # create the sum of histograms over all processes
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
 
@@ -171,12 +178,12 @@ def plot_shifted_variable(
         "up": "red",
         "down": "blue",
     }
-    for i, shift_id in enumerate(h_sum.axes["shift"]):
-        shift_inst = config_inst.get_shift(shift_id)
+    for i, shift_name in enumerate(h_sum.axes["shift"]):
+        shift_inst = config_inst.get_shift(shift_name)
 
-        h = h_sum[{"shift": hist.loc(shift_id)}]
+        h = h_sum[{"shift": hist.loc(shift_name)}]
         # assuming `nominal` always has shift id 0
-        ratio_norm = h_sum[{"shift": hist.loc(0)}].values()
+        ratio_norm = h_sum[{"shift": hist.loc("nominal")}].values()
 
         diff = sum(h.values()) / sum(ratio_norm) - 1
         label = shift_inst.label

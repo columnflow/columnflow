@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 import law
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
-from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
+from columnflow.util import maybe_import, load_correction_set
+from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array, DotDict
 from columnflow.types import Any
 
 np = maybe_import("numpy")
@@ -80,6 +80,7 @@ class BTagSFConfig:
 def btag_weights(
     self: Producer,
     events: ak.Array,
+    task: law.Task,
     jet_mask: ak.Array | type(Ellipsis) = Ellipsis,
     negative_b_score_action: str = "ignore",
     negative_b_score_log_mode: str = "warning",
@@ -241,7 +242,7 @@ def btag_weights(
 
     # when the requested uncertainty is a known jec shift, obtain the propagated effect and
     # do not produce additional systematics
-    shift_inst = self.global_shift_inst
+    shift_inst = task.global_shift_inst
     if shift_inst.is_nominal:
         # nominal weight and those of all method intrinsic uncertainties
         events = add_weight("central", None, self.weight_name)
@@ -275,20 +276,25 @@ def btag_weights(
     return events
 
 
-@btag_weights.init
-def btag_weights_init(self: Producer) -> None:
+@btag_weights.post_init
+def btag_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
     # depending on the requested shift_inst, there are three cases to handle:
     #   1. when a JEC uncertainty is requested whose propagation to btag weights is known, the
     #      producer should only produce that specific weight column
     #   2. when the nominal shift is requested, the central weight and all variations related to the
     #      method-intrinsic shifts are produced
     #   3. when any other shift is requested, only create the central weight column
-    self.btag_config: BTagSFConfig = self.get_btag_config()
-    self.uses.add(f"Jet.{self.btag_config.discriminator}")
 
-    shift_inst = getattr(self, "global_shift_inst", None)
-    if not shift_inst:
-        return
+    # NOTE: we currently setup the produced columns only during the post_init. This means
+    # that the `produces` of this Producer will be empty during task initialization, meaning
+    # that this Producer would be skipped if one would directly request it on command line
+
+    # gather info
+    self.btag_config = self.get_btag_config()
+    shift_inst = task.global_shift_inst
+
+    # use the btag discriminator
+    self.uses.add(f"Jet.{self.btag_config.discriminator}")
 
     # to handle this efficiently in one spot, store jec information
     self.jec_source = shift_inst.x.jec_source if shift_inst.has_tag("jec") else None
@@ -327,27 +333,28 @@ def btag_weights_init(self: Producer) -> None:
 
 
 @btag_weights.requires
-def btag_weights_requires(self: Producer, reqs: dict) -> None:
+def btag_weights_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @btag_weights.setup
 def btag_weights_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
-    bundle = reqs["external_files"]
-
-    # create the btag sf corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_btag_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
-    self.btag_sf_corrector = correction_set[self.btag_config.correction_set]
+    # load the btag sf corrector
+    btag_file = self.get_btag_file(reqs["external_files"].files)
+    self.btag_sf_corrector = load_correction_set(btag_file)[self.btag_config.correction_set]

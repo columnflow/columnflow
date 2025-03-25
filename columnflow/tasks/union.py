@@ -16,14 +16,21 @@ from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox
 
 
-class UniteColumns(
-    MLModelsMixin,
-    ProducersMixin,
-    ChunkedIOMixin,
+class _UniteColumns(
     ReducedEventsUser,
+    ProducersMixin,
+    MLModelsMixin,
+    ChunkedIOMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`UniteColumns`.
+    """
+
+
+class UniteColumns(_UniteColumns):
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     file_type = luigi.ChoiceParameter(
@@ -49,7 +56,11 @@ class UniteColumns(
         if not self.pilot:
             if self.producer_insts:
                 reqs["producers"] = [
-                    self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                    self.reqs.ProduceColumns.req(
+                        self,
+                        producer=producer_inst.cls_name,
+                        producer_inst=producer_inst,
+                    )
                     for producer_inst in self.producer_insts
                     if producer_inst.produced_columns
                 ]
@@ -66,7 +77,11 @@ class UniteColumns(
 
         if self.producer_insts:
             reqs["producers"] = [
-                self.reqs.ProduceColumns.req(self, producer=producer_inst.cls_name)
+                self.reqs.ProduceColumns.req(
+                    self,
+                    producer=producer_inst.cls_name,
+                    producer_inst=producer_inst,
+                )
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
@@ -116,7 +131,7 @@ class UniteColumns(
             r for r in write_columns
             if not law.util.multi_match(r.column, skip_columns, mode=any)
         }
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
         # define columns that need to be read
         read_columns = write_columns | set(mandatory_coffea_columns)
@@ -128,6 +143,7 @@ class UniteColumns(
             files.extend([inp["columns"].abspath for inp in inputs["producers"]])
         if self.ml_model_insts:
             files.extend([inp["mlcolumns"].abspath for inp in inputs["ml"]])
+
         for (events, *columns), pos in self.iter_chunked_io(
             files,
             source_type=len(files) * ["awkward_parquet"],
@@ -177,7 +193,6 @@ UniteColumns.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.
     default=UniteColumns.task_family in check_overlap_tasks,
     add_default_to_description=True,
 )
-
 
 UniteColumnsWrapper = wrapper_factory(
     base_cls=AnalysisTask,

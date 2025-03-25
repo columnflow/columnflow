@@ -6,8 +6,11 @@ Selectors for applying golden JSON in data.
 
 from __future__ import annotations
 
+import law
+
 from columnflow.selection import Selector, selector, SelectionResult
-from columnflow.util import maybe_import, InsertableDict, DotDict
+from columnflow.util import maybe_import, DotDict
+from columnflow.types import Any
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
@@ -91,20 +94,27 @@ def json_filter(
 
 
 @json_filter.requires
-def json_filter_requires(self: Selector, reqs: dict) -> None:
+def json_filter_requires(
+    self: Selector,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @json_filter.setup
 def json_filter_setup(
     self: Selector,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     """
     Setup function for :py:class:`json_filter`. Load golden JSON and set up run/luminosity block

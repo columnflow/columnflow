@@ -74,6 +74,7 @@ if __name__ == "__main__":
     import argparse
 
     ap = argparse.ArgumentParser(
+        add_help=False,
         description=(
             "Utility script for quickly loading event arrays, histograms or other supported "
             "objects from files for interactive processing.\n\n"
@@ -85,9 +86,12 @@ if __name__ == "__main__":
         ),
     )
 
+    ap.register("action", "help", argparse._HelpAction)
     ap.add_argument("files", metavar="FILE", nargs="+", help="one or more supported files")
     ap.add_argument("--events", "-e", action="store_true", help="assume files to contain event info")
+    ap.add_argument("--hists", "-h", action="store_true", help="assume files to contain histograms")
     ap.add_argument("--list", "-l", action="store_true", help="list contents of the loaded file")
+    ap.add_argument("--help", action="help", help="show this help message and exit")
 
     args = ap.parse_args()
 
@@ -99,13 +103,23 @@ if __name__ == "__main__":
     # interpret data
     intepreted = objects
     if args.events:
-        events = objects
-        interpreted = events
-        print("events loaded from objects[0] into variable 'events'")
-
         # preload common packages
         import awkward as ak  # noqa
         import numpy as np   # noqa
+
+        events = interpreted = objects
+        print("events loaded from objects[0] into variable 'events'")
+
+    elif args.hists:
+        # preload common packages
+        import hist  # noqa
+
+        if isinstance(objects, hist.Hist):
+            h = interpreted = objects
+            print("histogram loaded from objects[0] into variable 'h'")
+        else:
+            hists = interpreted = objects
+            print("histograms loaded from objects[0] into variable 'hists'")
 
     # list content
     if args.list:
