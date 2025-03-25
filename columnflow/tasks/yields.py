@@ -13,25 +13,34 @@ from scinum import Number
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ProducersMixin,
-    DatasetsProcessesMixin, CategoriesMixin, WeightProducerMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    DatasetsProcessesMixin, CategoriesMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms
 from columnflow.util import dev_sandbox, try_int
 
 
-class CreateYieldTable(
+class _CreateYieldTable(
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ReducerClassMixin,
+    ProducerClassesMixin,
+    WeightProducerClassMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
-    WeightProducerMixin,
-    ProducersMixin,
-    SelectorStepsMixin,
-    CalibratorsMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+    """
+    Base classes for :py:class:`CreateYieldTable`.
+    """
+
+    single_config = True
+    resolution_task_class = MergeHistograms
+
+
+class CreateYieldTable(_CreateYieldTable):
 
     table_format = luigi.Parameter(
         default="fancy_grid",
@@ -63,15 +72,17 @@ class CreateYieldTable(
         description="Adds a suffix to the output name of the yields table; empty default",
     )
 
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
         MergeHistograms=MergeHistograms,
     )
 
-    # dummy branch map
     def create_branch_map(self):
-        return [0]
+        # dummy branch map
+        return {0: None}
 
     def requires(self):
         return {
@@ -192,9 +203,9 @@ class CreateYieldTable(
                     leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
                     h_cat = h[{"category": [
-                        hist.loc(c.id)
+                        hist.loc(c.name)
                         for c in leaf_category_insts
-                        if c.id in h.axes["category"]
+                        if c.name in h.axes["category"]
                     ]}]
                     h_cat = h_cat[{"category": sum}]
 

@@ -50,6 +50,9 @@ ana.x.config_groups = {}
 # named function hooks that can modify store_parts of task outputs if needed
 ana.x.store_parts_modifiers = {}
 
+# histogramming hooks, invoked before creating plots when --hist-hook parameter set
+ana.x.hist_hooks = {}
+
 
 #
 # setup configs
@@ -108,9 +111,11 @@ for dataset_name in dataset_names:
 # verify that the root process of all datasets is part of any of the registered processes
 verify_config_processes(cfg, warn=True)
 
-# default objects, such as calibrator, selector, producer, ml model, inference model, etc
+# default objects, such as calibrator, selector, reducer, producer, ml model, inference model, etc
 cfg.x.default_calibrator = "example"
 cfg.x.default_selector = "example"
+cfg.x.default_selector_steps = []
+cfg.x.default_reducer = "cf_default"
 cfg.x.default_producer = "example"
 cfg.x.default_weight_producer = "example"
 cfg.x.default_ml_model = None
@@ -165,15 +170,15 @@ cfg.x.selector_step_groups = {
 
 # calibrator groups for conveniently looping over certain calibrators
 # (used during calibration)
-cfg.x.calibrator_groups = {}
+ana.x.calibrator_groups = {}
 
 # producer groups for conveniently looping over certain producers
 # (used during the ProduceColumns task)
-cfg.x.producer_groups = {}
+ana.x.producer_groups = {}
 
 # ml_model groups for conveniently looping over certain ml_models
 # (used during the machine learning tasks)
-cfg.x.ml_model_groups = {}
+ana.x.ml_model_groups = {}
 
 # custom method and sandbox for determining dataset lfns
 cfg.x.get_dataset_lfns = None

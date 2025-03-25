@@ -1,7 +1,7 @@
 # coding: utf-8
 
 """
-Object and event calibration tools.
+Event and collection reduction objects.
 """
 
 from __future__ import annotations
@@ -13,15 +13,15 @@ from columnflow.util import DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
 
 
-class Calibrator(TaskArrayFunction):
+class Reducer(TaskArrayFunction):
     """
-    Base class for all calibrators.
+    Base class for all reducers.
     """
 
     exposed = True
 
     @classmethod
-    def calibrator(
+    def reducer(
         cls,
         func: Callable | None = None,
         bases: tuple = (),
@@ -30,23 +30,22 @@ class Calibrator(TaskArrayFunction):
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
-        Decorator for creating a new :py:class:`~.Calibrator` subclass with additional, optional
-        *bases* and attaching the decorated function to it as ``call_func``.
+        Decorator for creating a new :py:class:`~.Reducer` subclass with additional, optional *bases* and attaching the
+        decorated function to it as ``call_func``.
 
-        When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by
-        other calibrators, selectors and producers in case they are evalauted on a
-        :py:class:`order.Dataset` (using the :py:attr:`dataset_inst` attribute) whose ``is_mc``
-        (``is_data``) attribute is *False*.
+        When *mc_only* (*data_only*) is *True*, the reducer is skipped and not considered by other task array functions
+        in case they are evalauted on a :py:class:`order.Dataset` (using the :py:attr:`dataset_inst` attribute) whose
+        ``is_mc`` (``is_data``) attribute is *False*.
 
         All additional *kwargs* are added as class members of the new subclasses.
 
-        :param func: Function to be wrapped and integrated into new :py:class:`Calibrator` class.
-        :param bases: Additional bases for the new :py:class:`Calibrator`.
-        :param mc_only: Boolean flag indicating that this :py:class:`Calibrator` should only run on
-            Monte Carlo simulation and skipped for real data.
-        :param data_only: Boolean flag indicating that this :py:class:`Calibrator` should only run
-            on real data and skipped for Monte Carlo simulation.
-        :return: New :py:class:`Calibrator` subclass.
+        :param func: Function to be wrapped and integrated into new :py:class:`Reducer` class.
+        :param bases: Additional bases for the new reducer.
+        :param mc_only: Boolean flag indicating that this reducer should only run on Monte Carlo simulation and skipped
+            for real data.
+        :param data_only: Boolean flag indicating that this reducer should only run on real data and skipped for Monte
+            Carlo simulation.
+        :return: New reducer subclass.
         """
         def decorator(func: Callable) -> DerivableMeta:
             # create the class dict
@@ -61,7 +60,7 @@ class Calibrator(TaskArrayFunction):
             frame = inspect.stack()[1]
             module = inspect.getmodule(frame[0])
 
-            # get the calibrator name
+            # get the reducer name
             cls_name = cls_dict.pop("cls_name", func.__name__)
 
             # hook to update the class dict during class derivation
@@ -71,11 +70,10 @@ class Calibrator(TaskArrayFunction):
 
                 # optionally add skip function
                 if mc_only and data_only:
-                    raise Exception(f"calibrator {cls_name} received both mc_only and data_only")
+                    raise Exception(f"reducer {cls_name} received both mc_only and data_only")
                 if (mc_only or data_only) and cls_dict.get("skip_func"):
                     raise Exception(
-                        f"calibrator {cls_name} received custom skip_func, but either mc_only or "
-                        "data_only are set",
+                        f"reducer {cls_name} received custom skip_func, but either mc_only or data_only are set",
                     )
 
                 if "skip_func" not in cls_dict:
@@ -104,4 +102,4 @@ class Calibrator(TaskArrayFunction):
 
 
 # shorthand
-calibrator = Calibrator.calibrator
+reducer = Reducer.reducer

@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
+#: Location of the documentation.
+docs_url = os.getenv("CF_DOCS_URL", "https://columnflow.readthedocs.io/en/latest")
+
+#: Location of release notes.
+release_url = os.getenv("CF_RELEASE_URL", "https://github.com/columnflow/columnflow/releases/tag")
+
 #: Boolean denoting whether the environment is in a local environment (based on ``CF_LOCAL_ENV``).
 env_is_local = law.util.flag_to_bool(os.getenv("CF_LOCAL_ENV", "false"))
 
@@ -98,6 +104,12 @@ if not env_is_rtd:
     if law.config.has_option("analysis", "selection_modules"):
         for m in law.config.get_expanded("analysis", "selection_modules", [], split_csv=True):
             logger.debug(f"loading selection module '{m}'")
+            maybe_import(m.strip())
+
+    import columnflow.reduction  # noqa
+    if law.config.has_option("analysis", "reduction_modules"):
+        for m in law.config.get_expanded("analysis", "reduction_modules", [], split_csv=True):
+            logger.debug(f"loading reduction module '{m}'")
             maybe_import(m.strip())
 
     import columnflow.categorization  # noqa

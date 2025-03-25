@@ -16,6 +16,7 @@ import law
 import order as od
 
 from columnflow.util import maybe_import
+from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.types import Callable, Any, Sequence
 
 ak = maybe_import("awkward")
@@ -58,6 +59,39 @@ def get_events_from_categories(
         mask = cat_mask | mask
 
     return events[mask]
+
+
+def get_category_name_columns(
+    category_ids: ak.Array,
+    config_inst: od.Config,
+) -> ak.Array:
+    """
+    Function that transforms column of category ids to column of category names.
+
+    :param category_ids: Awkward array of category ids.
+    :param config_inst: Config instance from which to load category instances.
+    :raises ValueError: If any of the category ids is not defined in the *config_inst*.
+    :return: Awkward array of category names with the same shape as *category_ids*
+    """
+    flat_ids = flat_np_view(category_ids)
+
+    # map all category ids present in *category_ids* to category instances
+    category_map = {
+        _id: config_inst.get_category(_id, default=None)
+        for _id in set(flat_ids)
+    }
+    if any(cat is None for cat in category_map.values()):
+        undefined_ids = {cat_id for cat_id, cat_inst in category_map.items() if cat_inst is None}
+        raise ValueError(f"undefined category ids: {', '.join(map(str, undefined_ids))}")
+
+    # Create a vectorized function for the mapping
+    map_to_name = np.vectorize(lambda _id: category_map[_id].name)
+
+    # Apply the mapping and layout to the original shape
+    flat_names = map_to_name(flat_ids)
+    category_names = layout_ak_array(flat_names, category_ids)
+
+    return category_names
 
 
 def get_root_processes_from_campaign(campaign: od.config.Campaign) -> od.unique.UniqueObjectIndex:

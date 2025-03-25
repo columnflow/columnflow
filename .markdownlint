@@ -3,7 +3,7 @@ plugins:
   md013:
     enabled: False
   md033:
-    allowed_elements: "!--,![CDATA[,!DOCTYPE,table,h1,p,img"
+    allowed_elements: "!--,![CDATA[,!DOCTYPE,table,h1,a,p,img,div"
   md026:
     punctuation: ".,;!。，；！"
   md001:
