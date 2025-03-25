@@ -6,7 +6,7 @@ Throughout the documentation, you will sometimes see them abbreviated as `TAFs`.
 
 ## Introduction
 
-A streamlined view of this task structure and the dependencies between them can be seen in the figure below (more complex parts of the graph, e.g. those related to cutflows or machine learning, are hidden for the purpose of clarity here).
+A streamlined view of this task structure and the dependencies between them can be seen in the figure below (more complex parts of the graph, e.g. those related to cutflows or machine learning, are hidden for the purpose of clarity here; see [our wiki](https://github.com/columnflow/columnflow/wiki#default-task-graph) for an update-to-date version of the current graph).
 
 - Each box denotes a specific task.
 - Arrows indicate dependencies between them, usually in the form of persistently stored data.
@@ -85,36 +85,45 @@ graph TD
 
 ## TAF Types
 
-1. Calibrator:
-    - Meant to apply calibrations to event data that are stored as additional columns; these columns can then be used in subsequent tasks as if they were part of the original data
-    - *Examples*: energy calibration (jets, taus) or object corrections (MET)
-    - *Quantity*: zero, one or more
-    - *Output length*: same as input
-    - *Parameter*: `--calibrators [NAME,[NAME,...]]`
-2. Selector:
-    - Meant to perform both event and object selection; they must produce event and per-object masks that can be used downstream, as well as event and selection statistics (either in `json` or `hist` format) to be used for normalization later; they can also produce additional columns for use in subsequent tasks
-    - *Examples*: the usual event selection
-    - *Quantity*: exactly one
-    - *Output length*: same as input
-    - *Parameter*: `--selector NAME`
-3. Reducer:
-    - It receives all event data, as well as columns produced during calbration and selection plus the event and object selection masks to perform the reduction step; a default implementation exists that should be sufficient for most use cases; if additional columns should be produced, the default reducer can be extended
-    - *Examples*: `cf_default`, i.e., columnflow's default event and object reduction, as well as collection creation
-    - *Quantity*: exactly one
-    - *Output length*: Any length, but obviously usually shorter than the input
-    - *Parameter*: `--reducer NAME(cf_default)`
-4. Producer:
-    - The go-to mechanism for creating and storing additional variables needed by the analysis, after events were selected and reduced
-    - *Examples*: creation of additional variables needed by the analysis
-    - *Quantity*: zero, one or more
-    - *Output length*: same as input
-    - *Parameter*: `--producers [NAME,[NAME,...]]`
-5. Histogram producer:
-    - More versatile than other TAFs as it allows defining some late event data adjustments and event weight, as well as controls the creation, filling and post-processing of histograms before they are saved to disk
-    - *Examples*: calcalation of event weights, plus the usual histogram filling procedure
-    - *Quantity*: exactly one
-    - *Output length*: does not apply, since histograms are created
-    - *Parameter*: `--hist-producer NAME(cf_default)`
+### Calibrator
+
+- Meant to apply calibrations to event data that are stored as additional columns; these columns can then be used in subsequent tasks as if they were part of the original data
+- *Examples*: energy calibration (jets, taus) or object corrections (MET)
+- *Quantity*: zero, one or more
+- *Output length*: same as input
+- *Parameter*: `--calibrators [NAME,[NAME,...]]`
+
+### Selector
+
+- Meant to perform both event and object selection; they must produce event and per-object masks that can be used downstream, as well as event and selection statistics (either in `json` or `hist` format) to be used for normalization later; they can also produce additional columns for use in subsequent tasks
+- *Examples*: the usual event selection
+- *Quantity*: exactly one
+- *Output length*: same as input
+- *Parameter*: `--selector NAME`
+
+### Reducer
+
+- It receives all event data, as well as columns produced during calbration and selection plus the event and object selection masks to perform the reduction step; a default implementation exists that should be sufficient for most use cases; if additional columns should be produced, the default reducer can be extended
+- *Examples*: `cf_default`, i.e., columnflow's default event and object reduction, as well as collection creation
+- *Quantity*: exactly one
+- *Output length*: Any length, but obviously usually shorter than the input
+- *Parameter*: `--reducer NAME(cf_default)`
+
+### Producer
+
+- The go-to mechanism for creating and storing additional variables needed by the analysis, after events were selected and reduced
+- *Examples*: creation of additional variables needed by the analysis
+- *Quantity*: zero, one or more
+- *Output length*: same as input
+- *Parameter*: `--producers [NAME,[NAME,...]]`
+
+### Histogram producer
+
+- More versatile than other TAFs as it allows defining some late event data adjustments and event weight, as well as controls the creation, filling and post-processing of histograms before they are saved to disk
+- *Examples*: calcalation of event weights, plus the usual histogram filling procedure
+- *Quantity*: exactly one
+- *Output length*: does not apply, since histograms are created
+- *Parameter*: `--hist-producer NAME(cf_default)`
 
 ## Simple Example
 
@@ -175,7 +184,7 @@ Note that the decorators miss the `_func` suffix, but they register and bind met
 ```python
 # same as above
 @producer(
-    uses={"Electron.{pt,phi,eta,deltaEtaSC}"},
+    uses={"Electron.{eta,deltaEtaSC}"},
     produces={"Electron.superclusterEta"},
 )
 def electron_sc_eta(self, events: ak.Array, **kwargs) -> ak.Array:
@@ -196,12 +205,26 @@ def electron_sc_eta_init(self: Producer) -> None:
 # custom post-init
 @electron_sc_eta.post_init
 def electron_sc_eta_post_init(self: Producer, task: law.Task) -> None:
-    # can access task!
+    # first hook to access task for some late init steps after dependency tree was built
     ...
 
 # custom requires
 @electron_sc_eta.requires
 def electron_sc_eta_requires(self: Producer, task: law.Task, reqs: dict[str, Any]) -> None:
     # add extra requirements to reqs
+    ...
+
+# custom setup
+@electron_sc_eta.setup
+def electron_sc_eta_setup(self: Producer, task: law.Task, reqs: dict[str, Any], inputs: dict[str, Any], reader_targets: dict[str, Any]) -> None:
+    # setup objects needed for actual function calls and store them as members on *self*
+    # reqs refer to requirements declared above, and inputs point to their outputs
+    # reader_targets can optionally be updated to declare additional columnar input files
+    ...
+
+# custom teardown
+@electron_sc_eta.teardown
+def electron_sc_eta_teardown(self: Producer, task: law.Task) -> None:
+    # free up resources, usually by removing members from *self*
     ...
 ```

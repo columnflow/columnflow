@@ -9,5 +9,5 @@ Building Blocks
    reducers.md
    producers.md
    categories.md
-   histograms.md
+   hist_producers.md
    config_objects.md
