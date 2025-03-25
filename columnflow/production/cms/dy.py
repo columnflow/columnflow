@@ -75,7 +75,7 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     lepton_all_mask = (
         # e, mu, taus, neutrinos
         (
-            (pdg_id >= 11)
+            (pdg_id >= 11) &
             (pdg_id <= 16) &
             (status == 1) &
             events.GenPart.hasFlags("fromHardProcess")
@@ -247,78 +247,6 @@ def dy_weights_setup(
             f"Expected {self.n_unc} uncertainties, got {dy_n_unc}",
         )
 
-
-#
-# Helper functions for kinematics.
-#
-def GetXYfromPTPHI(pt, phi):
-    """Convert (pt, phi) to (x, y)."""
-    return pt * np.cos(phi), pt * np.sin(phi)
-
-
-def GetPTPHIfromXY(x, y):
-    """Convert (x, y) to (pt, phi)."""
-    pt = np.sqrt(x * x + y * y)
-    phi = np.arctan2(y, x)
-    return pt, phi
-
-
-def GetU(met_pt, met_phi, full_pt, full_phi, vis_pt, vis_phi):
-    """
-    Compute the recoil vector U:
-      U = MET + (visible boson) – (full boson)
-    and then project U into components parallel (Upara) and perpendicular (Uperp)
-    to the full boson direction.
-    """
-    met_x, met_y = GetXYfromPTPHI(met_pt, met_phi)
-    full_x, full_y = GetXYfromPTPHI(full_pt, full_phi)
-    vis_x, vis_y = GetXYfromPTPHI(vis_pt, vis_phi)
-    Ux = met_x + vis_x - full_x
-    Uy = met_y + vis_y - full_y
-    U_pt, U_phi = GetPTPHIfromXY(Ux, Uy)
-    # Projection along and perpendicular to full boson phi:
-    Upara = U_pt * np.cos(U_phi - full_phi)
-    Uperp = U_pt * np.sin(U_phi - full_phi)
-    return Upara, Uperp
-
-
-def GetMETfromU(upara, uperp, full_pt, full_phi, vis_pt, vis_phi):
-    """
-    Reconstruct MET from the corrected U components.
-    """
-    U_pt = np.sqrt(upara * upara + uperp * uperp)
-    # Recover U_phi (note the rotation by full_phi)
-    U_phi = np.arctan2(uperp, upara) + full_phi
-    Ux, Uy = GetXYfromPTPHI(U_pt, U_phi)
-    full_x, full_y = GetXYfromPTPHI(full_pt, full_phi)
-    vis_x, vis_y = GetXYfromPTPHI(vis_pt, vis_phi)
-    met_x = Ux - vis_x + full_x
-    met_y = Uy - vis_y + full_y
-    met_pt, met_phi = GetPTPHIfromXY(met_x, met_y)
-    return met_pt, met_phi
-
-
-def GetH(METpt, METphi, FullVPt, FullVPhi, VisVPt, VisVPhi):
-    METx, METy = GetXYfromPTPHI(METpt, METphi)
-    VisVx, VisVy = GetXYfromPTPHI(VisVPt, VisVPhi)
-    Hx = -METx - VisVx
-    Hy = -METy - VisVy
-    Hpt, Hphi = GetPTPHIfromXY(Hx, Hy)
-    Hpara, Hperp = GetXYfromPTPHI(Hpt, Hphi - FullVPhi)
-    return Hpara, Hperp
-
-
-def GetMETfromH(Hpara, Hperp, FullVPt, FullVPhi, VisVPt, VisVPhi):
-    VisVx, VisVy = GetXYfromPTPHI(VisVPt, VisVPhi)
-    Hpt, HphiMinusFullVPhi = GetPTPHIfromXY(Hpara, Hperp)
-    Hphi = HphiMinusFullVPhi + FullVPhi
-    Hx, Hy = GetXYfromPTPHI(Hpt, Hphi)
-    METx = -Hx - VisVx
-    METy = -Hy - VisVy
-    METpt, METphi = GetPTPHIfromXY(METx, METy)
-    return METpt, METphi
-
-
 @producer(
     uses={
         # MET information
@@ -344,39 +272,54 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     Producer for bosonic recoil corrections.
 
     Steps:
-      1) Compute the recoil vector U (Upara, Uperp) from the PuppiMET and the boson information.
-      2) Apply the nominal recoil correction to recoil vector U.
-      3) Recompute the corrected MET from the corrected U components.
-      4) Compute systematic variations (Recoil uncertainties) by recalculating MET variations using the
-         Recoil_correction_Uncertainty correction.
+      1) Build transverse vectors for MET and the generator-level boson (full and visible).
+      2) Compute the recoil vector U = MET + vis - full in the transverse plane.
+      3) Project U along and perpendicular to the full boson direction.
+      4) Apply the nominal recoil correction and reassemble the corrected MET.
+      5) For each systematic variation, apply the uncertainty correction on H components and reconstruct MET.
     """
-    # Retrieve inputs as numpy arrays.
-    met_pt = np.asarray(events.PuppiMET.pt)
-    met_phi = np.asarray(events.PuppiMET.phi)
+    # Build MET vector (using dummy eta and mass, since only x and y matter)
+    met = vector.array({
+        "pt": events.PuppiMET.pt,
+        "phi": events.PuppiMET.phi,
+        "eta": np.zeros_like(events.PuppiMET.pt),
+        "mass": np.zeros_like(events.PuppiMET.pt),
+    })
 
-    full_pt = np.asarray(events.gen_dilepton_all.pt)
-    full_phi = np.asarray(events.gen_dilepton_all.phi)
+    # Build full and visible boson vectors from generator-level information
+    full = vector.array({
+        "pt": events.gen_dilepton_all.pt,
+        "phi": events.gen_dilepton_all.phi,
+        "eta": np.zeros_like(events.gen_dilepton_all.pt),
+        "mass": np.zeros_like(events.gen_dilepton_all.pt),
+    })
+    vis = vector.array({
+        "pt": events.gen_dilepton_vis.pt,
+        "phi": events.gen_dilepton_vis.phi,
+        "eta": np.zeros_like(events.gen_dilepton_vis.pt),
+        "mass": np.zeros_like(events.gen_dilepton_vis.pt),
+    })
 
-    vis_pt = np.asarray(events.gen_dilepton_vis.pt)
-    vis_phi = np.asarray(events.gen_dilepton_vis.phi)
+    # Compute the recoil vector U = MET + vis - full
+    Ux = met.x + vis.x - full.x
+    Uy = met.y + vis.y - full.y
 
-    # nJet is expected to be a per-event scalar; convert to float for the correction functions.
-    # number of of jets with pT>30 GeV at |eta|<2.5, plus jets with pT>50 GeV outside of tracker region
+    # Project U onto the full boson direction
+    full_pt = full.pt
+    full_unit_x = full.x / full_pt
+    full_unit_y = full.y / full_pt
+    upara = Ux * full_unit_x + Uy * full_unit_y
+    uperp = -Ux * full_unit_y + Uy * full_unit_x
+
+    # Determine jet multiplicity for the event (jet selection as in original)
     jet_selection = ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) | (
         (events.Jet.pt > 50) & (np.abs(events.Jet.eta) >= 2.5)
     )
     selected_jets = events.Jet[jet_selection]
     njet = np.asarray(ak.num(selected_jets, axis=1), dtype=np.float32)
 
-    # -------------------------------------------------------------------------
-    # Nominal recoil correction:
+    # Apply nominal recoil correction on U components
     # (see here: https://cms-higgs-leprare.docs.cern.ch/htt-common/V_recoil/#example-snippet)
-    # 1) Compute Upara and Uperp from the original MET and boson information.
-    upara, uperp = GetU(met_pt, met_phi, full_pt, full_phi, vis_pt, vis_phi)
-
-    # 2) Apply the nominal recoil correction using the QuantileMapHist method.
-    #    Correction function signature:
-    #      (era: str, njet: float, ptll: float, var: "Upara"/"Uperp", value: real)
     upara_corr = self.recoil_corrector.evaluate(
         self.dy_recoil_config.era,
         self.dy_recoil_config.order,
@@ -394,33 +337,41 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         uperp,
     )
 
-    # 3) Recompute the corrected MET from the corrected U components.
-    met_pt_corr, met_phi_corr = GetMETfromU(
-        upara_corr, uperp_corr, full_pt, full_phi, vis_pt, vis_phi,
+    # Reassemble the corrected U vector
+    U_corr_x = upara_corr * full_unit_x - uperp_corr * full_unit_y
+    U_corr_y = upara_corr * full_unit_y + uperp_corr * full_unit_x
+
+    # Recompute corrected MET: MET_corr = U_corr - vis + full
+    met_corr_x = U_corr_x - vis.x + full.x
+    met_corr_y = U_corr_y - vis.y + full.y
+    met_corr_pt = np.sqrt(met_corr_x**2 + met_corr_y**2)
+    met_corr_phi = np.arctan2(met_corr_y, met_corr_x)
+
+    events = set_ak_column(
+        events, "RecoilCorrMET.pt", met_corr_pt, value_type=np.float32,
     )
     events = set_ak_column(
-        events, "RecoilCorrMET.pt", met_pt_corr, value_type=np.float32,
-    )
-    events = set_ak_column(
-        events, "RecoilCorrMET.phi", met_phi_corr, value_type=np.float32,
+        events, "RecoilCorrMET.phi", met_corr_phi, value_type=np.float32,
     )
 
-    # -------------------------------------------------------------------------
-    # Recoil uncertainty variations:
-    # First, derive H components from the nominal corrected MET.
-    hpara, hperp = GetH(met_pt_corr, met_phi_corr, full_pt, full_phi, vis_pt, vis_phi)
+    # --- Systematic variations ---
+    # Derive H from the nominal corrected MET: H = - (MET_corr + vis)
+    Hx = -met_corr_x - vis.x
+    Hy = -met_corr_y - vis.y
+    H_pt = np.sqrt(Hx**2 + Hy**2)
+    H_phi = np.arctan2(Hy, Hx)
+    # Project H into the full boson coordinate system
+    H_para = H_pt * np.cos(H_phi - full.phi)
+    H_perp = H_pt * np.sin(H_phi - full.phi)
 
-    # Loop over systematic variations.
     for syst in self.systematics:
-        # The recoil uncertainty correction for H components expects:
-        #   (era: str, njet: float, ptll: float, var: "Hpara"/"Hperp", value: real, syst: string)
         hpara_var = self.recoil_unc_corrector.evaluate(
             self.dy_recoil_config.era,
             self.dy_recoil_config.order,
             njet,
             events.gen_dilepton_all.pt,
             "Hpara",
-            hpara,
+            H_para,
             syst,
         )
         hperp_var = self.recoil_unc_corrector.evaluate(
@@ -429,20 +380,26 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             njet,
             events.gen_dilepton_all.pt,
             "Hperp",
-            hperp,
+            H_perp,
             syst,
         )
-        met_pt_var, met_phi_var = GetMETfromH(
-            hpara_var, hperp_var, full_pt, full_phi, vis_pt, vis_phi,
+        # Reconstruct the corrected H vector in the full boson frame
+        H_corr_x = hpara_var * np.cos(full.phi) - hperp_var * np.sin(full.phi)
+        H_corr_y = hpara_var * np.sin(full.phi) + hperp_var * np.cos(full.phi)
+        # Reconstruct the MET variation: MET_var = -H_corr - vis
+        met_var_x = -H_corr_x - vis.x
+        met_var_y = -H_corr_y - vis.y
+        met_var_pt = np.sqrt(met_var_x**2 + met_var_y**2)
+        met_var_phi = np.arctan2(met_var_y, met_var_x)
+        events = set_ak_column(
+            events, f"RecoilCorrMET.pt_{syst}", met_var_pt, value_type=np.float32,
         )
         events = set_ak_column(
-            events, f"RecoilCorrMET.pt_{syst}", met_pt_var, value_type=np.float32,
-        )
-        events = set_ak_column(
-            events, f"RecoilCorrMET.phi_{syst}", met_phi_var, value_type=np.float32,
+            events, f"RecoilCorrMET.phi_{syst}", met_var_phi, value_type=np.float32,
         )
 
     return events
+
 
 
 @recoil_corrections.init
