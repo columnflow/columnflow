@@ -247,6 +247,7 @@ def dy_weights_setup(
             f"Expected {self.n_unc} uncertainties, got {dy_n_unc}",
         )
 
+
 @producer(
     uses={
         # MET information
@@ -399,7 +400,6 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         )
 
     return events
-
 
 
 @recoil_corrections.init
