@@ -111,7 +111,6 @@ class PlotVariablesBase(
             for dataset, inp in self.input().items():
                 dataset_inst = self.config_inst.get_dataset(dataset)
                 h_in = inp["collection"][0]["hists"].targets[self.branch_data.variable].load(formatter="pickle")
-
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
                     # skip when the dataset is already known to not contain any sub process
@@ -194,33 +193,52 @@ class PlotVariablesBase(
             hists = _hists
 
             # call the plot function
-            """
-            fig, _ = self.call_plot_func(
-                self.plot_function,
-                hists=hists,
-                config_inst=self.config_inst,
-                category_inst=category_inst.copy_shallow(),
-                variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
-                shift_insts=plot_shifts,
-                **self.get_plot_parameters(),
-            )
-            """
-            # custom plotting for ABCD regions in qcd estimation
-            fig, axs = self.call_plot_func(
-                self.plot_function,
-                hists=hists,
-                config_inst=self.config_inst,
-                category_inst=category_inst.copy_shallow(),
-                variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
-                shift_insts=plot_shifts,
-                **self.get_plot_parameters(),
-            )
+            normal_plot = True
+            abdc_plot = False
+            y_labels = False
 
-            for ax in axs:
-                ax.set_xlim(0, 4)
-                ax.set_xticks([0.5, 1.5, 2.5, 3.5])
-            axs[0].set_xticklabels(["A", "B", "C", "D"], ha="center")
-            axs[0].set_xlabel("Region")
+            if normal_plot is True:
+                fig, _ = self.call_plot_func(
+                    self.plot_function,
+                    hists=hists,
+                    config_inst=self.config_inst,
+                    category_inst=category_inst.copy_shallow(),
+                    variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                    shift_insts=plot_shifts,
+                    **self.get_plot_parameters(),
+                )
+
+            if abdc_plot is True:
+                # custom plotting for ABCD regions in qcd estimation
+                fig, axs = self.call_plot_func(
+                    self.plot_function,
+                    hists=hists,
+                    config_inst=self.config_inst,
+                    category_inst=category_inst.copy_shallow(),
+                    variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                    shift_insts=plot_shifts,
+                    **self.get_plot_parameters(),
+                )
+
+                # custom x-axis labels
+                for ax in axs:
+                    ax.set_xlim(0, 4)
+                    ax.set_xticks([0.5, 1.5, 2.5, 3.5])
+                axs[0].set_xticklabels(["OS iso", "OS non iso", "SS iso", "SS noniso"], ha="center")
+                axs[0].set_xlabel("Region")
+
+                if y_labels is True:
+                    # custom y-axis labels
+                    new_ylabels = []
+                    ylabels = axs[0].get_yticklabels()
+                    for label in ylabels:
+                        string_label = label.get_text()
+                        # new_label = str(round(float(string_label) * 1000)) + "K"
+                        new_label = str(round(int(float(string_label)) / 1000)) + "K"
+                        new_ylabels.append(new_label)
+                    new_ylabels[0] = "0"
+                    # new_ylabels[-1] = "1M"
+                    axs[0].set_yticklabels(new_ylabels)
 
             # save the plot
             for outp in self.output()["plots"]:

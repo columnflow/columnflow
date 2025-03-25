@@ -240,7 +240,6 @@ class CreateHistograms(
                         [Route(c).apply(masked_events) for c in self.category_id_columns],
                         axis=-1,
                     )
-
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
                         "category": category_ids,
@@ -392,6 +391,8 @@ class MergeHistograms(
             variable_hists = [h[variable_name] for h in hists]
             merged = sum(variable_hists[1:], variable_hists[0].copy())
             outputs["hists"][variable_name].dump(merged, formatter="pickle")
+
+        from IPython import embed; embed(header="MergeHistograms.run")
 
         # optionally remove inputs
         if self.remove_previous:

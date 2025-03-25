@@ -284,11 +284,12 @@ def apply_variable_settings(
         if underflow is None:
             underflow = var_inst.x("underflow", False)
 
+        """
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
                 h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
                 hists[proc_inst] = h
-
+        """
         # slicing
         slices = getattr(var_inst, "slice", None) or var_inst.x("slice", None)
         if (
@@ -434,11 +435,12 @@ def prepare_style_config(
         variable_inst.x("x_min", variable_inst.x_min),
         variable_inst.x("x_max", variable_inst.x_max),
     )
-
-    ylim = (
-        variable_inst.x("y_min", variable_inst.y_min),
-        variable_inst.x("y_max", variable_inst.y_max),
-    )
+    y_lim = True
+    if y_lim is True:
+        ylim = (
+            variable_inst.x("y_min", variable_inst.y_min),
+            variable_inst.x("y_max", variable_inst.y_max),
+        )
 
     # build the label from category and optional variable selection labels
     cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
