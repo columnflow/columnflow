@@ -70,11 +70,25 @@ def di_jet_mass(self: Producer, events: ak.Array, task: law.Task) -> ak.Array:
 
 ## Multi-config Tasks
 
-- TODO.
+Most of the tasks provided by columnflow operate on a single analysis configuration (usually representing self-contained data taking periods or *eras*).
+Examples are `cf.CalibrateEvents` and `cf.SelectEvents`, or `cf.ProduceColumns` and `cf.CreateHistograms` which do the heavy lifting in terms of event processing.
+
+However, some tasks require access to data of multiple eras at a time, and therefore, access to multiple analysis configurations.
+We refer to these tasks as **multi-config tasks**.
+
+In version 0.3, the following tasks are multi-config tasks:
+
+- Most plotting tasks: tasks like `cf.PlotVariables1D` need to be able to draw events simulated for / recorded in multiple eras into the same plot.
+- `cf.MLTraining`: For many ML training applications it is reasonable to train on data from multiple eras, given that detector conditions are not too different. It is now possible to request data from multiple eras to be loaded for a single training.
+- `cf.CreateDatacards` (CMS-specific): The inference model interface as well as the datacard export routines now support entries for multiple configurations. See the [changes to the inference model interface](#inference-model-updates) below for details.
 
 ### Update Instructions
 
-1. TODO.
+All instructions only apply to the CLI usage of tasks.
+
+1. Tasks listed above no longer have a `--config` parameter. However, they now have a `--configs` parameter that accepts multiple configuration names as a comma-separate sequece. In order to achieve the single-config behavior, just pass the name of a single configuration here.
+2. Specific other parameters of multi-config tasks changed as well. Most notably, the `--datasets` and `--processes` parameters, which previously allowed for defining sequences of dataset and process names on the command line, now accept muliple comma-separated sequences. The number of sequences should be exactly one (applies to all configurations) or match the number of configurations given in `--configs` (one-to-one assignment). Sequences should be separater by colons.
+    - Example: `law.run cf.PlotVariables1D --configs 22pre,22post --datasets tt_sl,st_tw:tt_sl,st_s`
 
 ## Reducers
 
