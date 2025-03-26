@@ -2487,7 +2487,9 @@ class HistHookMixin(ConfigTask):
         Return a string representation of the hist hooks.
         """
         if self.hist_hooks_short_repr:
-            hooks_repr = law.util.create_hash(self.hist_hooks)
+            ordered_hooks = sorted(self.hist_hooks)
+            hooks_repr = law.util.create_hash(ordered_hooks)
+            hooks_repr = f"{len(ordered_hooks)}_{hooks_repr}"
         else:
             hooks = [hook for hook in self.hist_hooks if hook not in (None, "", law.NO_STR)]
 
