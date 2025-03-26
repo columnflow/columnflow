@@ -2447,6 +2447,13 @@ class HistHookMixin(ConfigTask):
         "default: empty",
     )
 
+    hist_hooks_short_repr = luigi.BoolParameter(
+        default=False,
+        description="when True, all hist hooks names are shortened to a single hash in the path,"
+        "when False, only the first 5 hist hooks names are used to create the store part, the rest "
+        "is hashed; default: False",
+    )
+
     def invoke_hist_hooks(self, hists: dict) -> dict:
         """
         Invoke hooks to update histograms before plotting.
@@ -2479,10 +2486,13 @@ class HistHookMixin(ConfigTask):
         """
         Return a string representation of the hist hooks.
         """
-        hooks = [hook for hook in self.hist_hooks if hook not in (None, "", law.NO_STR)]
+        if self.hist_hooks_short_repr:
+            hooks_repr = law.util.create_hash(self.hist_hooks)
+        else:
+            hooks = [hook for hook in self.hist_hooks if hook not in (None, "", law.NO_STR)]
 
-        hooks_repr = "__".join(hooks[:5])
-        if len(hooks) > 5:
-            hooks_repr += f"__{law.util.create_hash(hooks[5:])}"
+            hooks_repr = "__".join(hooks[:5])
+            if len(hooks) > 5:
+                hooks_repr += f"__{law.util.create_hash(hooks[5:])}"
 
         return hooks_repr
