@@ -171,6 +171,6 @@ def top_pt_weight_skip(self: Producer, **kwargs) -> bool:
     Skip if running on anything except ttbar MC simulation, evaluated via the :py:attr:`require_dataset_tag` attribute.
     """
     if self.require_dataset_tag is None:
-        return False
+        return self.dataset_inst.is_data
 
     return self.dataset_inst.is_data or not self.dataset_inst.has_tag("is_ttbar")
