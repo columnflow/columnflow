@@ -92,12 +92,53 @@ All instructions only apply to the CLI usage of tasks.
 
 ## Reducers
 
-- [Reducers](./building_blocks/reducers.md)
-- TODO.
+Reducers are a new type of task array function that are invoked by the `cf.ReduceEvents` task.
+They control how results of the event selection - event and object masks - are applied to the full event data.
+See the [types of task array functions](./task_array_functions.md#taf-types) and the detailed [documentation on reducers](./building_blocks/reducers.md) for details.
+
+The reducer's job is
+
+- to apply the event selection mask (booleans) to select only a subset of events,
+- to apply object selection masks (booleans or integer indices) to create new collections of objects (e.g. specific jets, or leptons), and
+- to drop columns are not needed by any of the downstream tasks.
+
+These three steps were previously part of the default implementation of the `cf.ReduceEvents` tasks but are now fully configurable though custom reducers.
+For compatibility with existing analyses, a default reducer called `cf_default` is provided by columnflow that implements exactly the previous behavior.
+In doing so, it even relies on the auxiliary entry `keep_columns` in the configuration to determine which columns should be kept after reduction.
+
+### Example
+
+The following example creates a custom reducer that invokes columnflow's default reduction behavior and additionally creates a new column.
+
+```python
+from columnflow.reduction import Reducer, reducer
+from columnflow.reduction.default import cf_default
+from columnflow.util import maybe_import
+from columnflow.columnar_util import set_ak_column
+
+ak = maybe_import("awkward")
+
+@reducer(
+    uses={cf_default, "Jet.hadronFlavour"},
+    produces={cf_default, "Jet.from_b_hadron"},
+)
+def example(self: Reducer, events: ak.Array, selection: ak.Array, **kwargs) -> ak.Array:
+    # run cf's default reduction which handles event selection and collection creation
+    events = self[cf_default](events, selection, **kwargs)
+
+    # compute and store additional columns after the default reduction
+    # (so only on a subset of the events and objects which might be computationally lighter)
+    events = set_ak_column(events, "Jet.from_b_hadron", abs(events.Jet.hadronFlavour) == 5, value_type=bool)
+
+    return events
+```
 
 ### Update Instructions
 
-1. TODO.
+1. In general, there is no need to update your code. However, you will notice that output paths of all tasks downstream of (and including) `cf.ReduceEvents` will have an additional fragment like `.../red__cf_default/...` to reflect the choice of the reducer.
+2. The reduction behavior that was previously part of the `cf.ReduceEvents` task is now encapsulated by a [default reducer](https://github.com/columnflow/columnflow/blob/refactor/taf_init/columnflow/reduction/default.py) called `cf_default`. To extend or alter its behavior, create your own implementation either from scratch or by inheriting from it and only overwriting some of its hooks.
+3. Invoke your reducer by adding `--reducer MY_REDUCER_CLASS` on the command line or by adding an auxiliary entry `default_reducer` to your configuration.
+4. If you decide to control the set of columns that should be available after reduction solely through your reducer, and no longer through the `keep_columns` auxiliary entry in your configuration, you can do so by redefining the `produces` set of your reducer.
 
 ## Histogram Producers
 
