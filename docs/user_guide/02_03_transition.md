@@ -32,7 +32,7 @@ In short, there are three types of hooks:
 `pre_init`, `post_init` and `teardown` have been newly introduced.
 See the [task array function interface](./task_array_functions.md#taf-interface) for a full descrption of all hooks and the arguments they receive.
 
-(Note that, as before, while the hooks to register custom functions are named as shown above, the functions stored internally have an additional suffix and are named `HOOK_func`.)
+(Note that, as before, while the hooks to register custom functions are named as shown above, the functions stored internally have an additional suffix and are named `<HOOK_NAME>_func`.)
 
 ### Example
 
@@ -60,25 +60,61 @@ def di_jet_mass(self: Producer, events: ak.Array, task: law.Task) -> ak.Array:
     return events
 ```
 
+### Update Instructions
+
+1. Checkout the [TAF interface](./task_array_functions.md#taf-interface) to learn about the arguments that the hooks receive. In particular, the `task` argument is now passed to all hooks after (and including) `post_init`.
+2. Make sure to no longer use the TAF attribites `self.task`, `self.global_shift_inst`, and `self.local_shift_inst`. Access them through `task` argument instead.
+3. Depending on whether your custom TAF required access to these attributes, for instance in the `init` hook, you need to move your code to a different hook such as `post_init`.
+4. If your TAF blocked specific resources, such as a large object, ML model, etc. loaded during `setup`, think about releasing these resources in the `teardown` hook.
+5. Also, all TAF instances are chached from now on, given the combination of `self.analysis_inst`, `self.config_inst` and `self.dataset_inst`.
+
 ## Multi-config Tasks
 
 - TODO.
+
+### Update Instructions
+
+1. TODO.
 
 ## Reducers
 
 - [Reducers](./building_blocks/reducers.md)
 - TODO.
 
+### Update Instructions
+
+1. TODO.
+
 ## Histogram Producers
 
 - [Hist producers](./building_blocks/hist_producers.md)
 - TODO.
 
+### Update Instructions
+
+1. TODO.
+
 ## Inference Model Updates
 
 - TODO.
 
+### Update Instructions
+
+1. TODO.
+
 ## Changed Plotting Task Names
 
-- see [our wiki](https://github.com/columnflow/columnflow/wiki#default-task-graph)
-- TODO.
+The visualization of systematic uncertainties is updated as of v0.3.
+A new plot method was introduced to show not only the effect of the statistical uncertainty (due to the limited amount of simulated events) as a grey, hatched area, but also that of systematic uncertainties as a differently colored band.
+
+The task that invokes this plot method by default is `cf.PlotShiftedVariables1D`.
+See the full task graph in [our wiki](https://github.com/columnflow/columnflow/wiki#default-task-graph) to see its dependencies to other tasks.
+
+**Note** that this task is not new, but it has been changed to include the systematic uncertainty bands.
+In version v0.2 and below, this task was used to plot the effect of a single up or down variation of a single shift.
+This behavior is now covered by a task called `cf.PlotShiftedVariablesPerShift1D`.
+
+### Update Instructions
+
+1. If you are interested in creating plots showing the effect of one **or multiple** shifts in the same graph, use the `cf.PlotShiftedVariables1D` task.
+2. If you want to plot the effect of a single up or down variation of a single shift, use the `cf.PlotShiftedVariablesPerShift1D` task (formerly known as `cf.PlotShiftedVariables1D`)
