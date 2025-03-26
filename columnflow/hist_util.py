@@ -147,7 +147,7 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
 
 def create_hist_from_variables(
     *variable_insts,
-    categorical_axes: tuple(tuple(str, str)) | None = None,
+    categorical_axes: tuple[tuple[str, str]] | None = None,
     weight: bool = True,
 ) -> hist.Hist:
     histogram = hist.Hist.new

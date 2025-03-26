@@ -11,7 +11,7 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, HistProducerClassMixin,
     InferenceModelMixin, HistHookMixin, MLModelsMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -28,7 +28,7 @@ class SerializeInferenceModelBase(
     ReducerClassMixin,
     ProducerClassesMixin,
     MLModelsMixin,
-    WeightProducerClassMixin,
+    HistProducerClassMixin,
     InferenceModelMixin,
     HistHookMixin,
     law.LocalWorkflow,

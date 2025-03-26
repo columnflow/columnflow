@@ -12,7 +12,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, MLModelsMixin,
-    WeightProducerClassMixin, VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin,
+    HistProducerClassMixin, VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin,
 )
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox, maybe_import
@@ -25,7 +25,7 @@ class HistogramsUserBase(
     SelectorClassMixin,
     ReducerClassMixin,
     ProducerClassesMixin,
-    WeightProducerClassMixin,
+    HistProducerClassMixin,
     MLModelsMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
