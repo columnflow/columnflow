@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import law
+import luigi
+
 import order as od
 from collections import OrderedDict
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, VariablesMixin, SelectorMixin, DatasetsProcessesMixin,
+    CalibratorsMixin, VariablesMixin, SelectorMixin, DatasetsMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase2D,
@@ -86,7 +88,9 @@ class BTagEfficiency(
 
 class BTagEfficiencyPlot(
     BTagEfficiencyBase,
-    DatasetsProcessesMixin,
+    DatasetsMixin,
+    CustomDefaultVariablesMixin,
+    VariablesMixin,
     SelectorMixin,
     CalibratorsMixin,
     law.LocalWorkflow,
@@ -97,6 +101,11 @@ class BTagEfficiencyPlot(
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_functions_2d.plot_2d",
         add_default_to_description=True,
+    )
+
+    dataset_group = luigi.Parameter(
+        default="",
+        description="the name of the label to print on the b-tagging efficiency plots to represent the dataset group.",
     )
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -143,7 +152,7 @@ class BTagEfficiencyPlot(
         import hist
         import numpy as np
 
-        # variable_insts = list(map(self.config_inst.get_variable, self.variables))
+        variable_insts = list(map(self.config_inst.get_variable, self.variables))
 
         # plot efficiency for each hadronFlavour and wp
         efficiency_hist = self.input()["collection"][0]["hist"].load(formatter="pickle")
@@ -160,7 +169,12 @@ class BTagEfficiencyPlot(
             if sys != "central":
                 h_sys -= h[{"systematic": "central"}].values()
 
-            proc = self.config_inst.get_process(self.processes[-1])
+            # create dummy process for plotting
+            proc = od.Process(
+                name=f"{self.datasets_repr}_{self.dataset_group}",
+                id="+",
+                label=self.dataset_group,
+            )
 
             # create a dummy category for plotting
             cat = od.Category(
@@ -168,7 +182,6 @@ class BTagEfficiencyPlot(
                 label=self.flavours[self.branch_data.flav],
             )
 
-            variable_insts = list(map(self.config_inst.get_variable, h_sys.axes.name))
             # custom styling:
             label_values = np.round(h_sys.values() * 100, decimals=1)
             style_config = {"plot2d_cfg": {"cmap": "PiYG", "labels": label_values}}
