@@ -10,7 +10,7 @@ import law
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, InsertableDict
-from columnflow.columnar_util import set_ak_column
+from columnflow.columnar_util import set_ak_column, fill_at
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -18,7 +18,7 @@ ak = maybe_import("awkward")
 
 # helper
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
-
+fill_at_f32 = functools.partial(fill_at, value_type=np.float32)
 
 logger = law.logger.get_logger(__name__)
 
@@ -31,10 +31,25 @@ logger = law.logger.get_logger(__name__)
     # function to determine the correction file
     get_pileup_file=(lambda self, external_files: external_files.pu_sf),
 )
-def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def pu_weight(
+    self: Producer,
+    events: ak.Array,
+    outlier_threshold: float = 10,
+    outlier_action: str = "remove",
+    **kwargs,
+) -> ak.Array:
     """
     Based on the number of primary vertices, assigns each event pileup weights using correctionlib.
+
+    The *outlier_action* defines the procedure of how to handle events with a pile up weight
+    above the *outlier_threshold*. Supported modes are:
+
+        - ``"ignore"``: events are kept unmodified
+        - ``"remove"``: pileup weight nominal/up/down and mc_weight are all set to 0 (event is removed)
+        - ``"raise"``: an exception is raised if any event has a pileup weight above the threshold
+
     """
+
     # compute the indices for looking up weights
     indices = events.Pileup.nTrueInt.to_numpy().astype("int32") - 1
 
@@ -43,6 +58,7 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         "NumTrueInteractions": indices,
     }
 
+    any_outlier_mask = ak.zeros_like(indices, dtype=np.bool)
     for column_name, syst in (
         ("pu_weight", "nominal"),
         ("pu_weight_minbias_xs_up", "up"),
@@ -54,7 +70,38 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
         # evaluate and store the produced column
         pu_weight = self.pileup_corrector.evaluate(*inputs)
-        events = set_ak_column(events, column_name, pu_weight, value_type=np.float32)
+
+        outlier_mask = (pu_weight > outlier_threshold)
+        any_outlier_mask = any_outlier_mask | outlier_mask
+        occurances = ak.sum(outlier_mask)
+        frac = occurances / len(outlier_mask) * 100
+
+        events = set_ak_column_f32(events, column_name, pu_weight, value_type=np.float32)
+
+        msg = (
+            f"in dataset {self.dataset_inst.name}, there are {occurances} ({frac:.2f}%) "
+            f"entries with pile-up weights above {outlier_threshold:.0f}"
+        )
+
+        if outlier_action == "warning":
+            logger.warning(msg)
+        elif outlier_action == "error":
+            raise ValueError(msg)
+
+    if outlier_action == "remove":
+
+        occurances = ak.sum(any_outlier_mask)
+        frac = occurances / len(any_outlier_mask) * 100
+        msg = (
+            f"in dataset {self.dataset_inst.name}, there are {occurances} ({frac:.2f}%) "
+            f"entries with any pile-up weight variation above {outlier_threshold:.0f}"
+        )
+
+        msg += f"; the columns {column_name} (nominal/up/down) have been set to 0 for these events"
+
+        events = fill_at_f32(events, any_outlier_mask, "mc_weight", 0)
+        for column_name in ("pu_weight", "pu_weight_minbias_xs_up", "pu_weight_minbias_xs_down"):
+            events = fill_at_f32(events, any_outlier_mask, column_name, 0)
 
     return events
 

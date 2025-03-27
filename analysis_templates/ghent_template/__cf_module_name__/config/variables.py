@@ -28,6 +28,14 @@ def add_variables(config: od.Config) -> None:
         discrete_x=True,
     )
     config.add_variable(
+        "jet1_pt",
+        expression="Jet.pt[:,0]",
+        null_value=EMPTY_FLOAT,
+        binning=(30, 0, 300),
+        x_title=r"leading Jet $p_T$",
+        unit="GeV",
+    )
+    config.add_variable(
         "genTop_pt",
         expression="genTop.pt[:,0]",
         null_value=EMPTY_FLOAT,

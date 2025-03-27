@@ -82,7 +82,7 @@ class CreateCutflowHistograms(
         # store the normalization weight producer for MC
         self.norm_weight_producer = None
         if self.dataset_inst.is_mc:
-            self.norm_weight_producer = Producer.get_cls("normalization_weights")(
+            self.norm_weight_producer = Producer.get_cls("stitched_normalization_weights")(
                 inst_dict=self.get_producer_kwargs(self),
             )
 

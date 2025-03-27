@@ -1318,7 +1318,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         brace_expand=True,
         parse_empty=True,
     )
-    calibrators = law.MultiCSVParameter(
+    ml_calibrators = law.MultiCSVParameter(
         default=(),
         description="multiple comma-separated sequences of names of calibrators to apply, "
         "separated by ':'; each sequence corresponds to a config in --configs; when empty, the "
@@ -1327,7 +1327,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         brace_expand=True,
         parse_empty=True,
     )
-    selectors = law.CSVParameter(
+    ml_selectors = law.CSVParameter(
         default=(),
         description="comma-separated names of selectors to apply; each selector corresponds to a "
         "config in --configs; when empty, the 'default_selector' setting of each config is used if "
@@ -1336,7 +1336,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         brace_expand=True,
         parse_empty=True,
     )
-    producers = law.MultiCSVParameter(
+    ml_producers = law.MultiCSVParameter(
         default=(),
         description="multiple comma-separated sequences of names of producers to apply, "
         "separated by ':'; each sequence corresponds to a config in --configs; when empty, the "
@@ -1369,7 +1369,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         :raises Exception: If the number of calibrator sequences does not match
             the number of configs used by the ML model.
         """
-        calibrators: Union[tuple[str], tuple[tuple[str]]] = params.get("calibrators") or (None,)
+        calibrators: Union[tuple[str], tuple[tuple[str]]] = params.get("ml_calibrators") or (None,)
 
         # broadcast to configs
         n_configs = len(ml_model_inst.config_insts)
@@ -1432,7 +1432,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         :raises Exception: If the number of selector sequences does not match
             the number of configs used by the ML model.
         """
-        selectors = params.get("selectors") or (None,)
+        selectors = params.get("ml_selectors") or (None,)
 
         # broadcast to configs
         n_configs = len(ml_model_inst.config_insts)
@@ -1494,7 +1494,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         :raises Exception: If the number of producer sequences does not match
             the number of configs used by the ML model.
         """
-        producers = params.get("producers") or (None,)
+        producers = params.get("ml_producers") or (None,)
 
         # broadcast to configs
         n_configs = len(ml_model_inst.config_insts)
@@ -1571,13 +1571,13 @@ class MLModelTrainingMixin(MLModelMixinBase):
             ml_model_inst._set_configs(params["configs"])
 
             # resolve calibrators
-            params["calibrators"] = cls.resolve_calibrators(ml_model_inst, params)
+            params["ml_calibrators"] = cls.resolve_calibrators(ml_model_inst, params)
 
             # resolve selectors
-            params["selectors"] = cls.resolve_selectors(ml_model_inst, params)
+            params["ml_selectors"] = cls.resolve_selectors(ml_model_inst, params)
 
             # resolve producers
-            params["producers"] = cls.resolve_producers(ml_model_inst, params)
+            params["ml_producers"] = cls.resolve_producers(ml_model_inst, params)
 
             # call the model's setup hook
             ml_model_inst._setup()
@@ -1623,9 +1623,9 @@ class MLModelTrainingMixin(MLModelMixinBase):
         parts.insert_after("task_family", "configs", configs_repr)
 
         for label, fct_names in [
-            ("calib", self.calibrators),
-            ("sel", tuple((sel,) for sel in self.selectors)),
-            ("prod", self.producers),
+            ("calib", self.ml_calibrators),
+            ("sel", tuple((sel,) for sel in self.ml_selectors)),
+            ("prod", self.ml_producers),
         ]:
             if not fct_names or not any(fct_names):
                 fct_names = ["none"]
@@ -2054,6 +2054,66 @@ class VariablesMixin(ConfigTask):
             return self.variables[0]
 
         return f"{len(self.variables)}_{law.util.create_hash(sorted(self.variables))}"
+
+
+class DatasetsMixin(ConfigTask):
+
+    datasets = law.CSVParameter(
+        default=(),
+        description="comma-separated dataset names or patters to select; can also be the key of a "
+        "mapping defined in the 'dataset_groups' auxiliary data of the config; when empty, uses "
+        "all datasets registered in the config; empty "
+        "default",
+        brace_expand=True,
+        parse_empty=True,
+    )
+
+    allow_empty_datasets = False
+
+    @classmethod
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve datasets
+        if "datasets" in params:
+            if params["datasets"]:
+                datasets = cls.find_config_objects(
+                    params["datasets"],
+                    config_inst,
+                    od.Dataset,
+                    config_inst.x("dataset_groups", {}),
+                )
+
+            # complain when no datasets were found
+            if not datasets and not cls.allow_empty_datasets:
+                raise ValueError(f"no datasets found matching {params['datasets']}")
+
+            params["datasets"] = tuple(datasets)
+            params["dataset_insts"] = [config_inst.get_dataset(d) for d in params["datasets"]]
+
+        return params
+
+    @classmethod
+    def get_known_shifts(cls, config_inst, params):
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+
+        # add shifts of all datasets to upstream ones
+        for dataset_inst in params.get("dataset_insts") or []:
+            if dataset_inst.is_mc:
+                upstream_shifts |= set(dataset_inst.info.keys())
+
+        return shifts, upstream_shifts
+
+    @property
+    def datasets_repr(self):
+        if len(self.datasets) == 1:
+            return self.datasets[0]
+
+        return f"{len(self.datasets)}_{law.util.create_hash(sorted(self.datasets))}"
 
 
 class DatasetsProcessesMixin(ConfigTask):

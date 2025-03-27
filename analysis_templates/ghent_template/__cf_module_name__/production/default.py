@@ -9,6 +9,8 @@ from columnflow.columnar_util import set_ak_column
 
 from columnflow.production.categories import category_ids
 
+from columnflow.production.cmsGhent.btag_weights import jet_btag
+
 from __cf_short_name_lc__.production.weights import event_weights
 from __cf_short_name_lc__.config.categories import add_categories_production
 
@@ -22,6 +24,7 @@ maybe_import("coffea.nanoevents.methods.nanoaod")
     uses=({
         category_ids,
         event_weights,
+        jet_btag,
     } | four_vec(
         {"Electron", "Muon", }
     ) | four_vec(
@@ -42,10 +45,11 @@ def default(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # (re)produce category i
     events = self[category_ids](events, **kwargs)
 
+    events = self[jet_btag](events, working_points=["M",], jet_mask=(abs(events.Jet.eta) < 2.4))
+
     events = set_ak_column(events, "ht", ak.sum(events.Jet.pt, axis=1), value_type=np.float32)
     events = set_ak_column(events, "n_jet", ak.sum(events.Jet.pt > 0, axis=1))
-    events = set_ak_column(events, "n_bjet", ak.sum(events.Jet.btagDeepFlavB >=
-                           self.config_inst.x.btag_working_points.deepjet.medium, axis=1))
+    events = set_ak_column(events, "n_bjet", ak.sum(events.Jet.btag_M, axis=1))
     events = set_ak_column(events, "n_electron", ak.sum(events.Electron.pt > 0, axis=1))
     events = set_ak_column(events, "n_muon", ak.sum(events.Muon.pt > 0, axis=1))
 

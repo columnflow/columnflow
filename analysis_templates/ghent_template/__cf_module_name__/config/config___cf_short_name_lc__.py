@@ -16,10 +16,13 @@ from columnflow.config_util import (
 from __cf_short_name_lc__.config.styling import stylize_processes
 from __cf_short_name_lc__.config.datasets import add_datasets, configure_datasets
 from __cf_short_name_lc__.config.processes import add_processes
+from __cf_short_name_lc__.config.settings.settings import add_settings
 from __cf_short_name_lc__.config.veto import add_vetoes
 from __cf_short_name_lc__.config.categories import add_categories_selection
 from __cf_short_name_lc__.config.variables import add_variables
 from __cf_short_name_lc__.config.shifts import add_shifts
+from __cf_short_name_lc__.config.groups import add_groups
+
 from __cf_short_name_lc__.selection.trigger import add_triggers
 
 ak = maybe_import("awkward")
@@ -57,6 +60,7 @@ def add_config(
 
     add_triggers(cfg, campaign)
     add_datasets(cfg, campaign)
+    add_settings(cfg)
     add_vetoes(cfg)
     configure_datasets(cfg, limit_dataset_files)
 
@@ -84,154 +88,6 @@ def add_config(
         })
 
     cfg.x.minbias_xs = Number(69.2, 0.046j)
-
-    # jec configuration
-    # https://twiki.cern.ch/twiki/bin/view/CMS/JECDataMC?rev=201
-    jerc_postfix = "APV" if year == 2016 and campaign.x.vfp == "post" else ""
-    cfg.x.jec = {
-        "Jet": DotDict.wrap({
-            "campaign": f"Summer19UL{year2}{jerc_postfix}",
-            "version": {2016: "V7", 2017: "V5", 2018: "V5"}[year],
-            "jet_type": "AK4PFchs",
-            "levels": ["L1FastJet", "L2Relative", "L2L3Residual", "L3Absolute"],
-            "levels_for_type1_met": ["L1FastJet"],
-            "uncertainty_sources": [
-                # "AbsoluteStat",
-                # "AbsoluteScale",
-                # "AbsoluteSample",
-                # "AbsoluteFlavMap",
-                # "AbsoluteMPFBias",
-                # "Fragmentation",
-                # "SinglePionECAL",
-                # "SinglePionHCAL",
-                # "FlavorQCD",
-                # "TimePtEta",
-                # "RelativeJEREC1",
-                # "RelativeJEREC2",
-                # "RelativeJERHF",
-                # "RelativePtBB",
-                # "RelativePtEC1",
-                # "RelativePtEC2",
-                # "RelativePtHF",
-                # "RelativeBal",
-                # "RelativeSample",
-                # "RelativeFSR",
-                # "RelativeStatFSR",
-                # "RelativeStatEC",
-                # "RelativeStatHF",
-                # "PileUpDataMC",
-                # "PileUpPtRef",
-                # "PileUpPtBB",
-                # "PileUpPtEC1",
-                # "PileUpPtEC2",
-                # "PileUpPtHF",
-                # "PileUpMuZero",
-                # "PileUpEnvelope",
-                # "SubTotalPileUp",
-                # "SubTotalRelative",
-                # "SubTotalPt",
-                # "SubTotalScale",
-                # "SubTotalAbsolute",
-                # "SubTotalMC",
-                "Total",
-                # "TotalNoFlavor",
-                # "TotalNoTime",
-                # "TotalNoFlavorNoTime",
-                # "FlavorZJet",
-                # "FlavorPhotonJet",
-                # "FlavorPureGluon",
-                # "FlavorPureQuark",
-                # "FlavorPureCharm",
-                # "FlavorPureBottom",
-                # "TimeRunA",
-                # "TimeRunB",
-                # "TimeRunC",
-                # "TimeRunD",
-                "CorrelationGroupMPFInSitu",
-                "CorrelationGroupIntercalibration",
-                "CorrelationGroupbJES",
-                "CorrelationGroupFlavor",
-                "CorrelationGroupUncorrelated",
-            ],
-        })
-    }
-
-    # JER
-    # https://twiki.cern.ch/twiki/bin/view/CMS/JetResolution?rev=107
-    cfg.x.jer = {
-        "Jet": DotDict.wrap({
-            "campaign": f"Summer19UL{year2}{jerc_postfix}",
-            "version": "JR" + {2016: "V3", 2017: "V2", 2018: "V2"}[year],
-            "jet_type": "AK4PFchs",
-        })
-    }
-
-    # JEC uncertainty sources propagated to btag scale factors
-    # (names derived from contents in BTV correctionlib file)
-    cfg.x.btag_sf_jec_sources = [
-        "",  # total
-        "Absolute",
-        "AbsoluteMPFBias",
-        "AbsoluteScale",
-        "AbsoluteStat",
-        f"Absolute_{year}",
-        "BBEC1",
-        f"BBEC1_{year}",
-        "EC2",
-        f"EC2_{year}",
-        "FlavorQCD",
-        "Fragmentation",
-        "HF",
-        f"HF_{year}",
-        "PileUpDataMC",
-        "PileUpPtBB",
-        "PileUpPtEC1",
-        "PileUpPtEC2",
-        "PileUpPtHF",
-        "PileUpPtRef",
-        "RelativeBal",
-        "RelativeFSR",
-        "RelativeJEREC1",
-        "RelativeJEREC2",
-        "RelativeJERHF",
-        "RelativePtBB",
-        "RelativePtEC1",
-        "RelativePtEC2",
-        "RelativePtHF",
-        "RelativeSample",
-        f"RelativeSample_{year}",
-        "RelativeStatEC",
-        "RelativeStatFSR",
-        "RelativeStatHF",
-        "SinglePionECAL",
-        "SinglePionHCAL",
-        "TimePtEta",
-    ]
-
-    # b-tag working points
-    # https://twiki.cern.ch/twiki/bin/view/CMS/BtagRecommendation106XUL16preVFP?rev=6
-    # https://twiki.cern.ch/twiki/bin/view/CMS/BtagRecommendation106XUL16postVFP?rev=8
-    # https://twiki.cern.ch/twiki/bin/view/CMS/BtagRecommendation106XUL17?rev=15
-    # https://twiki.cern.ch/twiki/bin/view/CMS/BtagRecommendation106XUL17?rev=17
-    btag_key = f"2016{campaign.x.vfp}" if year == 2016 else year
-    cfg.x.btag_working_points = DotDict.wrap({
-        "deepjet": {
-            "loose": {"2016pre": 0.0508, "2016post": 0.0480, 2017: 0.0532, 2018: 0.0490}[btag_key],
-            "medium": {"2016pre": 0.2598, "2016post": 0.2489, 2017: 0.3040, 2018: 0.2783}[btag_key],
-            "tight": {"2016pre": 0.6502, "2016post": 0.6377, 2017: 0.7476, 2018: 0.7100}[btag_key],
-        },
-        "deepcsv": {
-            "loose": {"2016pre": 0.2027, "2016post": 0.1918, 2017: 0.1355, 2018: 0.1208}[btag_key],
-            "medium": {"2016pre": 0.6001, "2016post": 0.5847, 2017: 0.4506, 2018: 0.4168}[btag_key],
-            "tight": {"2016pre": 0.8819, "2016post": 0.8767, 2017: 0.7738, 2018: 0.7665}[btag_key],
-        },
-    })
-    cfg.x.btag_sf = ("deepJet_shape", cfg.x.btag_sf_jec_sources)
-
-    # names of electron correction sets and working points
-    # (used in the electron_sf producer)
-    cfg.x.electron_sf_names = ("UL-Electron-ID-SF", f"{year}{corr_postfix}", "wp80iso")
-    cfg.x.muon_sf_names = ("NUM_TightRelIso_DEN_TightIDandIPCut", f"{year}{corr_postfix}_UL")
 
     # external files
     json_mirror = "/cvmfs/cms.cern.ch/rsync/cms-nanoAOD/jsonpog-integration"
@@ -266,43 +122,12 @@ def add_config(
         "pu_sf": (f"{json_mirror}/POG/LUM/{year}{corr_postfix}_UL/puWeights.json.gz", "v1")
     })
 
-    # process groups for conveniently looping over certain processs
-    # (used in wrapper_factory and during plotting)
-    cfg.x.process_groups = {
-        "test": ["tt_dl"],
-        "all": ["tt_dl", "dy", "data"],
-        "sim": ["tt_dl", "dy"],
-    }
-
-    # dataset groups for conveniently looping over certain datasets
-    # (used in wrapper_factory and during plotting)
-    cfg.x.dataset_groups = {
-        "test": ["tt_dl_powheg"],
-        "all": ["tt_dl_powheg", "dy*", "data*"],
-        "sim": ["tt_dl_powheg", "dy*"],
-    }
-
-    cfg.x.variable_groups = {
-        "default": ["n_jet"],
-    }
-
-    # category groups for conveniently looping over certain categories
-    # (used during plotting)
-    cfg.x.category_groups = {
-        "default": ["incl"],
-    }
-
     # shift groups for conveniently looping over certain shifts
     # (used during plotting)
     cfg.x.event_weights = DotDict()
     cfg.x.event_weights["normalization_weight"] = []
     add_shifts(cfg)
-
-    cfg.x.shift_groups = {
-        "jer": ["nominal", "jer_up", "jer_down"],
-        "btag": ["nominal", "btag*"],
-        "all": cfg.shifts.names(),
-    }
+    add_groups(cfg)
 
     # selector step groups for conveniently looping over certain steps
     # (used in cutflow tasks)
@@ -330,7 +155,7 @@ def add_config(
             # columns added during selection, required in general
             "mc_weight", "PV.npvs", "process_id", "category_ids", "deterministic_seed",
             # weight-related columns
-            "pu_weight*", "pdf_weight*",
+            "pu_weight*", "pdf_weight*", "isr_weight*", "fsr_weight*",
             "murf_envelope_weight*", "mur_weight*", "muf_weight*",
             "btag_weight*",
             # extra columns
@@ -349,7 +174,7 @@ def add_config(
     cfg.x.default_ml_model = None
     cfg.x.default_inference_model = "example"
     cfg.x.default_variables = ("n_jet",)
-    cfg.x.default_cateogries = ("incl",)
+    cfg.x.default_categories = ("incl",)
 
     add_categories_selection(cfg)
     add_variables(cfg)

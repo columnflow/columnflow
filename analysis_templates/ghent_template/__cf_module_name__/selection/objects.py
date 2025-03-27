@@ -7,29 +7,18 @@ Selection modules for object selection of Muon, Electron, and Jet.
 from collections import defaultdict
 from typing import Tuple
 
-import law
-
 from columnflow.util import maybe_import, four_vec
 from columnflow.columnar_util import set_ak_column
-from columnflow.production.util import attach_coffea_behavior
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.selection.util import masked_sorted_indices
 
 ak = maybe_import("awkward")
 
 
-def masked_sorted_indices(mask: ak.Array, sort_var: ak.Array, ascending: bool = False) -> ak.Array:
-    """
-    Helper function to obtain the correct indices of an object mask
-    """
-    indices = ak.argsort(sort_var, axis=-1, ascending=ascending)
-    return indices[mask[indices]]
-
-
 @selector(
     uses=four_vec(
         ("Muon"),
-        ("sip3d", "dxy", "dz", "miniPFRelIso_all", "tightId")
+        ("sip3d", "dxy", "dz", "miniPFRelIso_all", "mediumId")
     ) | {"event"},
     triggers=None
 )
@@ -55,7 +44,7 @@ def muon_object(
     # tight object muon mask (tight cutbased ID)
     mu_mask_tight = (
         (mu_mask) &
-        (muon.tightId)
+        (muon.mediumId)
     )
 
     events = set_ak_column(events, "Muon.tight", mu_mask_tight, value_type=bool)
