@@ -17,7 +17,7 @@ import law
 import order as od
 import scinum as sn
 
-from columnflow.util import maybe_import, try_int, try_complex
+from columnflow.util import maybe_import, try_int, try_complex, UNSET
 from columnflow.types import Iterable, Any, Callable, Sequence
 
 math = maybe_import("math")
@@ -66,6 +66,14 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
         cms_label_kwargs["exp"] = ""
 
     return cms_label_kwargs
+
+
+def get_attr_or_aux(proc: od.AuxDataMixin, attr: str, default: Any) -> Any:
+    if (value := getattr(proc, attr, UNSET)) != UNSET:
+        return value
+    if proc.has_aux(attr):
+        return proc.get_aux(attr)
+    return default
 
 
 def round_dynamic(value: int | float) -> int | float:
@@ -200,18 +208,18 @@ def apply_process_scaling(hists: dict) -> dict:
         nonlocal stack_integral
         if stack_integral is None:
             stack_integral = sum(
-                _remove_residual_axis(proc_h, "shift", select_value="nominal").sum().value
+                remove_residual_axis_single(proc_h, "shift", select_value="nominal").sum().value
                 for proc, proc_h in hists.items()
-                if proc.is_mc and not getattr(proc, "unstack", False)
+                if proc.is_mc and not get_attr_or_aux(proc, "unstack", False)
             )
         return stack_integral
 
     for proc_inst, h in hists.items():
         # apply "scale" setting directly to the hists
-        scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
+        scale_factor = get_attr_or_aux(proc_inst, "scale", None)
         if scale_factor == "stack":
             # compute the scale factor and round
-            h_no_shift = _remove_residual_axis(h, "shift", select_value="nominal")
+            h_no_shift = remove_residual_axis_single(h, "shift", select_value="nominal")
             scale_factor = round_dynamic(get_stack_integral() / h_no_shift.sum().value)
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
@@ -269,7 +277,7 @@ def apply_variable_settings(
     # apply certain  setting directly to histograms
     for var_inst in variable_insts:
         # rebinning
-        rebin_factor = getattr(var_inst, "rebin", None) or var_inst.x("rebin", None)
+        rebin_factor = get_attr_or_aux(var_inst, "rebin", None)
         if try_int(rebin_factor):
             for proc_inst, h in list(hists.items()):
                 rebin_factor = int(rebin_factor)
@@ -277,12 +285,8 @@ def apply_variable_settings(
                 hists[proc_inst] = h
 
         # overflow and underflow bins
-        overflow = getattr(var_inst, "overflow", None)
-        if overflow is None:
-            overflow = var_inst.x("overflow", False)
-        underflow = getattr(var_inst, "underflow", None)
-        if underflow is None:
-            underflow = var_inst.x("underflow", False)
+        overflow = get_attr_or_aux(var_inst, "overflow", False)
+        underflow = get_attr_or_aux(var_inst, "underflow", False)
 
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
@@ -290,7 +294,7 @@ def apply_variable_settings(
                 hists[proc_inst] = h
 
         # slicing
-        slices = getattr(var_inst, "slice", None) or var_inst.x("slice", None)
+        slices = get_attr_or_aux(var_inst, "slice", None)
         if (
             slices and isinstance(slices, Iterable) and len(slices) >= 2 and
             try_complex(slices[0]) and try_complex(slices[1])
@@ -356,10 +360,13 @@ def use_flow_bins(
     return h_out
 
 
-def apply_density(hists: dict) -> dict:
+def apply_density(hists: dict, density: bool = True) -> dict:
     """
     Scales number of histogram entries to bin widths.
     """
+    if not density:
+        return hists
+
     for key, hist in hists.items():
         # bin area safe for multi-dimensional histograms
         area = functools.reduce(operator.mul, hist.axes.widths)
@@ -370,7 +377,7 @@ def apply_density(hists: dict) -> dict:
     return hists
 
 
-def _remove_residual_axis(
+def remove_residual_axis_single(
     h: hist.Hist,
     ax_name: str,
     max_bins: int = 1,
@@ -410,7 +417,7 @@ def remove_residual_axis(
     raises Exception otherwise
     """
     return {
-        key: _remove_residual_axis(h, ax_name, max_bins=max_bins, select_value=select_value)
+        key: remove_residual_axis_single(h, ax_name, max_bins=max_bins, select_value=select_value)
         for key, h in hists.items()
     }
 
@@ -495,19 +502,19 @@ def prepare_stack_plot_config(
 
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
-        proc_hide_stat_errors = getattr(process_inst, "hide_stat_errors", hide_stat_errors)
+        proc_hide_stat_errors = get_attr_or_aux(process_inst, "hide_stat_errors", hide_stat_errors)
         if process_inst.is_data:
-            data_hists.append(_remove_residual_axis(h, "shift", select_value="nominal"))
+            data_hists.append(remove_residual_axis_single(h, "shift", select_value="nominal"))
             data_hide_stat_errors.append(proc_hide_stat_errors)
             if data_label is None:
                 data_label = process_inst.label
-        elif getattr(process_inst, "unstack", False):
-            line_hists.append(_remove_residual_axis(h, "shift", select_value="nominal"))
+        elif get_attr_or_aux(process_inst, "unstack", False):
+            line_hists.append(remove_residual_axis_single(h, "shift", select_value="nominal"))
             line_colors.append(process_inst.color1)
             line_labels.append(process_inst.label)
             line_hide_stat_errors.append(proc_hide_stat_errors)
         else:
-            mc_hists.append(_remove_residual_axis(h, "shift", select_value="nominal"))
+            mc_hists.append(remove_residual_axis_single(h, "shift", select_value="nominal"))
             mc_colors.append(process_inst.color1)
             mc_edgecolors.append(process_inst.color2)
             mc_labels.append(process_inst.label)

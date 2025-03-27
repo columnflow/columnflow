@@ -28,7 +28,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 from columnflow.hist_util import add_missing_shifts
-from columnflow.config_util import get_shifts_from_sources
+from columnflow.config_util import get_shift_from_configs
 
 
 class _PlotVariablesBase(
@@ -367,7 +367,7 @@ class PlotVariablesBaseSingleShift(
         return parts
 
     def get_plot_shifts(self):
-        return [self.config_inst.get_shift(self.shift)]
+        return [get_shift_from_configs(self.config_insts, self.shift)]
 
 
 class PlotVariables1D(
@@ -532,10 +532,13 @@ class PlotVariablesBaseMultiShifts(
 
         # gather sources, and expand to up/down shifts
         sources = self.shift_sources if self.combine_shifts else [self.branch_data.shift_source]
-        insts = get_shifts_from_sources(self.config_inst, *sources)
+        shifts = []
+        for source in sources:
+            shifts.append(get_shift_from_configs(self.config_insts, f"{source}_{od.Shift.UP}"))
+            shifts.append(get_shift_from_configs(self.config_insts, f"{source}_{od.Shift.DOWN}"))
 
         # add nominal
-        return [self.config_inst.get_shift("nominal")] + insts
+        return [self.config_inst.get_shift("nominal"), *shifts]
 
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting

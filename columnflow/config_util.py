@@ -308,6 +308,23 @@ def add_shift_aliases(
         shift.x.column_aliases = _aliases
 
 
+def get_shift_from_configs(configs: list[od.Config], shift: str | od.Shift, silent: bool = False) -> od.Shift | None:
+    """
+
+    """
+    if isinstance(shift, od.Shift):
+        shift = shift.name
+
+    for config in configs:
+        if config.has_shift(shift):
+            return config.get_shift(shift)
+
+    if silent:
+        return None
+
+    raise ValueError(f"shift '{shift}' not found in any of the given configs: {configs}")
+
+
 def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) -> list[od.Shift]:
     """
     Takes a *config* object and returns a list of shift instances for both directions given a

@@ -49,13 +49,13 @@ def draw_stat_error_bands(
         "x": h.axes[0].centers,
         "bottom": baseline * (1 - rel_stat_error),
         "height": baseline * 2 * rel_stat_error,
-        **kwargs,
         "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
         "hatch": "///",
         "linewidth": 0,
         "color": "none",
         "edgecolor": "black",
         "alpha": 1.0,
+        **kwargs,
     }
     ax.bar(**bar_kwargs)
 
@@ -147,13 +147,13 @@ def draw_syst_error_bands(
         "x": h.axes[0].centers,
         "bottom": baseline * (1 - rel_syst_error_down),
         "height": baseline * (rel_syst_error_up + rel_syst_error_down),
-        **kwargs,
         "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
         "hatch": "\\\\\\",
         "linewidth": 0,
         "color": "none",
         "edgecolor": "#30c300",
         "alpha": 1.0,
+        **kwargs,
     }
     ax.bar(**bar_kwargs)
 
