@@ -116,10 +116,12 @@ def draw_syst_error_bands(
         up_diffs = []
         down_diffs = []
         for source, (up_shift, down_shift) in shift_groups.items():
-            up_diff = shift_stacks[up_shift].values()[b] - h.values()[b]
-            down_diff = shift_stacks[down_shift].values()[b] - h.values()[b]
-            up_diffs.append(max(up_diff, down_diff, 0))
-            down_diffs.append(min(up_diff, down_diff, 0))
+            # get actual differences resulting from this shift
+            shift_up_diff = shift_stacks[up_shift].values()[b] - h.values()[b]
+            shift_down_diff = shift_stacks[down_shift].values()[b] - h.values()[b]
+            # store them depending on whether they really increase or decrease the yield
+            up_diffs.append(max(shift_up_diff, shift_down_diff, 0))
+            down_diffs.append(min(shift_up_diff, shift_down_diff, 0))
         # combination based on the method
         if method == "quadratic_sum":
             up_diff = sum(d**2 for d in up_diffs)**0.5
