@@ -74,7 +74,8 @@ def fill_hist(
 
     # fill
     arrays = ak.flatten(ak.cartesian(data))
-    h.fill(**fill_kwargs, **{field: arrays[field] for field in arrays.fields})
+    if len(arrays) > 0:
+        h.fill(**fill_kwargs, **{field: arrays[field] for field in arrays.fields})
 
 
 def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist:

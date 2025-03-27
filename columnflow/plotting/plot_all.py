@@ -192,7 +192,7 @@ def draw_hist_twin(
     ax2 = ax.twinx()
     draw_hist(ax2, h, norm, **kwargs)
     bin_widths = h.axes[0].widths
-    ax2.set_ylabel(r"Entries / {:.2f} GeV".format(bin_widths[0]))
+    ax2.set_ylabel(r"Events / {:.2f} GeV".format(bin_widths[0]))
 
 
 def plot_all(

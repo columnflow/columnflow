@@ -1539,14 +1539,7 @@ class MLModelsMixin(AnalysisTask):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # get the ML model instances
-        self.ml_model_insts = [
-            MLModelMixinBase.get_ml_model_inst(
-                ml_model,
-                self.analysis_inst,
-                requested_configs=self.config_insts,
-            )
-            for ml_model in self.ml_models
-        ]
+        self.ml_model_insts = None
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()

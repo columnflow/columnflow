@@ -219,7 +219,7 @@ class CreateHistograms(
                     [Route(c).apply(events) for c in self.category_id_columns],
                     axis=-1,
                 )
-                unique_category_ids = np.unique(category_ids)
+                unique_category_ids = np.unique(ak.flatten(category_ids))
                 if any(cat_id not in category_map for cat_id in unique_category_ids):
                     undefined_category_ids = set(unique_category_ids) - set(category_map)
                     raise ValueError(
