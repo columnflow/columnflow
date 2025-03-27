@@ -1,5 +1,8 @@
-# version 9
+# version 10
 
+# use packages from columnar sandbox as baseline
 -r columnar.txt
 
-tensorflow~=2.11.0
+# add numpy and tensorflow with exact version requirement
+numpy==1.26.4
+tensorflow==2.11.0

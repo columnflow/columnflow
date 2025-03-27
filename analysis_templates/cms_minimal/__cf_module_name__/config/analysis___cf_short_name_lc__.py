@@ -98,7 +98,7 @@ dataset_names = [
     # backgrounds
     "tt_sl_powheg",
     # signals
-    "st_tchannel_t_powheg",
+    "st_tchannel_t_4f_powheg",
 ]
 for dataset_name in dataset_names:
     # add the dataset
@@ -235,7 +235,7 @@ cfg.add_shift(name="mu_down", id=11, type="shape")
 add_shift_aliases(cfg, "mu", {"muon_weight": "muon_weight_{direction}"})
 
 # external files
-json_mirror = "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c"
+json_mirror = "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-377439e8"
 cfg.x.external_files = DotDict.wrap({
     # lumi files
     "lumi": {
