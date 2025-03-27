@@ -167,14 +167,14 @@ They can be accessed as usual to retrieve information about the context in which
 
 Hooks are called thereafter in various places:
 
-- `pre_init_func(self)`: Called before dependency creation, can be used to control `deps_kwargs` that are passed to dependent TAFs.
-- `init_func(self)`: Initialization of the TAF, can control dynamic registration of used and produced columns or dependencies, as well as systemtic shifts.
-- `skip_func(self)`: Whether this TAF should be skipped altogether.
-- `post_init_func(self, task)`: Can control dynamic registration of used and produced columns, but no additional TAF dependencies.
-- `requires_func(self, task, reqs)`: Allows adding extra task requirements to `reqs` that will be resolved before the tasks commences.
-- `setup_func(self, task, reqs, inputs, reader_targets)`: Allows setting up objects needed for actual function calls, receiving requirements defined in `requires_func` as well as their produced outputs via `inputs`;
-- `call_func(self, events, task, **kwargs)`: Actual events chunk processing, can be called multiple times for different chunks.
-- `teardown_func(self, task)`: Called after processing, but potentially before chunk merging, allows reducing memory footprint by eagerly freeing up resources.
+- `pre_init(self)`: Called before dependency creation, can be used to control `deps_kwargs` that are passed to dependent TAFs.
+- `init(self)`: Initialization of the TAF, can control dynamic registration of used and produced columns or dependencies, as well as systemtic shifts.
+- `skip(self)`: Whether this TAF should be skipped altogether.
+- `post_init(self, task)`: Can control dynamic registration of used and produced columns, but no additional TAF dependencies.
+- `requires(self, task, reqs)`: Allows adding extra task requirements to `reqs` that will be resolved before the tasks commences.
+- `setup(self, task, reqs, inputs, reader_targets)`: Allows setting up objects needed for actual function calls, receiving requirements defined in `requires` as well as their produced outputs via `inputs`;
+- `call(self, events, task, **kwargs)`: Actual events chunk processing, can be called multiple times for different chunks.
+- `teardown(self, task)`: Called after processing, but potentially before chunk merging, allows reducing memory footprint by eagerly freeing up resources.
 
 ## Full example
 

@@ -128,7 +128,8 @@ def example(self: Reducer, events: ak.Array, selection: ak.Array, **kwargs) -> a
 
     # compute and store additional columns after the default reduction
     # (so only on a subset of the events and objects which might be computationally lighter)
-    events = set_ak_column(events, "Jet.from_b_hadron", abs(events.Jet.hadronFlavour) == 5, value_type=bool)
+    col = abs(events.Jet.hadronFlavour) == 5
+    events = set_ak_column(events, "Jet.from_b_hadron", col, value_type=bool)
 
     return events
 ```
@@ -142,12 +143,58 @@ def example(self: Reducer, events: ak.Array, selection: ak.Array, **kwargs) -> a
 
 ## Histogram Producers
 
-- [Hist producers](./building_blocks/hist_producers.md)
-- TODO.
+In release v0.2 and before, the amount of control users had over the creation of histograms within `cf.CreateHistograms` was limited to the selection of variables to use (through the `--variables` parameter) and the definition of event weights to be used during histogram filling.
+The latter was configured by specifying a so-called weight producer (through the `--weight-producer` parameter), was referred to the name of a task array function.
+
+As of v0.3, we generalized this concept and renamed it to **histogram producers**.
+Use `--hist-producer` in the command line to specify the histogram producer you intend to use.
+See the full [histogram producer documentation](./building_blocks/hist_producers.md) for more info.
+
+In short, histogram producers [continue to be task array functions](./task_array_functions.md#histogram-producers), however, they provide additional hooks to control different aspects of the histograming process:
+
+- `create_hist(self, variables: list[od.Variable], task: law.Task) -> hist.Histogram`: Given a list of variables, creates and returns a new histogram, with arbitrary axes, binning and weight storage.
+- `fill_hist(self, h: hist.Histogram, data: dict[str, Any], task: law.Task) -> None`: Provided columnar data to fill (with fields `"category"`, `"process"`, `"shift"` (a string) and `"weight"`), controls the way this data is filled into the histogram.
+- `post_process_hist(self, h: hist.Histogram, task: law.Task) -> hist.Histogram`: After all data was filled in `cf.CreateHistogram`, allows to change the histogram before it is saved to disk.
+- `post_process_merged_hist(self, h: hist.Histogram, task: law.Task) -> hist.Histogram`: Invoked by `cf.MergeHistograms`, allows to change the merged histogram before it is saved for subsequent processing.
+
+The only requirement that columnflow imposes on histograms for plotting and export as part of statistical models is the existence of axes `"category"` (str), `"process"` (int) and `"shift"` (str) **after** merging.
+
+The main callable of a histogram producer continues to be responsible for returning (and potentially preprocessing) the event chunk to histogram, as well as a float array representing event weights in a 2-tuple, consistent with the previous behavior of weight producers.
+
+**Note** that, unlike for most other task array functions, columnflow provides a default histogram producer named {py:class}`~columnflow.histograming.default.cf_default`.
+It handles the histogram definition and filling in a backwards-compatible way, as well as a post-processing step that converts the category and shift axes from categorical integer to string types (for consistency across configuration objects when used in multi-config tasks).
+It is recommended to extend this default histogram producer in case you only need to change a single aspect of the histograming process with respect to the default behavior.
+See the example below for how to do this.
+
+### Example
+
+```python
+from columnflow.histograming import HistProducer
+from columnflow.histograming.default import cf_default
+from columnflow.util import maybe_import
+
+ak = maybe_import("awkward")
+
+@cf_default.hist_producer(
+    uses={"{normalization,pileup,btag}_weight"}
+)
+def example(self: HistProducer, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Example histogram producer that inherits from columnflow's default and
+    changes the event weight only.
+    """
+    # compute the event weight
+    weight = events.normalization_weight * events.pileup_weight * events.btag_weight
+
+    return events, weight
+```
 
 ### Update Instructions
 
-1. TODO.
+1. In case you used a weight producer before, convert it to a {py:meth}`~columnflow.histograming.HistProducer`. There should be no change necessary for the main event callable.
+2. On the command line, use `--hist-producer` instead of `--weight-producer`.
+3. Note that the `weight__` prefix in the weight producer related fragment of output paths of all tasks downstream of (and including) `cf.CreateHistograms` were changed to `hist__` accordingly.
+4. If you do not intend to alter the default histogram definition, filling and post-processing, make sure to inherit from {py:class}`~columnflow.histograming.default.cf_default` as shown in the example above.
 
 ## Inference Model Updates
 
@@ -170,7 +217,8 @@ from columnflow.inference import InferenceModel, inference_model
 @inference_model
 def example_model(self: InferenceModel) -> None:
     """
-    Initialization method for the inference model. Use instance methods to define categories, processes and parameters.
+    Initialization method for the inference model.
+    Use instance methods to define categories, processes and parameters.
     """
     # add a category
     self.add_category(
@@ -178,9 +226,12 @@ def example_model(self: InferenceModel) -> None:
         # add config dependent settings
         config_data={
             config_inst.name: self.category_config_spec(
-                category=f"{ch}__{cat}__os__iso",  # name of the analysis category in the config
-                variable="jet1_pt",  # name of the variable
-                data_datasets=["data_*"],  # names (or patterns) of datasets with real data in the config
+                # name of the analysis category in the config
+                category=f"{ch}__{cat}__os__iso",
+                # name of the variable
+                variable="jet1_pt",
+                # names (or patterns) of datasets with real data in the config
+                data_datasets=["data_*"],
             )
             for config_inst in self.config_insts
         },
@@ -195,8 +246,10 @@ def example_model(self: InferenceModel) -> None:
         # add config dependent settings
         config_data={
             config_inst.name: self.process_config_spec(
-                process=["tt_sl", "tt_dl", "tt_fh"],  # names of processes in the config
-                mc_datasets=["tt_sl_powheg", "tt_dl_...", ...],  # names of MC datasets in the config
+                # names of processes in the config
+                process=["tt_sl", "tt_dl", "tt_fh"],
+                # names of MC datasets in the config
+                mc_datasets=["tt_sl_powheg", "tt_dl_...", ...],
             ),
         },
         # additional process settings
