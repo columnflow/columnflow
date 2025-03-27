@@ -125,6 +125,7 @@ def jet_btag_requires(self: Producer, reqs: dict) -> None:
     # Missing dataset groups are calculated with the BTagEfficiency task
     mc_only=True,
     weight_name="btag_weight",
+    produce_plots=True,
 )
 def fixed_wp_btag_weights(
     self: Producer,
@@ -358,6 +359,17 @@ def fixed_wp_btag_weights_requires(self: Producer, reqs: dict) -> None:
             datasets=self.datasets,
             variables=self.variables,
         )
+
+        if self.produce_plots:
+            from columnflow.tasks.cmsGhent.btagefficiency import BTagEfficiencyPlot
+            reqs["btag_efficiency_plots"] = BTagEfficiencyPlot.req(
+                self.task,
+                branch=-1,
+                _exclude={"branches"},
+                datasets=self.datasets,
+                variables=self.variables,
+                dataset_group=self.dataset_group,
+            )
 
 
 @producer(
