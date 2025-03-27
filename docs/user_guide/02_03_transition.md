@@ -88,7 +88,7 @@ All instructions only apply to the CLI usage of tasks.
 
 1. Tasks listed above no longer have a `--config` parameter. However, they now have a `--configs` parameter that accepts multiple configuration names as a comma-separate sequece. In order to achieve the single-config behavior, just pass the name of a single configuration here.
 2. Specific other parameters of multi-config tasks changed as well. Most notably, the `--datasets` and `--processes` parameters, which previously allowed for defining sequences of dataset and process names on the command line, now accept muliple comma-separated sequences. The number of sequences should be exactly one (applies to all configurations) or match the number of configurations given in `--configs` (one-to-one assignment). Sequences should be separater by colons.
-    - Example: `law.run cf.PlotVariables1D --configs 22pre,22post --datasets tt_sl,st_tw:tt_sl,st_s`
+   - Example: `law.run cf.PlotVariables1D --configs 22pre,22post --datasets tt_sl,st_tw:tt_sl,st_s`
 
 ## Reducers
 
@@ -264,9 +264,9 @@ def example_model(self: InferenceModel) -> None:
 1. In definitions of categories, processes and parameters within your inference model, make sure that all pointers that refer for analysis-specific objects are stored in a dictionary with keys being configuration names.
 2. These dictionaries are stored in fields named `config_data`.
 3. Use the provided factory functions to create these dictionary structures to invoke some additional value validation:
-    - for categories: {py:meth}`~columnflow.inference.InferenceModel.category_config_spec`
-    - for processes: {py:meth}`~columnflow.inference.InferenceModel.process_config_spec`
-    - for parameters: {py:meth}`~columnflow.inference.InferenceModel.parameter_config_spec`
+   - for categories: {py:meth}`~columnflow.inference.InferenceModel.category_config_spec`
+   - for processes: {py:meth}`~columnflow.inference.InferenceModel.process_config_spec`
+   - for parameters: {py:meth}`~columnflow.inference.InferenceModel.parameter_config_spec`
 
 ## Changed Plotting Task Names
 
