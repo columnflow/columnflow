@@ -151,11 +151,69 @@ def example(self: Reducer, events: ak.Array, selection: ak.Array, **kwargs) -> a
 
 ## Inference Model Updates
 
-- TODO.
+As stated [above](#multi-config-tasks), multi-config tasks allow for the inclusion of multiple analysis configurations in a single task to be able to access event data that spans multiple eras.
+This is particularly useful for tasks that export statistical models like `cf.CreateDatacards` (CMS-specific), and all other tasks that inherit from the generalized `SerializeInferenceModelBase` task.
+
+To support this new feature, the underlying {py:class}`~columnflow.inference.InferenceModel`, i.e., the container object able to configure statistical models for your analysis, was updated.
+Pointers to analysis-specific objects in category and process defintions are now to be stored per configuration (see example below).
+This info is picked up by (e.g.) `cf.CreateDatacards` to pull in information and data from multiple data taking eras to potentially fill their event data into the same inference category.
+
+As for all multi-config tasks, pass a sequence of configuration names to the `--configs` parameter on the command line.
+
+### Example
+
+The following example demonstrates how to define an inference model that ...
+
+```python
+from columnflow.inference import InferenceModel, inference_model
+
+@inference_model
+def example_model(self: InferenceModel) -> None:
+    """
+    Initialization method for the inference model. Use instance methods to define categories, processes and parameters.
+    """
+    # add a category
+    self.add_category(
+        "example_category",
+        # add config dependent settings
+        config_data={
+            config_inst.name: self.category_config_spec(
+                category=f"{ch}__{cat}__os__iso",  # name of the analysis category in the config
+                variable="jet1_pt",  # name of the variable
+                data_datasets=["data_*"],  # names (or patterns) of datasets with real data in the config
+            )
+            for config_inst in self.config_insts
+        },
+        # additional category settings
+        mc_stats=10.0,
+        flow_strategy=FlowStrategy.move,
+    )
+
+    # add processes
+    self.add_process(
+        name="TT",
+        # add config dependent settings
+        config_data={
+            config_inst.name: self.process_config_spec(
+                process=["tt_sl", "tt_dl", "tt_fh"],  # names of processes in the config
+                mc_datasets=["tt_sl_powheg", "tt_dl_...", ...],  # names of MC datasets in the config
+            ),
+        },
+        # additional process settings
+        is_signal=False,
+    )
+    # more processes here
+    ...
+```
 
 ### Update Instructions
 
-1. TODO.
+1. In definitions of categories, processes and parameters within your inference model, make sure that all pointers that refer for analysis-specific objects are stored in a dictionary with keys being configuration names.
+2. These dictionaries are stored in fields named `config_data`.
+3. Use the provided factory functions to create these dictionary structures to invoke some additional value validation:
+    - for categories: {py:meth}`~columnflow.inference.InferenceModel.category_config_spec`
+    - for processes: {py:meth}`~columnflow.inference.InferenceModel.process_config_spec`
+    - for parameters: {py:meth}`~columnflow.inference.InferenceModel.parameter_config_spec`
 
 ## Changed Plotting Task Names
 
