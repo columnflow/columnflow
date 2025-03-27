@@ -684,7 +684,7 @@ class SelectorStepsMixin(SelectorMixin):
     selector_steps = law.CSVParameter(
         default=selector_steps_all,
         description=f"a subset of steps of the selector to apply; "
-                    f"Set to {selector_steps_all[0]} to apply all (default).",
+        f"Set to {selector_steps_all[0]} to apply all (default).",
         brace_expand=True,
         parse_empty=True,
     )
@@ -2690,6 +2690,8 @@ class ParamsCacheMixin:
             dct_update = dict(branch=int(kwargs.get("branch", -1)))
             if "dataset" in kwargs:
                 dct_update["dataset"] = kwargs["dataset"]
+            if "shift" in kwargs:
+                dct_update["shift"] = kwargs["shift"]
             cached_out = cache[0] | dct_update | {
                 k: kwargs.get(k, ()) for k in
                 ["print_output", "branches", "print_status", "remove_output", "fetch_output"]
