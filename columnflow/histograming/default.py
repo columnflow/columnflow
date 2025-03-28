@@ -70,10 +70,13 @@ def cf_default_post_process_hist(self: HistProducer, h: hist.Histogram, task: la
     """
     axis_names = {ax.name for ax in h.axes}
 
-    # translate category and shift integers to strings
+    # translate axes
     if "category" in axis_names:
         category_map = {cat.id: cat.name for cat in self.config_inst.get_leaf_categories()}
         h = translate_hist_intcat_to_strcat(h, "category", category_map)
+    if "process" in axis_names:
+        process_map = {proc_id: self.config_inst.get_process(proc_id).name for proc_id in h.axes["process"]}
+        h = translate_hist_intcat_to_strcat(h, "process", process_map)
     if "shift" in axis_names:
         shift_map = {task.global_shift_inst.id: task.global_shift_inst.name}
         h = translate_hist_intcat_to_strcat(h, "shift", shift_map)

@@ -113,9 +113,9 @@ class HistogramsUserBase(
         # axis selections
         h = h[{
             "process": [
-                hist.loc(p.id)
+                hist.loc(p.name)
                 for p in sub_process_insts
-                if p.id in h.axes["process"]
+                if p.name in h.axes["process"]
             ],
             "category": [
                 hist.loc(c.name)
