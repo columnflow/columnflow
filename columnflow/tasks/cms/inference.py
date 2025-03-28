@@ -305,10 +305,10 @@ class CreateDatacards(
                     if not self.inference_model_inst.require_shapes_for_parameter(param_obj):
                         continue
                     # store the varied hists
-                    datacard_hists[proc_obj_name][param_obj.name] = {}
+                    datacard_hists[proc_obj.name][param_obj.name] = {}
                     for d in ["up", "down"]:
                         shift_inst = self.config_inst.get_shift(f"{param_obj.config_shift_source}_{d}")
-                        datacard_hists[proc_obj_name][param_obj.name][d] = h_proc[
+                        datacard_hists[proc_obj.name][param_obj.name][d] = h_proc[
                             {"shift": hist.loc(shift_inst.id)}
                         ]
 
