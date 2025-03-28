@@ -157,7 +157,7 @@ In short, histogram producers [continue to be task array functions](./task_array
 - `post_process_hist(self, h: hist.Histogram, task: law.Task) -> hist.Histogram`: After all data was filled in `cf.CreateHistogram`, allows to change the histogram before it is saved to disk.
 - `post_process_merged_hist(self, h: hist.Histogram, task: law.Task) -> hist.Histogram`: Invoked by `cf.MergeHistograms`, allows to change the merged histogram before it is saved for subsequent processing.
 
-The only requirement that columnflow imposes on histograms for plotting and export as part of statistical models is the existence of axes `"category"` (str), `"process"` (int) and `"shift"` (str) **after** merging.
+The only requirement that columnflow imposes on histograms for plotting and export as part of statistical models is the existence of categorical (string) axes `"category"`, `"process"` and `"shift"` **after** merging.
 
 The main callable of a histogram producer continues to be responsible for returning (and potentially preprocessing) the event chunk to histogram, as well as a float array representing event weights in a 2-tuple, consistent with the previous behavior of weight producers.
 

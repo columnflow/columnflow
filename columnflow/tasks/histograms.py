@@ -67,7 +67,7 @@ class CreateHistograms(_CreateHistograms):
         expected = {
             "category": hist.axis.StrCategory,
             "shift": hist.axis.StrCategory,
-            "process": hist.axis.IntCategory,
+            "process": hist.axis.StrCategory,
         }
         axes = {ax.name: ax for ax in h.axes}
         for axis_name, axis_type in expected.items():

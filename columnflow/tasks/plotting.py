@@ -81,16 +81,16 @@ class PlotVariablesBase(_PlotVariablesBase):
     def config_inst(self):
         return self.config_insts[0]
 
-    def get_config_process_map(self) -> dict[od.Config, dict[od.Process, dict[str, Any]]]:
+    def get_config_process_map(self) -> tuple[dict[od.Config, dict[od.Process, dict[str, Any]]], dict[str, set[str]]]:
         """
-        Function that maps the config and process instances to the datasets and shifts they
-        are supposed to be plotted with. The mapping from processes to datasets is done by
-        checking the dataset instances for the presence of the process instances. The mapping
-        from processes to shifts is done by checking the upstream requirements for the presence
-        of a shift in the requires method of the task.
+        Function that maps the config and process instances to the datasets and shifts they are supposed to be plotted
+        with. The mapping from processes to datasets is done by checking the dataset instances for the presence of the
+        process instances. The mapping from processes to shifts is done by checking the upstream requirements for the
+        presence of a shift in the requires method of the task.
 
-        :return: A dictionary mapping config instances to dictionaries mapping process instances
-            to dictionaries containing the dataset-process mapping and the shifts to be considered.
+        :return: A 2-tuple with a dictionary mapping config instances to dictionaries mapping process instances to
+            dictionaries containing the dataset-process mapping and the shifts to be considered, and a dictionary
+            mapping process names to the shifts to be considered.
         """
         reqs = self.requires()
 
@@ -115,22 +115,21 @@ class PlotVariablesBase(_PlotVariablesBase):
 
             for process_inst in process_insts:
                 sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
-                dataset_procid_map = {}
+                dataset_proc_name_map = {}
                 for dataset_inst in dataset_insts:
-                    matched_proc_ids = [p.id for p in sub_process_insts if dataset_inst.has_process(p.name)]
-                    if matched_proc_ids:
-                        dataset_procid_map[dataset_inst] = matched_proc_ids
+                    matched_proc_names = [p.name for p in sub_process_insts if dataset_inst.has_process(p.name)]
+                    if matched_proc_names:
+                        dataset_proc_name_map[dataset_inst] = matched_proc_names
 
-                if not dataset_procid_map:
+                if not dataset_proc_name_map:
                     # no datasets found for this process
                     continue
 
                 process_info = {
-                    "dataset_procid_map": dataset_procid_map,
-                    # "sub_process_ids": {sub.id for sub in sub_process_insts},
+                    "dataset_proc_name_map": dataset_proc_name_map,
                     "config_shifts": {
                         shift
-                        for dataset_inst in dataset_procid_map.keys()
+                        for dataset_inst in dataset_proc_name_map.keys()
                         for shift in requested_shifts_per_dataset[dataset_inst]
                     },
                 }
@@ -178,16 +177,16 @@ class PlotVariablesBase(_PlotVariablesBase):
 
                     # loop and extract one histogram per process
                     for process_inst, process_info in config_process_map[config_inst].items():
-                        if dataset_inst not in process_info["dataset_procid_map"].keys():
+                        if dataset_inst not in process_info["dataset_proc_name_map"].keys():
                             continue
 
                         # select processes and reduce axis
                         h = h_in.copy()
                         h = h[{
                             "process": [
-                                hist.loc(proc_id)
-                                for proc_id in process_info["dataset_procid_map"][dataset_inst]
-                                if proc_id in h.axes["process"]
+                                hist.loc(proc_name)
+                                for proc_name in process_info["dataset_proc_name_map"][dataset_inst]
+                                if proc_name in h.axes["process"]
                             ],
                         }]
                         h = h[{"process": sum}]
