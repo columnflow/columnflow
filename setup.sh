@@ -770,11 +770,11 @@ cf_setup_git_hooks() {
     # Initializes lfs and custom githooks in the local checkout for both the columnflow
     # (sub)repository, as well as the analysis repository in case a directory bin/githooks is found.
     #
-    # Optional environments variables:
-    #   CF_REMOTE_ENV
-    #       When "1", no hooks are setup.
-    #   CF_CI_ENV
-    #       When "1", no hooks are setup.
+    # Required environments variables:
+    #   CF_REMOTE_ENV (bool)
+    #       When true, no hooks are setup.
+    #   CF_CI_ENV (bool)
+    #       When true, no hooks are setup.
 
     # do nothing when not local
     if ${CF_REMOTE_ENV} || ${CF_CI_ENV}; then
