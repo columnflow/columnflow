@@ -138,6 +138,7 @@ For a better overview of the tasks that are triggered by the commands below, che
     </tr>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/aalvesan"><img src="https://avatars.githubusercontent.com/u/99343616?v=4?s=100" width="100px;" alt="Ana Andrade"/><br /><sub><b>Ana Andrade</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=aalvesan" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/philippgadow"><img src="https://avatars.githubusercontent.com/u/6804366?v=4?s=100" width="100px;" alt="philippgadow"/><br /><sub><b>philippgadow</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=philippgadow" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
