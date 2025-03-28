@@ -34,6 +34,9 @@ logger_dev = law.logger.get_logger(f"{__name__}-dev")
 default_analysis = law.config.get_expanded("analysis", "default_analysis")
 default_config = law.config.get_expanded("analysis", "default_config")
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
+default_repr_max_len = law.config.get_expanded_int("analysis", "repr_max_len")
+default_repr_max_count = law.config.get_expanded_int("analysis", "repr_max_count")
+default_repr_hash_len = law.config.get_expanded_int("analysis", "repr_hash_len")
 
 # placeholder to denote a default value that is resolved dynamically
 RESOLVE_DEFAULT = "DEFAULT"
@@ -804,7 +807,44 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             )
         return first
 
-    def __init__(self, *args, **kwargs):
+    @classmethod
+    def build_repr(
+        cls,
+        objects: Any | Sequence[Any],
+        *,
+        sep: str = "__",
+        prepend_count: bool = False,
+        max_count: int = default_repr_max_count,
+        max_len: int = default_repr_max_len,
+        hash_len: int = default_repr_hash_len,
+    ) -> str:
+        """
+        Generic method to construct a string representation given TODO
+
+        :return: The string representation.
+        """
+        if 0 < max_len < hash_len:
+            raise ValueError(f"max_len must be greater than hash_len: {max_len} <= {hash_len}")
+
+        # join objects when a sequence is given
+        if isinstance(objects, (list, tuple)):
+            r = f"{len(objects)}_" if prepend_count else ""
+            if max_count > 0:
+                r += sep.join(objects[:max_count])
+                if len(objects) > max_count:
+                    r += f"{sep}{law.util.create_hash(objects[max_count:], l=hash_len)}"
+            else:
+                r += sep.join(objects[:max_count])
+        else:
+            r = str(objects)
+
+        # handle overall truncation
+        if max_len > 0 and len(r) > max_len:
+            r = r[:max_len - hash_len - 1] + "_" + law.util.create_hash(r, l=hash_len)
+
+        return r
+
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # store the analysis instance
