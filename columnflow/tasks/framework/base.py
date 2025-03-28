@@ -819,8 +819,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         hash_len: int = default_repr_hash_len,
     ) -> str:
         """
-        Generic method to construct a string representation given TODO
+        Generic method to construct a string representation given a single or a sequece of *objects*.
 
+        :param objects: The object or objects to be represented.
+        :param sep: The separator used to join the objects.
+        :param prepend_count: When *True*, the number of objects is prepended to the string.
+        :param max_count: The maximum number of objects to include in the string. Additional objects are hashed.
+        :param max_len: The maximum length of the string. If exceeded, the string is truncated and hashed.
+        :param hash_len: The length of the hash that is appended to the string when it is truncated.
         :return: The string representation.
         """
         if 0 < max_len < hash_len:
