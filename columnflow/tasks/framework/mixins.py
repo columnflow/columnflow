@@ -1975,6 +1975,16 @@ class VariablesMixin(ConfigTask):
 
             # resolve them
             if params["variables"]:
+                # first try to resolve variable groups
+                groups = config_inst.x("variable_groups", {})
+                new_variables = []
+                for variable in params["variables"]:
+                    if variable in groups:
+                        new_variables.extend( groups[variable] )
+                    else:
+                        new_variables.append( variable )
+                params["variables"] = tuple(new_variables)
+
                 # first, split into single- and multi-dimensional variables
                 single_vars = []
                 multi_var_parts = []
