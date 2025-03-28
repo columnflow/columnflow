@@ -1980,9 +1980,9 @@ class VariablesMixin(ConfigTask):
                 new_variables = []
                 for variable in params["variables"]:
                     if variable in groups:
-                        new_variables.extend( groups[variable] )
+                        new_variables.extend(groups[variable])
                     else:
-                        new_variables.append( variable )
+                        new_variables.append(variable)
                 params["variables"] = tuple(new_variables)
 
                 # first, split into single- and multi-dimensional variables
