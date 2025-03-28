@@ -15,10 +15,10 @@ Fields like "Jet" exist too, they contain columns (the parameters of the field, 
 As most of the information is conserved in the form of columns, it would be very inefficient (and might not even fit in the memory) to use all columns and all events from a dataset at once for each task.
 Therefore, in order to reduce the impact on the memory:
 
-- a chunking of the datasets is implemented using [dask](https://www.dask.org/):
+- A chunking of the datasets is implemented using [dask](https://www.dask.org/):
 not all events from a dataset are inputed in a task at once, but only chunked in groups of events.
 (100 000 events max per group is default as of 05.2023, default is set in the law.cfg file).
-- the user needs to define for each {py:class}`~columnflow.production.Producer`, {py:class}`~columnflow.calibration.Calibrator` and {py:class}`~columnflow.selection.Selector` which columns are to be loaded (this happens by defining the ```uses``` set in the header of the decorator of the class) and which new columns/fields are to be saved in parquet files after the respective task (this happens by defining the ```produces``` set in the header of the decorator of the class).
+- The user needs to define for each {py:class}`~columnflow.calibration.Calibrator`, {py:class}`~columnflow.selection.Selector`, {py:class}`~columnflow.reduction.Reducer`, {py:class}`~columnflow.production.Producer`, and {py:class}`~columnflow.histograming.HistProducer` which columns are to be loaded (this happens by defining the `uses` set in the header of the decorator of the class) and which new columns/fields are to be saved in parquet files after the respective task (this happens by defining the `produces` set in the header of the decorator of the class).
 The exact implementation for this feature is further detailed in {doc}`building_blocks/selectors` and {doc}`building_blocks/producers`.
 
 ## Tasks in columnflow
@@ -37,10 +37,10 @@ For an overview of the tasks that are available with columnflow, please see the 
 ## Important note on required parameters
 
 It should also be added that there are additional parameters specific for the tasks in columnflow, required by the fact that columnflow's purpose is for HEP analysis.
-These are the ```--analysis``` and ```--config``` parameters, which defaults can be set in the law.cfg.
+These are the `--analysis` and `--config` parameters, which defaults can be set in the law.cfg.
 These two parameters respectively define the config file for the different analyses to be used (where the different analyses and their parameters should be defined) and the name of the config file for the specific analysis to be used.
 
-Similarly, the ```--version``` parameter, which purpose is explained in the {doc}`law` section of this documentation, is required to start a task.
+Similarly, the `--version` parameter, which purpose is explained in the {doc}`law` section of this documentation, is required to start a task.
 
 ## Important modules and configs
 

@@ -74,7 +74,7 @@ cf_sandbox() {
     local interactive="false"
     [ -z "${cmd}" ] && cmd="bash -l" && interactive="true"
 
-    # espace some characters
+    # escape some characters
     cmd="${cmd//\{/\\\{}"
     cmd="${cmd//\}/\\\}}"
 

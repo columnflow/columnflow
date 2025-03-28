@@ -11,9 +11,10 @@ sys.path.insert(0, os.path.join(projdir, "docs", "_extensions"))
 sys.path.insert(0, os.path.join(projdir, "modules", "law"))
 sys.path.insert(0, os.path.join(projdir, "modules", "order"))
 sys.path.insert(0, projdir)
-# os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "docs", "law.cfg")
+
 os.environ["LAW_CONFIG_FILE"] = os.path.join(projdir, "law.cfg")
 
+import luigi
 import columnflow as cf
 
 project = "columnflow"
@@ -66,15 +67,15 @@ elif html_theme == "sphinx_book_theme":
     })
 
 extensions = [
-    "sphinx_design",
-    "sphinx_copybutton",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
-    "sphinx_autodoc_typehints",
     "sphinx.ext.viewcode",
     "sphinx.ext.autosectionlabel",
-    "sphinxcontrib.mermaid",
+    "sphinx_design",
+    "sphinx_copybutton",
+    "sphinx_autodoc_typehints",
     "sphinx_lfs_content",
+    "sphinxcontrib.mermaid",
     "autodocsumm",
     "myst_parser",
     "pydomain_patch",
@@ -94,8 +95,7 @@ autosectionlabel_prefix_document = True
 
 intersphinx_aliases = {
     # alias for a class that was imported at its package level
-    ("py:class", "awkward.highlevel.Array"):
-        ("py:class", "ak.Array"),
+    ("py:class", "awkward.highlevel.Array"): ("py:class", "ak.Array"),
 }
 
 intersphinx_mapping = {
@@ -111,8 +111,6 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable/", None),
     "scinum": ("https://scinum.readthedocs.io/en/stable/", None),
 }
-
-import luigi
 
 
 def process_docstring(app, what, name, obj, options, lines):

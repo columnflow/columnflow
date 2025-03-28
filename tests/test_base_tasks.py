@@ -252,7 +252,7 @@ class AnalysisTaskTests(unittest.TestCase):
 
     def test_resolve_datasets_processes(self):
         DatasetsProcessesMixin.single_config = False
-        DatasetsProcessesMixin.resolution_task_class = DatasetTask
+        DatasetsProcessesMixin.resolution_task_cls = DatasetTask
         for input_processes, expected_processes in (
             ((("proc4",),), (("proc4",), ("proc4",))),
             ((("proc4",), ("proc5")), (("proc4",), ("proc5",))),

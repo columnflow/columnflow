@@ -1,10 +1,11 @@
 # coding: utf-8
 
 """
-Example event weight producer.
+Example histogram producer.
 """
 
-from columnflow.weight import WeightProducer, weight_producer
+from columnflow.histograming import HistProducer
+from columnflow.histograming.default import cf_default
 from columnflow.util import maybe_import
 from columnflow.config_util import get_shifts_from_sources
 from columnflow.columnar_util import Route
@@ -13,8 +14,9 @@ ak = maybe_import("awkward")
 np = maybe_import("numpy")
 
 
-@weight_producer()
-def example(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
+# extend columnflow's default hist producer
+@cf_default.hist_producer()
+def example(self: HistProducer, events: ak.Array, **kwargs) -> ak.Array:
     # build the full event weight
     weight = ak.Array(np.ones(len(events), dtype=np.float32))
 
@@ -26,7 +28,7 @@ def example(self: WeightProducer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @example.init
-def example_init(self: WeightProducer) -> None:
+def example_init(self: HistProducer) -> None:
     self.weight_columns = {}
 
     if self.dataset_inst.is_data:

@@ -15,6 +15,7 @@ import inspect
 import functools
 import collections
 import copy
+import subprocess
 from dataclasses import dataclass, field
 
 import luigi
@@ -46,8 +47,7 @@ class Requirements(DotDict):
     which are added.
     """
 
-    def __init__(self, *others, **kwargs):
-
+    def __init__(self, *others, **kwargs) -> None:
         super().__init__()
 
         # add others and kwargs
@@ -164,7 +164,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return analysis_inst
 
     @classmethod
-    def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
+    def req_params(cls, inst: AnalysisTask, **kwargs) -> dict[str, Any]:
         """
         Returns parameters that are jointly defined in this class and another task instance of some
         other class. The parameters are used when calling ``Task.req(self)``.
@@ -195,7 +195,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return params
 
     @classmethod
-    def _structure_cfg_items(cls, items: list[tuple[str, Any]]) -> dict:
+    def _structure_cfg_items(cls, items: list[tuple[str, Any]]) -> dict[str, Any]:
         if not items:
             return {}
 
@@ -230,7 +230,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return items_dict
 
     @classmethod
-    def _get_cfg_outputs_dict(cls):
+    def _get_cfg_outputs_dict(cls) -> dict[str, Any]:
         if cls._cfg_outputs_dict is None and law.config.has_section("outputs"):
             # collect config item pairs
             skip_keys = {"wlcg_file_systems", "lfn_sources"}
@@ -244,7 +244,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return cls._cfg_outputs_dict
 
     @classmethod
-    def _get_cfg_versions_dict(cls):
+    def _get_cfg_versions_dict(cls) -> dict[str, Any]:
         if cls._cfg_versions_dict is None and law.config.has_section("versions"):
             # collect config item pairs
             items = [
@@ -257,7 +257,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         return cls._cfg_versions_dict
 
     @classmethod
-    def _get_cfg_resources_dict(cls):
+    def _get_cfg_resources_dict(cls) -> dict[str, Any]:
         if cls._cfg_resources_dict is None and law.config.has_section("resources"):
             # helper to split resource values into key-value pairs themselves
             def parse(key: str, value: str) -> tuple[str, list[tuple[str, Any]]]:
@@ -289,8 +289,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     @classmethod
     def get_default_version(cls, inst: AnalysisTask, params: dict[str, Any]) -> str | None:
         """
-        Determines the default version for instances of *this* task class when created through
-        :py:meth:`req` from another task *inst* given parameters *params*.
+        Determines the default version for instances of *this* task class when created through :py:meth:`req` from
+        another task *inst* given parameters *params*.
 
         :param inst: The task instance from which *this* task should be created via :py:meth:`req`.
         :param params: The parameters that are passed to the task instance.
@@ -336,8 +336,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         inst_or_params: AnalysisTask | dict[str, Any],
     ) -> law.util.InsertiableDict:
         """
-        Returns a dictionary with keys that can be used to lookup state specific values in a config
-        or dictionary, such as default task versions or output locations.
+        Returns a dictionary with keys that can be used to lookup state specific values in a config or dictionary, such
+        as default task versions or output locations.
 
         :param inst_or_params: The tasks instance or its parameters.
         :return: A dictionary with keys that can be used for nested lookup.
@@ -815,9 +815,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     def cached_value(self, key: str, func: Callable[[], T]) -> T:
         """
-        Upon first invocation, the function *func* is called and its return value is stored under
-        *key* in :py:attr:`_cached_values`. Subsequent calls with the same *key* return the cached
-        value.
+        Upon first invocation, the function *func* is called and its return value is stored under *key* in
+        :py:attr:`_cached_values`. Subsequent calls with the same *key* return the cached value.
 
         :param key: The key under which the value is stored.
         :param func: The function that is called to generate the value.
@@ -842,9 +841,9 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     def store_parts(self) -> law.util.InsertableDict:
         """
-        Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path.
-        For instance, the parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The
-        keys can be used by subclassing tasks to overwrite values.
+        Returns a :py:class:`law.util.InsertableDict` whose values are used to create a store path. For instance, the
+        parts ``{"keyA": "a", "keyB": "b", 2: "c"}`` lead to the path "a/b/c". The keys can be used by subclassing tasks
+        to overwrite values.
 
         :return: Dictionary with parts that will be translated into an output directory path.
         """
@@ -879,11 +878,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         **kwargs,
     ) -> str:
         """ local_path(*path, store=None, fs=None, store_parts_modifier=None)
-        Joins path fragments from *store* (defaulting to :py:attr:`default_store`),
-        :py:meth:`store_parts` and *path* and returns the joined path. In case a *fs* is defined,
-        it should refer to the config section of a local file system, and consequently, *store* is
-        not prepended to the returned path as the resolution of absolute paths is handled by that
-        file system.
+        Joins path fragments from *store* (defaulting to :py:attr:`default_store`), :py:meth:`store_parts` and *path*
+        and returns the joined path. In case a *fs* is defined, it should refer to the config section of a local file
+        system, and consequently, *store* is not prepended to the returned path as the resolution of absolute paths is
+        handled by that file system.
         """
         # if no fs is set, determine the main store directory
         parts = ()
@@ -908,11 +906,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         *path,
         store_parts_modifier: str | Callable[[AnalysisTask, dict], dict] | None = None,
         **kwargs,
-    ):
+    ) -> law.LocalTarget:
         """ local_target(*path, dir=False, store=None, fs=None, store_parts_modifier=None, **kwargs)
-        Creates either a local file or directory target, depending on *dir*, forwarding all *path*
-        fragments, *store* and *fs* to :py:meth:`local_path` and all *kwargs* the respective target
-        class.
+        Creates either a local file or directory target, depending on *dir*, forwarding all *path* fragments, *store*
+        and *fs* to :py:meth:`local_path` and all *kwargs* the respective target class.
         """
         _dir = kwargs.pop("dir", False)
         store = kwargs.pop("store", None)
@@ -935,8 +932,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         Joins path fragments from *store_parts()* and *path* and returns the joined path.
 
-        The full URI to the target is not considered as it is usually defined in ``[wlcg_fs]``
-        sections in the law config and hence subject to :py:func:`wlcg_target`.
+        The full URI to the target is not considered as it is usually defined in ``[wlcg_fs]`` sections in the law
+        config and hence subject to :py:func:`wlcg_target`.
         """
         # get and optional modify the store parts
         store_parts = self.store_parts()
@@ -955,11 +952,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         *path,
         store_parts_modifier: str | Callable[[AnalysisTask, dict], dict] | None = None,
         **kwargs,
-    ):
+    ) -> law.wclg.WLCGTarget:
         """ wlcg_target(*path, dir=False, fs=default_wlcg_fs, store_parts_modifier=None, **kwargs)
-        Creates either a remote WLCG file or directory target, depending on *dir*, forwarding all
-        *path* fragments to :py:meth:`wlcg_path` and all *kwargs* the respective target class. When
-        *None*, *fs* defaults to the *default_wlcg_fs* class level attribute.
+        Creates either a remote WLCG file or directory target, depending on *dir*, forwarding all *path* fragments to
+        :py:meth:`wlcg_path` and all *kwargs* the respective target class. When *None*, *fs* defaults to the
+        *default_wlcg_fs* class level attribute.
         """
         _dir = kwargs.pop("dir", False)
         if not kwargs.get("fs"):
@@ -974,7 +971,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # create the target instance and return it
         return cls(path, **kwargs)
 
-    def target(self, *path, **kwargs):
+    def target(self, *path, **kwargs) -> law.LocalTarget | law.wlcg.WLCGTarget | law.MirroredTarget:
         """ target(*path, location=None, **kwargs)
         """
         # get the default location
@@ -1046,15 +1043,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
     def get_parquet_writer_opts(self, repeating_values: bool = False) -> dict[str, Any]:
         """
-        Returns an option dictionary that can be passed as *writer_opts* to
-        :py:meth:`~law.pyarrow.merge_parquet_task`, for instance, at the end of chunked processing
-        steps that produce a single parquet file. See :py:class:`~pyarrow.parquet.ParquetWriter` for
-        valid options.
+        Returns an option dictionary that can be passed as *writer_opts* to :py:meth:`~law.pyarrow.merge_parquet_task`,
+        for instance, at the end of chunked processing steps that produce a single parquet file. See
+        :py:class:`~pyarrow.parquet.ParquetWriter` for valid options.
 
         This method can be overwritten in subclasses to customize the exact behavior.
 
-        :param repeating_values: Whether the values to be written have predominantly repeating
-            values, in which case differnt compression and encoding strategies are followed.
+        :param repeating_values: Whether the values to be written have predominantly repeating values, in which case
+            differnt compression and encoding strategies are followed.
         :return: A dictionary with options that can be passed to parquet writer objects.
         """
         # use dict encoding if values are repeating
@@ -1216,9 +1212,9 @@ class ConfigTask(AnalysisTask):
         """
         Build the array function instances.
         For single-config/dataset tasks, resolve_instances is implemented by mixin classes such as the ProducersMixin.
-        For multi-config tasks, resolve_instances from the upstream task is called for each config instance.
-        If the resolve_instances function needs to be called for other combinations of parameters (e.g. per dataset),
-        it can be overwritten by the task class.
+        For multi-config tasks, resolve_instances from the upstream task is called for each config instance. If the
+        resolve_instances function needs to be called for other combinations of parameters (e.g. per dataset), it can be
+        overwritten by the task class.
 
         :param params: Dictionary of task parameters.
         :param shifts: Collection of local and global shifts.
@@ -1226,20 +1222,20 @@ class ConfigTask(AnalysisTask):
         """
         cls.get_known_shifts(params, shifts)
 
-        if not cls.resolution_task_class:
+        if not cls.resolution_task_cls:
             params["known_shifts"] = shifts
             return params
 
         logger_dev.debug(
             f"{cls.task_family}: uses ConfigTask.resolve_instances base implementation; "
-            f"upsteam_task_cls was defined as {cls.resolution_task_class}; ",
+            f"upsteam_task_cls was defined as {cls.resolution_task_cls}; ",
         )
         # base implementation for ConfigTasks that do not define any datasets.
         # Needed for e.g. MergeShiftedHistograms
         if cls.has_single_config():
             _params = params.copy()
-            _params = cls.resolution_task_class.resolve_instances(params, shifts)
-            cls.resolution_task_class.get_known_shifts(_params, shifts)
+            _params = cls.resolution_task_cls.resolve_instances(params, shifts)
+            cls.resolution_task_cls.get_known_shifts(_params, shifts)
         else:
             for config_inst in params["config_insts"]:
                 _params = {
@@ -1247,8 +1243,8 @@ class ConfigTask(AnalysisTask):
                     "config_inst": config_inst,
                     "config": config_inst.name,
                 }
-                _params = cls.resolution_task_class.resolve_instances(_params, shifts)
-                cls.resolution_task_class.get_known_shifts(_params, shifts)
+                _params = cls.resolution_task_cls.resolve_instances(_params, shifts)
+                cls.resolution_task_cls.get_known_shifts(_params, shifts)
 
         params["known_shifts"] = shifts
 
@@ -1300,10 +1296,10 @@ class ConfigTask(AnalysisTask):
         """
         return params
 
-    resolution_task_class = None
+    resolution_task_cls = None
 
     @classmethod
-    def req_params(cls, inst, *args, **kwargs):
+    def req_params(cls, inst: law.Task, *args, **kwargs) -> dict[str, Any]:
         params = super().req_params(inst, *args, **kwargs)
 
         # manually add known shifts between workflows and branches
@@ -1418,7 +1414,7 @@ class ConfigTask(AnalysisTask):
 
         return kwargs
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # store a reference to the config instances
@@ -1463,9 +1459,9 @@ class ConfigTask(AnalysisTask):
             Sequence[str | int | slice | type(Ellipsis) | list | tuple],
     ) -> set[Route]:
         """
-        Expands a *column* into a set of :py:class:`Route` objects. *column* can be a
-        :py:class:`ColumnCollection`, a string, or any type that is accepted by :py:class:`Route`.
-        Collections are expanded through :py:meth:`find_keep_columns`.
+        Expands a *column* into a set of :py:class:`Route` objects. *column* can be a :py:class:`ColumnCollection`, a
+        string, or any type that is accepted by :py:class:`Route`. Collections are expanded through
+        :py:meth:`find_keep_columns`.
 
         :param column: The column to expand.
         :return: A set of :py:class:`Route` objects.
@@ -1483,6 +1479,7 @@ class ConfigTask(AnalysisTask):
 
 
 class ShiftTask(ConfigTask):
+
     shift = luigi.Parameter(
         default="nominal",
         description="name of a systematic shift to apply; must fulfill order.Shift naming rules; "
@@ -1505,6 +1502,7 @@ class ShiftTask(ConfigTask):
         if "known_shifts" not in params:
             raise Exception(f"{cls.task_family}: known shifts should be resolved before calling 'resolve_shifts'")
         known_shifts = params["known_shifts"]
+
         # get configs
         config_insts = params.get("config_insts")
 
@@ -1583,7 +1581,7 @@ class ShiftTask(ConfigTask):
 
         return keys
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # store references to the shift instances
@@ -1629,7 +1627,7 @@ class DatasetTask(ShiftTask):
     file_merging = None
 
     @classmethod
-    def resolve_param_values_pre_init(cls, params):
+    def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values_pre_init(params)
 
         # store a reference to the dataset inst
@@ -1685,7 +1683,7 @@ class DatasetTask(ShiftTask):
 
         return kwargs
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # store references to the dataset instance
@@ -1772,7 +1770,7 @@ class CommandTask(AnalysisTask):
 
     run_command_in_tmp = False
 
-    def _print_command(self, args):
+    def _print_command(self, args) -> None:
         max_depth = int(args[0])
 
         print(f"print task commands with max_depth {max_depth}")
@@ -1802,11 +1800,11 @@ class CommandTask(AnalysisTask):
             else:
                 print(offset + law.util.colored("not a CommandTask", "yellow"))
 
-    def build_command(self):
+    def build_command(self) -> str | list[str]:
         # this method should build and return the command to run
         raise NotImplementedError
 
-    def touch_output_dirs(self):
+    def touch_output_dirs(self) -> None:
         # keep track of created uris so we can avoid creating them twice
         handled_parent_uris = set()
 
@@ -1823,7 +1821,7 @@ class CommandTask(AnalysisTask):
                 parent.touch()
                 handled_parent_uris.add(parent.uri())
 
-    def run_command(self, cmd, optional=False, **kwargs):
+    def run_command(self, cmd: str | list[str], optional: bool = False, **kwargs) -> subprocess.Popen:
         # proper command encoding
         cmd = (law.util.quote_cmd(cmd) if isinstance(cmd, (list, tuple)) else cmd).strip()
 
@@ -1864,10 +1862,10 @@ class CommandTask(AnalysisTask):
 
         self.post_run_command()
 
-    def pre_run_command(self):
+    def pre_run_command(self) -> None:
         return
 
-    def post_run_command(self):
+    def post_run_command(self) -> None:
         return
 
 
@@ -1966,18 +1964,18 @@ def wrapper_factory(
     def check_class_compatibility(name, min_require_cls, max_base_cls):
         if not issubclass(require_cls, min_require_cls):
             raise TypeError(
-                f"when the '{name}' feature is enabled, require_cls must inherit from "
-                f"{min_require_cls}, but {require_cls} does not",
+                f"when the '{name}' feature is enabled, require_cls must inherit from {min_require_cls}, but "
+                f"{require_cls} does not",
             )
         if issubclass(base_cls, min_require_cls):
             raise TypeError(
-                f"when the '{name}' feature is enabled, base_cls must not inherit from "
-                f"{min_require_cls}, but {base_cls} does",
+                f"when the '{name}' feature is enabled, base_cls must not inherit from {min_require_cls}, but "
+                f"{base_cls} does",
             )
         if not issubclass(max_base_cls, base_cls):
             raise TypeError(
-                f"when the '{name}' feature is enabled, base_cls must be a super class of "
-                f"{max_base_cls}, but {base_cls} is not",
+                f"when the '{name}' feature is enabled, base_cls must be a super class of {max_base_cls}, but "
+                f"{base_cls} is not",
             )
 
     # check classes
@@ -2047,7 +2045,7 @@ def wrapper_factory(
             exclude_params_repr_empty.add("skip_shifts")
             exclude_params_req_set.add("skip_shifts")
 
-        def __init__(self, *args, **kwargs):
+        def __init__(self, *args, **kwargs) -> None:
             super().__init__(*args, **kwargs)
 
             # store wrapper flags

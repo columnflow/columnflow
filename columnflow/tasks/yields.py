@@ -13,7 +13,7 @@ from scinum import Number
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, HistProducerClassMixin,
     DatasetsProcessesMixin, CategoriesMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -26,7 +26,7 @@ class _CreateYieldTable(
     SelectorClassMixin,
     ReducerClassMixin,
     ProducerClassesMixin,
-    WeightProducerClassMixin,
+    HistProducerClassMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
     law.LocalWorkflow,
@@ -37,7 +37,7 @@ class _CreateYieldTable(
     """
 
     single_config = True
-    resolution_task_class = MergeHistograms
+    resolution_task_cls = MergeHistograms
 
 
 class CreateYieldTable(_CreateYieldTable):
@@ -168,9 +168,9 @@ class CreateYieldTable(_CreateYieldTable):
                     # axis selections
                     h = h[{
                         "process": [
-                            hist.loc(p.id)
+                            hist.loc(p.name)
                             for p in sub_process_insts[process_inst]
-                            if p.id in h.axes["process"]
+                            if p.name in h.axes["process"]
                         ],
                     }]
 

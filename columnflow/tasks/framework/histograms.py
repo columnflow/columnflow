@@ -12,7 +12,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, MLModelsMixin,
-    WeightProducerClassMixin, VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin,
+    HistProducerClassMixin, VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin,
 )
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox, maybe_import
@@ -25,7 +25,7 @@ class HistogramsUserBase(
     SelectorClassMixin,
     ReducerClassMixin,
     ProducerClassesMixin,
-    WeightProducerClassMixin,
+    HistProducerClassMixin,
     MLModelsMixin,
     DatasetsProcessesMixin,
     CategoriesMixin,
@@ -113,9 +113,9 @@ class HistogramsUserBase(
         # axis selections
         h = h[{
             "process": [
-                hist.loc(p.id)
+                hist.loc(p.name)
                 for p in sub_process_insts
-                if p.id in h.axes["process"]
+                if p.name in h.axes["process"]
             ],
             "category": [
                 hist.loc(c.name)
@@ -141,7 +141,7 @@ class HistogramsUserSingleShiftBase(
     HistogramsUserBase,
 ):
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
-    resolution_task_class = MergeHistograms
+    resolution_task_cls = MergeHistograms
 
     # upstream requirements
     reqs = Requirements(
@@ -170,7 +170,7 @@ class HistogramsUserMultiShiftBase(
     HistogramsUserBase,
 ):
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
-    resolution_task_class = MergeHistograms
+    resolution_task_cls = MergeHistograms
 
     # upstream requirements
     reqs = Requirements(
