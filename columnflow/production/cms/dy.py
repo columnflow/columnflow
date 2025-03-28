@@ -11,7 +11,8 @@ import law
 from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import 
+from law.util import InsertableDict
 from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
