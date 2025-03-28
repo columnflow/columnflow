@@ -26,7 +26,6 @@ from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler, TaskArrayFunction
 from columnflow.util import maybe_import, DotDict, get_docs_url, get_code_url
-from columnflow.types import Type
 
 ak = maybe_import("awkward")
 
@@ -37,14 +36,14 @@ logger_dev = law.logger.get_logger(f"{__name__}-dev")
 
 class ArrayFunctionClassMixin(ConfigTask):
 
-    def array_function_cls_repr(self, array_function: Type[TaskArrayFunction]) -> str:
+    def array_function_cls_repr(self, array_function_name: str) -> str:
         """
         Central definition of how to obtain representation of array function from the name.
 
         :param array_function: name of the array function (NOTE: change to class?)
         :return: sring representation of the array function
         """
-        return str(array_function)
+        return str(array_function_name)
 
 
 class ArrayFunctionInstanceMixin(DatasetTask):
