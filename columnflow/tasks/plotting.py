@@ -303,7 +303,7 @@ class PlotVariablesBaseSingleShift(
     PlotVariablesBase,
 ):
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
-    resolution_task_class = MergeHistograms
+    resolution_task_cls = MergeHistograms
     exclude_index = True
 
     reqs = Requirements(
@@ -458,7 +458,7 @@ class PlotVariablesBaseMultiShifts(
     combine_shifts = True
 
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
-    resolution_task_class = MergeHistograms
+    resolution_task_cls = MergeHistograms
 
     exclude_index = True
 
