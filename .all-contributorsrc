@@ -146,6 +146,15 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "aalvesan",
+      "name": "Ana Andrade",
+      "avatar_url": "https://avatars.githubusercontent.com/u/99343616?v=4",
+      "profile": "https://github.com/aalvesan",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"
