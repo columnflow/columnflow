@@ -32,11 +32,10 @@ def fill_hist(
     fill_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """
-    Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*.
-    The data is assumed to be structured in the same way as the histogram axes. If
-    *last_edge_inclusive* is *True*, values that would land exactly on the upper-most bin edge of an
-    axis are shifted into the last bin. If it is *None*, the behavior is determined automatically
-    and depends on the variable axis type. In this case, shifting is applied to all continuous,
+    Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*. The data is assumed
+    to be structured in the same way as the histogram axes. If *last_edge_inclusive* is *True*, values that would land
+    exactly on the upper-most bin edge of an axis are shifted into the last bin. If it is *None*, the behavior is
+    determined automatically and depends on the variable axis type. In this case, shifting is applied to all continuous,
     non-circular axes.
     """
     if fill_kwargs is None:
@@ -60,7 +59,7 @@ def fill_hist(
     # check data
     if not isinstance(data, dict):
         if len(axis_names) != 1:
-            raise ValueError("got multi-dimensional hist but only one dimensional data")
+            raise ValueError("got multi-dimensional hist but only one-dimensional data")
         data = {axis_names[0]: data}
     else:
         for name in axis_names:
@@ -74,15 +73,30 @@ def fill_hist(
             data[ax.name] = ak.copy(data[ax.name])
             flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
 
+    # check if conversion to records is needed
+    arr_types = (ak.Array, np.ndarray)
+    vals = list(data.values())
+    convert = (
+        # values is a mixture of singular and array types
+        (any(isinstance(v, arr_types) for v in vals) and not all(isinstance(v, arr_types) for v in vals)) or
+        # values contain at least one array with more than one dimension
+        any(isinstance(v, arr_types) and v.ndim != 1 for v in vals)
+    )
+
+    # actual conversion
+    if convert:
+        arrays = ak.flatten(ak.cartesian(data))
+        data = {field: arrays[field] for field in arrays.fields}
+        del arrays
+
     # fill
-    arrays = ak.flatten(ak.cartesian(data))
-    h.fill(**fill_kwargs, **{field: arrays[field] for field in arrays.fields})
+    h.fill(**fill_kwargs, **data)
 
 
 def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist:
     """
-    Add an axis to a histogram based on a variable instance. The axis_type is chosen
-    based on the variable instance's "axis_type" auxiliary.
+    Add an axis to a histogram based on a variable instance. The axis_type is chosen based on the variable instance's
+    "axis_type" auxiliary.
 
     :param histogram: The histogram to add the axis to.
     :param variable_inst: The variable instance to use for the axis.
@@ -131,10 +145,7 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
 
     if axis_type in {"regular", "reg"}:
         if not variable_inst.even_binning:
-            logger.warning(
-                "regular axis with uneven binning is not supported, using first and last bin edge "
-                "instead",
-            )
+            logger.warning("regular axis with uneven binning is not supported, using first and last bin edge instead")
         return histogram.Regular(
             variable_inst.n_bins,
             variable_inst.bin_edges[0],
@@ -149,6 +160,7 @@ def create_hist_from_variables(
     *variable_insts,
     categorical_axes: tuple[tuple[str, str]] | None = None,
     weight: bool = True,
+    storage: str | None = None,
 ) -> hist.Hist:
     histogram = hist.Hist.new
 
@@ -166,9 +178,18 @@ def create_hist_from_variables(
     for variable_inst in variable_insts:
         histogram = add_hist_axis(histogram, variable_inst)
 
-    # weight storage
-    if weight:
+    # add the storage
+    if storage is None:
+        # use weight value for backwards compatibility
+        storage = "weight" if weight else "double"
+    else:
+        storage = storage.lower()
+    if storage == "weight":
         histogram = histogram.Weight()
+    elif storage == "double":
+        histogram = histogram.Double()
+    else:
+        raise ValueError(f"unknown storage type '{storage}'")
 
     return histogram
 
