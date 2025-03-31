@@ -87,12 +87,9 @@ def met_filters(
 
 
 @met_filters.init
-def met_filters_init(self: Selector) -> None:
+def met_filters_init(self: Selector, **kwargs) -> None:
     met_filters = self.get_met_filters()
     if isinstance(met_filters, dict):
-        # do nothing when no dataset_inst is known
-        if not getattr(self, "dataset_inst", None):
-            return
         met_filters = met_filters[self.dataset_inst.data_source]
 
     # store filters as an attribute for faster lookup

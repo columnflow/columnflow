@@ -11,8 +11,8 @@ import getpass
 import luigi
 import law
 
-from columnflow.util import try_float, try_complex, DotDict
-from columnflow.types import Iterable
+from columnflow.util import try_float, try_complex, DotDict, Derivable
+from columnflow.types import Iterable, Any
 
 
 user_parameter_inst = luigi.Parameter(
@@ -35,6 +35,37 @@ last_edge_inclusive_inst = law.OptionalBoolParameter(
     "'None', shifting is performed for all variable axes that are continuous and non-circular; "
     f"default: {_default_last_bin_edge_inclusive}",
 )
+
+
+class DerivableInstParameter(luigi.Parameter):
+    """
+    Parameter that can be used to pass the instance of a :py:class:`Derivable` subclass.
+
+    This class does not implement parameter value parsing.
+    """
+
+    @classmethod
+    def _serialize(cls, x: Any) -> str:
+        if isinstance(x, Derivable):
+            return x.cls_name
+        return str(x)
+
+    def serialize(self, x: Any) -> str:
+        return self._serialize(x)
+
+
+class DerivableInstsParameter(luigi.Parameter):
+    """
+    Parameter that can be used to pass multiple instances of a :py:class:`Derivable` subclass.
+
+    This class does not implement parameter value parsing.
+    """
+
+    def serialize(self, x: Any) -> str:
+        """"""
+        if isinstance(x, (list, tuple)):
+            return ",".join(DerivableInstParameter._serialize(v) for v in x)
+        return str(x)
 
 
 class SettingsParameter(law.CSVParameter):

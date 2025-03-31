@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import law
+
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict, load_correction_set
+from columnflow.util import maybe_import, load_correction_set, DotDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -30,10 +33,7 @@ class ElectronSFConfig:
             raise ValueError("only one of working_point or hlt_path must be set")
 
     @classmethod
-    def new(
-        cls,
-        obj: ElectronSFConfig | tuple[str, str, str],
-    ) -> ElectronSFConfig:
+    def new(cls, obj: ElectronSFConfig | tuple[str, str, str]) -> ElectronSFConfig:
         # purely for backwards compatibility with the old tuple format
         if isinstance(obj, cls):
             return obj
@@ -53,6 +53,8 @@ class ElectronSFConfig:
     get_electron_file=(lambda self, external_files: external_files.electron_sf),
     # function to determine the electron weight config
     get_electron_config=(lambda self: ElectronSFConfig.new(self.config_inst.x.electron_sf_names)),
+    # choose if the eta variable should be the electron eta or the super cluster eta
+    use_supercluster_eta=True,
     weight_name="electron_weight",
     supported_versions=(1, 2, 3),
 )
@@ -92,11 +94,14 @@ def electron_weights(
     Optionally, an *electron_mask* can be supplied to compute the scale factor weight
     based only on a subset of electrons.
     """
-    # flat super cluster eta and pt views
-    sc_eta = flat_np_view((
-        events.Electron.eta[electron_mask] +
-        events.Electron.deltaEtaSC[electron_mask]
-    ), axis=1)
+    # flat super cluster eta/flat eta and pt views
+    if self.use_supercluster_eta:
+        eta = flat_np_view((
+            events.Electron.eta[electron_mask] +
+            events.Electron.deltaEtaSC[electron_mask]
+        ), axis=1)
+    else:
+        eta = flat_np_view(events.Electron.eta[electron_mask], axis=1)
     pt = flat_np_view(events.Electron.pt[electron_mask], axis=1)
     phi = flat_np_view(events.Electron.phi[electron_mask], axis=1)
 
@@ -105,7 +110,7 @@ def electron_weights(
         "WorkingPoint": self.electron_config.working_point,
         "Path": self.electron_config.hlt_path,
         "pt": pt,
-        "eta": sc_eta,
+        "eta": eta,
         "phi": phi,
     }
 
@@ -138,28 +143,33 @@ def electron_weights_init(self: Producer, **kwargs) -> None:
 
 
 @electron_weights.requires
-def electron_weights_requires(self: Producer, reqs: dict) -> None:
+def electron_weights_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @electron_weights.setup
 def electron_weights_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
-    bundle = reqs["external_files"]
+    self.electron_config = self.get_electron_config()
 
     # load the corrector
-    correction_set = load_correction_set(self.get_electron_file(bundle.files))
-
-    self.electron_config: ElectronSFConfig = self.get_electron_config()
-    self.electron_sf_corrector = correction_set[self.electron_config.correction]
+    e_file = self.get_electron_file(reqs["external_files"].files)
+    self.electron_sf_corrector = load_correction_set(e_file)[self.electron_config.correction]
 
     # the ValType key accepts different arguments for efficiencies and scale factors
     if self.electron_config.correction.endswith("Eff"):
@@ -178,6 +188,7 @@ electron_trigger_weights = electron_weights.derive(
     cls_dict={
         "get_electron_file": (lambda self, external_files: external_files.electron_trigger_sf),
         "get_electron_config": (lambda self: self.config_inst.x.electron_trigger_sf_names),
+        "use_supercluster_eta": False,
         "weight_name": "electron_trigger_weight",
     },
 )

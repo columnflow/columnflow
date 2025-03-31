@@ -10,12 +10,13 @@ __all__ = []
 
 import re
 import itertools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import order as od
 
 from columnflow.util import maybe_import
+from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.types import Callable, Any, Sequence
 
 ak = maybe_import("awkward")
@@ -58,6 +59,39 @@ def get_events_from_categories(
         mask = cat_mask | mask
 
     return events[mask]
+
+
+def get_category_name_columns(
+    category_ids: ak.Array,
+    config_inst: od.Config,
+) -> ak.Array:
+    """
+    Function that transforms column of category ids to column of category names.
+
+    :param category_ids: Awkward array of category ids.
+    :param config_inst: Config instance from which to load category instances.
+    :raises ValueError: If any of the category ids is not defined in the *config_inst*.
+    :return: Awkward array of category names with the same shape as *category_ids*
+    """
+    flat_ids = flat_np_view(category_ids)
+
+    # map all category ids present in *category_ids* to category instances
+    category_map = {
+        _id: config_inst.get_category(_id, default=None)
+        for _id in set(flat_ids)
+    }
+    if any(cat is None for cat in category_map.values()):
+        undefined_ids = {cat_id for cat_id, cat_inst in category_map.items() if cat_inst is None}
+        raise ValueError(f"undefined category ids: {', '.join(map(str, undefined_ids))}")
+
+    # Create a vectorized function for the mapping
+    map_to_name = np.vectorize(lambda _id: category_map[_id].name)
+
+    # Apply the mapping and layout to the original shape
+    flat_names = map_to_name(flat_ids)
+    category_names = layout_ak_array(flat_names, category_ids)
+
+    return category_names
 
 
 def get_root_processes_from_campaign(campaign: od.config.Campaign) -> od.unique.UniqueObjectIndex:
@@ -274,6 +308,23 @@ def add_shift_aliases(
         shift.x.column_aliases = _aliases
 
 
+def get_shift_from_configs(configs: list[od.Config], shift: str | od.Shift, silent: bool = False) -> od.Shift | None:
+    """
+
+    """
+    if isinstance(shift, od.Shift):
+        shift = shift.name
+
+    for config in configs:
+        if config.has_shift(shift):
+            return config.get_shift(shift)
+
+    if silent:
+        return None
+
+    raise ValueError(f"shift '{shift}' not found in any of the given configs: {configs}")
+
+
 def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) -> list[od.Shift]:
     """
     Takes a *config* object and returns a list of shift instances for both directions given a
@@ -286,6 +337,39 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) ->
         ),
         [],
     )
+
+
+def group_shifts(
+    shifts: od.Shift | Sequence[od.Shift],
+) -> tuple[od.Shift | None, dict[str, tuple[od.Shift, od.Shift]]]:
+    """
+    Takes several :py:class:`order.Shift` instances *shifts* and groups them according to their
+    shift source. The nominal shift, if present, is returned separately. The remaining shifts are
+    grouped by their source and the corresponding up and down shifts are stored in a dictionary.
+    Example:
+    .. code-block:: python
+        # assuming the following shifts exist
+        group_shifts([nominal, x_up, y_up, y_down, x_down])
+        # -> (nominal, {"x": (x_up, x_down), "y": (y_up, y_down)})
+    An exception is raised in case a shift source is represented only by its up or down shift.
+    """
+    nominal = None
+    grouped = defaultdict(lambda: [None, None])
+
+    up_sources = set()
+    down_sources = set()
+    for shift in law.util.make_list(shifts):
+        if shift.name == "nominal":
+            nominal = shift
+        else:
+            grouped[shift.source][shift.is_up] = shift
+            (up_sources if shift.is_up else down_sources).add(shift.source)
+
+    # check completeness of shifts
+    if (diff := up_sources.symmetric_difference(down_sources)):
+        raise ValueError(f"shift sources {diff} are not complete and cannot be grouped")
+
+    return nominal, dict(grouped)
 
 
 def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
@@ -421,8 +505,24 @@ def create_category_combinations(
             return {"id": "+"}
 
         create_category_combinations(cfg, categories, name_fn, kwargs_fn)
+
+    :param config: :py:class:`order.Config` object for which the categories are created.
+    :param categories: Dictionary that maps group names to sequences of categories.
+    :param name_fn: Callable that receives a dictionary mapping group names to categories and
+        returns the name of the newly created category.
+    :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and
+        returns a dictionary of keyword arguments that are forwarded to the category constructor.
+    :param skip_existing: If *True*, skip the creation of a category when it already exists in
+        *config*.
+    :param skip_fn: Callable that receives a dictionary mapping group names to categories and
+        returns *True* if the combination should be skipped.
+    :raises TypeError: If *name_fn* is not a callable.
+    :raises TypeError: If *kwargs_fn* is not a callable when set.
+    :raises ValueError: If a non-unique category id is detected.
+    :return: Number of newly created categories.
     """
     n_created_categories = 0
+    unique_ids_cache = {cat.id for cat, _, _ in config.walk_categories()}
     n_groups = len(categories)
     group_names = list(categories.keys())
 
@@ -467,6 +567,16 @@ def create_category_combinations(
                 # create the new category
                 cat = od.Category(name=cat_name, **kwargs)
                 n_created_categories += 1
+
+                # ID uniqueness check: raise an error when a non-unique id is detected for a new category
+                if kwargs["id"] in unique_ids_cache:
+                    matching_cat = config.get_category(kwargs["id"])
+                    if matching_cat.name != cat_name:
+                        raise ValueError(
+                            f"non-unique category id '{kwargs['id']}' for '{cat_name}' has "
+                            f"already been used for category '{matching_cat.name}'",
+                        )
+                unique_ids_cache.add(kwargs["id"])
 
                 # find direct parents and connect them
                 for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):

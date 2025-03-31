@@ -6,11 +6,14 @@ Muon related event weights.
 
 from __future__ import annotations
 
+import law
+
 from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict, load_correction_set
+from columnflow.util import maybe_import, load_correction_set, DotDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -22,10 +25,7 @@ class MuonSFConfig:
     campaign: str = ""
 
     @classmethod
-    def new(
-        cls,
-        obj: MuonSFConfig | tuple[str, str],
-    ) -> MuonSFConfig:
+    def new(cls, obj: MuonSFConfig | tuple[str, str]) -> MuonSFConfig:
         # purely for backwards compatibility with the old tuple format
         if isinstance(obj, cls):
             return obj
@@ -85,8 +85,8 @@ def muon_weights(
     subset of muons.
     """
     # flat absolute eta and pt views
-    abs_eta = flat_np_view(abs(events.Muon.eta[muon_mask]), axis=1)
-    pt = flat_np_view(events.Muon.pt[muon_mask], axis=1)
+    abs_eta = flat_np_view(abs(events.Muon["eta"][muon_mask]), axis=1)
+    pt = flat_np_view(events.Muon["pt"][muon_mask], axis=1)
 
     variable_map = {
         "year": self.muon_config.campaign,
@@ -111,7 +111,7 @@ def muon_weights(
         sf_flat = self.muon_sf_corrector(*inputs)
 
         # add the correct layout to it
-        sf = layout_ak_array(sf_flat, events.Muon.pt[muon_mask])
+        sf = layout_ak_array(sf_flat, events.Muon["pt"][muon_mask])
 
         # create the product over all muons in one event
         weight = ak.prod(sf, axis=1, mask_identity=False)
@@ -129,27 +129,34 @@ def muon_weights_init(self: Producer, **kwargs) -> None:
 
 
 @muon_weights.requires
-def muon_weights_requires(self: Producer, reqs: dict) -> None:
+def muon_weights_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @muon_weights.setup
 def muon_weights_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     bundle = reqs["external_files"]
 
     # load the corrector
     correction_set = load_correction_set(self.get_muon_file(bundle.files))
 
-    self.muon_config: MuonSFConfig = self.get_muon_config()
+    self.muon_config = self.get_muon_config()
     self.muon_sf_corrector = correction_set[self.muon_config.correction]
 
     # check versions

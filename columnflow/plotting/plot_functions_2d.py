@@ -17,7 +17,8 @@ from columnflow.plotting.plot_util import (
     remove_residual_axis,
     apply_variable_settings,
     apply_process_settings,
-    apply_density_to_hists,
+    apply_process_scaling,
+    apply_density,
     get_position,
     reduce_with,
 )
@@ -36,6 +37,7 @@ def plot_2d(
     config_inst: od.Config,
     category_inst: od.Category,
     variable_insts: list[od.Variable],
+    shift_insts: list[od.Shift],
     style_config: dict | None = None,
     density: bool | None = False,
     shape_norm: bool | None = False,
@@ -57,10 +59,10 @@ def plot_2d(
     remove_residual_axis(hists, "shift")
 
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
-
     hists = apply_process_settings(hists, process_settings)
-
-    hists = apply_density_to_hists(hists, density)
+    hists = apply_process_scaling(hists)
+    if density:
+        hists = apply_density(hists, density)
 
     # use CMS plotting style
     plt.style.use(mplhep.style.CMS)

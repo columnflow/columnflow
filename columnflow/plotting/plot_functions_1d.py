@@ -21,7 +21,8 @@ from columnflow.plotting.plot_util import (
     remove_residual_axis,
     apply_variable_settings,
     apply_process_settings,
-    apply_density_to_hists,
+    apply_process_scaling,
+    apply_density,
     hists_merge_cutflow_steps,
     get_position,
     get_profile_variations,
@@ -29,6 +30,8 @@ from columnflow.plotting.plot_util import (
     join_labels,
     equal_distance_bin_width,
 )
+from columnflow.hist_util import add_missing_shifts
+
 
 hist = maybe_import("hist")
 np = maybe_import("numpy")
@@ -38,11 +41,12 @@ mplhep = maybe_import("mplhep")
 od = maybe_import("order")
 
 
-def plot_variable_per_process(
+def plot_variable_stack(
     hists: OrderedDict,
     config_inst: od.Config,
     category_inst: od.Category,
     variable_insts: list[od.Variable],
+    shift_insts: list[od.Shift] | None,
     style_config: dict | None = None,
     density: bool | None = False,
     shape_norm: bool | None = False,
@@ -51,25 +55,43 @@ def plot_variable_per_process(
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
-    """
-    TODO: misleading function name, it should somehow contain "stack" and not "per_proceess"
-    """
-    remove_residual_axis(hists, "shift")
-
     variable_inst = variable_insts[0]
-    blinding_threshold = kwargs.get("blinding_threshold", None)
 
+    # process-based settings (styles and attributes)
+    hists = apply_process_settings(hists, process_settings)
+    # variable-based settings (rebinning, slicing, flow handling)
+    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    # process scaling
+    hists = apply_process_scaling(hists)
+    # remove data in bins where sensitivity exceeds some threshold
+    blinding_threshold = kwargs.get("blinding_threshold", None)
     if blinding_threshold:
         hists = blind_sensitive_bins(hists, config_inst, blinding_threshold)
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
-    hists = apply_process_settings(hists, process_settings)
-    hists = apply_density_to_hists(hists, density)
+
+    # density scaling per bin
+    if density:
+        hists = apply_density(hists, density)
+    # remove shift axis of histograms that are not to be stacked
+    unstacked_hists = {
+        proc_inst: h
+        for proc_inst, h in hists.items()
+        if proc_inst.is_mc and getattr(proc_inst, "unstack", False)
+    }
+    hists |= remove_residual_axis(unstacked_hists, "shift", select_value=0)
+
     # replace hist with version that has the same binning space between bins
     if "equal_bin_width" in kwargs:
         hists, kwargs["equal_distant_ticks_label"] = equal_distance_bin_width(hists, variable_inst)
+    
+    # prepare the plot config
+    plot_config = prepare_stack_plot_config(
+        hists,
+        shape_norm=shape_norm,
+        shift_insts=shift_insts,
+        **kwargs,
+    )
 
-    plot_config = prepare_stack_plot_config(hists, shape_norm=shape_norm, **kwargs)
-
+    # prepare and update the style config
     default_style_config = prepare_style_config(
         config_inst,
         category_inst,
@@ -79,7 +101,6 @@ def plot_variable_per_process(
         yscale,
         xtick_rotation=kwargs.get("rotate_xticks", None),
     )
-
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
@@ -96,7 +117,7 @@ def plot_variable_variants(
     density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
-    hide_errors: bool | None = None,
+    hide_stat_errors: bool | None = None,
     variable_settings: dict | None = None,
     **kwargs,
 ) -> plt.Figure:
@@ -107,7 +128,8 @@ def plot_variable_variants(
 
     variable_inst = variable_insts[0]
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
-    hists = apply_density_to_hists(hists, density)
+    if density:
+        hists = apply_density(hists, density)
 
     plot_config = OrderedDict()
 
@@ -128,7 +150,7 @@ def plot_variable_variants(
                 "norm": hists["Initial"].values(),
             },
         }
-        if hide_errors:
+        if hide_stat_errors:
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = None
@@ -158,11 +180,12 @@ def plot_shifted_variable(
     config_inst: od.Config,
     category_inst: od.Category,
     variable_insts: list[od.Variable],
+    shift_insts: list[od.Shift] | None,
     style_config: dict | None = None,
     density: bool | None = False,
     shape_norm: bool = False,
     yscale: str | None = None,
-    hide_errors: bool | None = None,
+    hide_stat_errors: bool | None = None,
     legend_title: str | None = None,
     process_settings: dict | None = None,
     variable_settings: dict | None = None,
@@ -174,7 +197,14 @@ def plot_shifted_variable(
     variable_inst = variable_insts[0]
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
-    hists = apply_density_to_hists(hists, density)
+    hists = apply_process_scaling(hists)
+    if density:
+        hists = apply_density(hists, density)
+
+    # add missing shifts to all histograms
+    all_shifts = set.union(*[set(h.axes["shift"]) for h in hists.values()])
+    for h in hists.values():
+        add_missing_shifts(h, all_shifts, str_axis="shift", nominal_bin="nominal")
 
     # create the sum of histograms over all processes
     h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
@@ -186,12 +216,12 @@ def plot_shifted_variable(
         "up": "red",
         "down": "blue",
     }
-    for i, shift_id in enumerate(h_sum.axes["shift"]):
-        shift_inst = config_inst.get_shift(shift_id)
+    for i, shift_name in enumerate(h_sum.axes["shift"]):
+        shift_inst = config_inst.get_shift(shift_name)
 
-        h = h_sum[{"shift": hist.loc(shift_id)}]
+        h = h_sum[{"shift": hist.loc(shift_name)}]
         # assuming `nominal` always has shift id 0
-        ratio_norm = h_sum[{"shift": hist.loc(0)}].values()
+        ratio_norm = h_sum[{"shift": hist.loc("nominal")}].values()
 
         diff = sum(h.values()) / sum(ratio_norm) - 1
         label = shift_inst.label
@@ -211,7 +241,7 @@ def plot_shifted_variable(
                 "color": colors[shift_inst.direction],
             },
         }
-        if hide_errors:
+        if hide_stat_errors:
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = None
@@ -263,7 +293,9 @@ def plot_cutflow(
     remove_residual_axis(hists, "shift")
 
     hists = apply_process_settings(hists, process_settings)
-    hists = apply_density_to_hists(hists, density)
+    hists = apply_process_scaling(hists)
+    if density:
+        hists = apply_density(hists, density)
     hists = hists_merge_cutflow_steps(hists)
 
     # setup plotting config
@@ -331,7 +363,7 @@ def plot_profile(
     style_config: dict | None = None,
     density: bool | None = False,
     yscale: str | None = "",
-    hide_errors: bool | None = None,
+    hide_stat_errors: bool | None = None,
     process_settings: dict | None = None,
     variable_settings: dict | None = None,
     skip_base_distribution: bool = False,
@@ -365,7 +397,9 @@ def plot_profile(
 
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_settings(hists, process_settings)
-    hists = apply_density_to_hists(hists, density)
+    hists = apply_process_scaling(hists)
+    if density:
+        hists = apply_density(hists, density)
 
     # process histograms to profiled and reduced histograms
     profiled_hists, reduced_hists = OrderedDict(), OrderedDict()
@@ -409,7 +443,7 @@ def plot_profile(
                     },
                 }
 
-        if hide_errors:
+        if hide_stat_errors:
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = None

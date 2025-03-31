@@ -40,7 +40,7 @@ class ExampleModel(MLModel):
 
     def datasets(self, config_inst: od.Config) -> set[od.Dataset]:
         return {
-            config_inst.get_dataset("st_tchannel_t_powheg"),
+            config_inst.get_dataset("st_tchannel_t_4f_powheg"),
             config_inst.get_dataset("tt_sl_powheg"),
         }
 

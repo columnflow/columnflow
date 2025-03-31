@@ -146,6 +146,23 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "aalvesan",
+      "name": "Ana Andrade",
+      "avatar_url": "https://avatars.githubusercontent.com/u/99343616?v=4",
+      "profile": "https://github.com/aalvesan",
+      "contributions": [
+        "code"
+      ]
+    }, {
+      "login": "philippgadow",
+      "name": "philippgadow",
+      "avatar_url": "https://avatars.githubusercontent.com/u/6804366?v=4",
+      "profile": "https://github.com/philippgadow",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"

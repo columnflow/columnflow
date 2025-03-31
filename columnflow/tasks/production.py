@@ -16,13 +16,20 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.util import dev_sandbox
 
 
-class ProduceColumns(
+class _ProduceColumns(
+    ReducedEventsUser,
     ProducerMixin,
     ChunkedIOMixin,
-    ReducedEventsUser,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`ProduceColumns`.
+    """
+
+
+class ProduceColumns(_ProduceColumns):
+
     # default sandbox, might be overwritten by producer function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -32,11 +39,7 @@ class ProduceColumns(
         RemoteWorkflow.reqs,
     )
 
-    # register sandbox and shifts found in the chosen producer to this task
-    register_producer_sandbox = True
-    register_producer_shifts = True
-
-    # strategy for handling missing source columns when adding aliases on event chunks
+    invokes_producer = True
     missing_column_alias_strategy = "original"
 
     def workflow_requires(self):
@@ -46,14 +49,18 @@ class ProduceColumns(
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
-        reqs["producer"] = law.util.make_unique(law.util.flatten(self.producer_inst.run_requires()))
+        reqs["producer"] = law.util.make_unique(law.util.flatten(
+            self.producer_inst.run_requires(task=self),
+        ))
 
         return reqs
 
     def requires(self):
         return {
             "events": self.reqs.ProvideReducedEvents.req(self),
-            "producer": law.util.make_unique(law.util.flatten(self.producer_inst.run_requires())),
+            "producer": law.util.make_unique(law.util.flatten(
+                self.producer_inst.run_requires(task=self),
+            )),
         }
 
     workflow_condition = ReducedEventsUser.workflow_condition.copy()
@@ -75,7 +82,7 @@ class ProduceColumns(
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet,
+            sorted_ak_to_parquet, attach_coffea_behavior,
         )
 
         # prepare inputs and outputs
@@ -84,8 +91,13 @@ class ProduceColumns(
         output_chunks = {}
 
         # run the producer setup
-        producer_reqs = self.producer_inst.run_requires()
-        reader_targets = self.producer_inst.run_setup(producer_reqs, luigi.task.getpaths(producer_reqs))
+        self._array_function_post_init()
+        producer_reqs = self.producer_inst.run_requires(task=self)
+        reader_targets = self.producer_inst.run_setup(
+            task=self,
+            reqs=producer_reqs,
+            inputs=luigi.task.getpaths(producer_reqs),
+        )
         n_ext = len(reader_targets)
 
         # create a temp dir for saving intermediate files
@@ -102,7 +114,7 @@ class ProduceColumns(
 
         # define columns that will be written
         write_columns = self.producer_inst.produced_columns
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
         # prepare inputs for localization
         with law.localize_file_targets(
@@ -133,7 +145,8 @@ class ProduceColumns(
 
                 # invoke the producer
                 if len(events):
-                    events = self.producer_inst(events)
+                    events = attach_coffea_behavior(events)
+                    events = self.producer_inst(events, task=self)
 
                 # remove columns
                 events = route_filter(events)
@@ -146,6 +159,9 @@ class ProduceColumns(
                 chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
                 output_chunks[pos.index] = chunk
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
+
+        # teardown the producer
+        self.producer_inst.run_teardown(task=self)
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

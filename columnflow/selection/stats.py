@@ -12,9 +12,11 @@ from functools import reduce
 from collections import defaultdict
 from operator import and_, getitem as getitem_
 
-from columnflow.types import Sequence, Callable
+import law
+
 from columnflow.selection import Selector, SelectionResult, selector
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, DotDict
+from columnflow.types import Sequence, Callable, Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -115,7 +117,13 @@ def increment_stats(
     feature, a *skip_func* can be defined that receives the weight name and the names of the groups
     of an entry. If the function returns *True*, the entry will be skipped.
     """
-    # default skip func
+    # defaults
+    if weight_map is None:
+        weight_map = {}
+    if group_map is None:
+        group_map = {}
+    if group_combinations is None:
+        group_combinations = []
     if skip_func is None:
         skip_func = lambda weight_name, group_names: False
 
@@ -126,7 +134,6 @@ def increment_stats(
     }
 
     # treat groups as combinations of a single group
-    group_combinations = list(group_combinations or [])
     for group_name, group_data in list(group_map.items())[::-1]:
         if group_data.get("combinations_only", False) or (group_name,) in group_combinations:
             continue
@@ -209,9 +216,11 @@ def increment_stats(
 @increment_stats.setup
 def increment_stats_setup(
     self: Selector,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     # flags to descibe "number" and "sum" fields
     self.NUM, self.SUM = range(2)

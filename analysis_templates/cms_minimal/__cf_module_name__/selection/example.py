@@ -8,7 +8,7 @@ from collections import defaultdict
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.selection.stats import increment_stats
-from columnflow.selection.util import sorted_indices_from_mask
+from columnflow.columnar_util import sorted_indices_from_mask
 from columnflow.production.processes import process_ids
 from columnflow.production.cms.mc_weight import mc_weight
 from columnflow.util import maybe_import
@@ -24,9 +24,8 @@ ak = maybe_import("awkward")
 # (not selectable from the command line but used by other, exposed selectors)
 #
 
-
 @selector(
-    uses={"Muon.pt", "Muon.eta"},
+    uses={"Muon.{pt,eta,phi,mass}"},
 )
 def muon_selection(
     self: Selector,
@@ -53,7 +52,7 @@ def muon_selection(
 
 
 @selector(
-    uses={"Jet.pt", "Jet.eta"},
+    uses={"Jet.{pt,eta,phi,mass}"},
 )
 def jet_selection(
     self: Selector,
@@ -81,6 +80,7 @@ def jet_selection(
         },
     )
 
+
 @jet_selection.init
 def jet_selection_init(self: Selector) -> None:
     # register shifts
@@ -90,16 +90,17 @@ def jet_selection_init(self: Selector) -> None:
         if shift_inst.has_tag(("jec", "jer"))
     }
 
+
 #
 # exposed selectors
 # (those that can be invoked from the command line)
 #
 
+
 @selector(
     uses={
         # selectors / producers called within _this_ selector
-        mc_weight, cutflow_features, process_ids, muon_selection, jet_selection,
-        increment_stats,
+        mc_weight, cutflow_features, process_ids, muon_selection, jet_selection, increment_stats,
     },
     produces={
         # selectors / producers whose newly created columns should be kept

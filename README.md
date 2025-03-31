@@ -1,6 +1,6 @@
 <h1 align="center">
-  <img src="https://media.githubusercontent.com/media/columnflow/columnflow/master/assets/logo_dark.png#gh-light-mode-only" width="480" />
-  <img src="https://media.githubusercontent.com/media/columnflow/columnflow/master/assets/logo_bright.png#gh-dark-mode-only" width="480" />
+  <img alt="light logo" src="https://media.githubusercontent.com/media/columnflow/columnflow/master/assets/logo_dark.png#gh-light-mode-only" width="480" />
+  <img alt="dark logo" src="https://media.githubusercontent.com/media/columnflow/columnflow/master/assets/logo_bright.png#gh-dark-mode-only" width="480" />
 </h1>
 
 <!-- marker-before-badges -->
@@ -35,25 +35,39 @@ Original source hosted at [GitHub](https://github.com/columnflow/columnflow).
 
 <!-- marker-before-note -->
 
-## Note on current development
+## ❗️ Note on v0.2 → v0.3 transition
 
-This project is currently in a beta phase.
+The 0.3 release introduces many performance fixes and new features such as
+
+- a new interface for all *task array functions* (calibrators, selectors, producers, etc.),
+- support for plotting data of multiple data taking campaigns at once,
+- a simplified machine learning interface, and
+- statistical inference models with support for merging data of different campaigns.
+
+However, some of these changes are potentially breaking existing code.
+Checkout the [v0.2 → v0.3 transition guide](https://columnflow.readthedocs.io/en/latest/user_guide/02_03_transition.html) as well as the [release notes](https://github.com/columnflow/columnflow/releases/tag/v0.3.0) for a detailed overview of the changes and how to adapt your code.
+
+Version 0.2 continues to be available via the [`legacy/v0.2`](https://github.com/columnflow/columnflow/tree/legacy/v0.2) branch, with the latest release being [v0.2.5](https://github.com/columnflow/columnflow/releases/tag/v0.2.5).
+
+## 🚧 Note on current development
+
+This project is in an advanced beta phase.
 The project setup, suggested workflows, definitions of particular tasks, and the signatures of various helper classes and functions are mostly frozen but could still be subject to changes in the near future.
-At this point (July 2024), various large-scale analyses based upon columnflow are being developed, and in the process, help test and verify various aspects of its core.
-The first major release with a largely frozen API is expected in the fall of 2024.
-However, if you would like to join early on, contribute or just give it a spin, feel free to get in touch!
+Various large-scale analyses based upon columnflow have been performed, others are being developed, and in the process, help test and verify various aspects of the framework.
 
 <!-- marker-after-note -->
 
 <!-- marker-before-analytics -->
 
-![Columnflow analytics](https://repobeats.axiom.co/api/embed/b6ebc5ba41019de55eb48e195eecb438890442c8.svg "Columnflow analytics")
+<div align="center">
+  <img alt="Columnflow analytics" src="https://repobeats.axiom.co/api/embed/b6ebc5ba41019de55eb48e195eecb438890442c8.svg" />
+</div>
 
 <!-- marker-after-analytics -->
 
 <!-- marker-before-body -->
 
-## Quickstart
+## ⏩ Quickstart
 
 To create an analysis using columnflow, it is recommended to start from a predefined template (located in [analysis_templates](https://github.com/columnflow/columnflow/tree/master/analysis_templates)).
 The following command (no previous git clone required) interactively asks for a handful of names and settings, and creates a minimal, yet fully functioning project structure for you!
@@ -103,15 +117,18 @@ Setup successfull! The next steps are:
 
 For a better overview of the tasks that are triggered by the commands below, checkout the current (yet stylized) [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph).
 
-## Projects using columnflow
+## 💯 Projects using columnflow
 
 - [hh2bbtautau](https://github.com/uhh-cms/hh2bbtautau): HH → bb𝜏𝜏 analysis with CMS.
 - [hh2bbww](https://github.com/uhh-cms/hh2bbww): HH → bbWW analysis with CMS.
 - [topmass](https://github.com/uhh-cms/topmass): Top quark mass measurement with CMS.
 - [mttbar](https://github.com/uhh-cms/mttbar): Search for heavy resonances in ttbar events with CMS.
-- [analysis playground](https://github.com/uhh-cms/analysis_playground): A testing playground for HEP analyses.
+- [analysis playground](https://github.com/uhh-cms/AZH2inv): TODO
+- [topsf](https://github.com/uhh-cms/topsf): Top tagging scale factor measurement.
+- [hto4l](https://github.com/uhh-cms/hto4l): H → ZZ → 4l analysis with CMS.
+- [DiJetJERC](https://github.com/uhh-cms/DiJetJERC): Di-jet analysis with CMS.
 
-## Contributors
+## 🙏 Contributors
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
 <!-- prettier-ignore-start -->
@@ -119,7 +136,7 @@ For a better overview of the tasks that are triggered by the commands below, che
 <table>
   <tbody>
     <tr>
-      <td align="center" valign="top" width="14.28%"><a href="https://github.com/riga"><img src="https://avatars.githubusercontent.com/u/1908734?v=4?s=100" width="100px;" alt="Marcel Rieger"/><br /><sub><b>Marcel Rieger</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Ariga" title="Reviewed Pull Requests">👀</a> <a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Documentation">📖</a> <a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Tests">⚠️</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/riga"><img src="https://avatars.githubusercontent.com/u/1908734?v=4?s=100" width="100px;" alt="Marcel Rieger"/><br /><sub><b>Marcel Rieger</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=riga" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Ariga" title="Reviewed Pull Requests">👀</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mafrahm"><img src="https://avatars.githubusercontent.com/u/49306645?v=4?s=100" width="100px;" alt="Mathis Frahm"/><br /><sub><b>Mathis Frahm</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=mafrahm" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Amafrahm" title="Reviewed Pull Requests">👀</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/dsavoiu"><img src="https://avatars.githubusercontent.com/u/17005255?v=4?s=100" width="100px;" alt="Daniel Savoiu"/><br /><sub><b>Daniel Savoiu</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=dsavoiu" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Adsavoiu" title="Reviewed Pull Requests">👀</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/pkausw"><img src="https://avatars.githubusercontent.com/u/26219567?v=4?s=100" width="100px;" alt="pkausw"/><br /><sub><b>pkausw</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=pkausw" title="Code">💻</a> <a href="https://github.com/columnflow/columnflow/pulls?q=is%3Apr+reviewed-by%3Apkausw" title="Reviewed Pull Requests">👀</a></td>
@@ -135,6 +152,10 @@ For a better overview of the tasks that are triggered by the commands below, che
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/haddadanas"><img src="https://avatars.githubusercontent.com/u/103462379?v=4?s=100" width="100px;" alt="haddadanas"/><br /><sub><b>haddadanas</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=haddadanas" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/jomatthi"><img src="https://avatars.githubusercontent.com/u/82223346?v=4?s=100" width="100px;" alt="jomatthi"/><br /><sub><b>jomatthi</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=jomatthi" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/JulesVandenbroeck"><img src="https://avatars.githubusercontent.com/u/93740577?v=4?s=100" width="100px;" alt="JulesVandenbroeck"/><br /><sub><b>JulesVandenbroeck</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=JulesVandenbroeck" title="Code">💻</a></td>
+    </tr>
+    <tr>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/aalvesan"><img src="https://avatars.githubusercontent.com/u/99343616?v=4?s=100" width="100px;" alt="Ana Andrade"/><br /><sub><b>Ana Andrade</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=aalvesan" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/philippgadow"><img src="https://avatars.githubusercontent.com/u/6804366?v=4?s=100" width="100px;" alt="philippgadow"/><br /><sub><b>philippgadow</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=philippgadow" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
