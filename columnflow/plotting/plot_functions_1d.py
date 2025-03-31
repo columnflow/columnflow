@@ -82,7 +82,7 @@ def plot_variable_stack(
     # replace hist with version that has the same binning space between bins
     if "equal_bin_width" in kwargs:
         hists, kwargs["equal_distant_ticks_label"] = equal_distance_bin_width(hists, variable_inst)
-    
+
     # prepare the plot config
     plot_config = prepare_stack_plot_config(
         hists,

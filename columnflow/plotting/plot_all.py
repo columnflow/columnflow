@@ -274,7 +274,7 @@ def plot_all(
     whitespace_fraction: float = 0.3,
     magnitudes: float = 4,
     **kwargs,
-) -> tuple(plt.Figure, tuple(plt.Axes)):
+) -> tuple[plt.Figure, tuple[plt.Axes, ...]]:
     """
     Function that calls multiple plotting methods based on two configuration dictionaries,
     *plot_config* and *style_config*.
