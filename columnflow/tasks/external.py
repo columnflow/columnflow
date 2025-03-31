@@ -378,7 +378,7 @@ class ExternalFile:
         ExternalFile(location="path/to/file", version="v1")
 
         # refer to a directory or archive that contains multiple files
-        ExternalFile(location="some/archive.tgz", subpaths={"file_name": "file/in/archive"], version="v1")
+        ExternalFile(location="some/archive.tgz", subpaths={"file_name": "file/in/archive"}, version="v1")
     """
 
     location: str
@@ -467,15 +467,17 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         :param path: path or external file object.
         :return: Unique basename(s).
         """
-        if isinstance(path, ExternalFile):
-            if path.subpaths:
-                return {
-                    name: cls.create_unique_basename(os.path.join(path.location, subpath))
-                    for name, subpath in path.subpaths.items()
-                }
-            return cls.create_unique_basename(path.location)
+        if isinstance(path, str):
+            return f"{law.util.create_hash(path)}_{os.path.basename(path)}"
 
-        return f"{law.util.create_hash(path)}_{os.path.basename(path)}"
+        # path must be an ExternalFile
+        if path.subpaths:
+            return {
+                name: cls.create_unique_basename(os.path.join(path.location, subpath))
+                for name, subpath in path.subpaths.items()
+            }
+
+        return cls.create_unique_basename(path.location)
 
     @property
     def files_hash(self) -> str:
@@ -547,7 +549,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
 
-        # create a scratch directory inside for temporary downloads that will not be bundled
+        # create a scratch directory for temporary downloads that will not be bundled
         scratch_dir = tmp_dir.child("scratch", type="d")
         scratch_dir.touch()
 
