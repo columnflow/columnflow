@@ -28,7 +28,6 @@ from columnflow.plotting.plot_util import (
     get_profile_variations,
     blind_sensitive_bins,
     join_labels,
-    equal_distance_bin_width,
 )
 from columnflow.hist_util import add_missing_shifts
 
@@ -78,10 +77,6 @@ def plot_variable_stack(
     }
     hists |= remove_residual_axis(unstacked_hists, "shift", select_value=0)
 
-    # replace hist with version that has the same binning space between bins
-    if "equal_bin_width" in kwargs:
-        hists, kwargs["equal_distant_ticks_label"] = equal_distance_bin_width(hists, variable_inst)
-
     # prepare the plot config
     plot_config = prepare_stack_plot_config(
         hists,
@@ -98,7 +93,6 @@ def plot_variable_stack(
         density,
         shape_norm,
         yscale,
-        xtick_rotation=kwargs.get("rotate_xticks", None),
     )
     style_config = law.util.merge_dicts(
         default_style_config,
@@ -170,7 +164,6 @@ def plot_variable_variants(
         density,
         shape_norm,
         yscale,
-        xtick_rotation=kwargs.get("rotate_xticks", None),
     )
     # plot-function specific changes
     default_style_config["rax_cfg"]["ylim"] = (0., 1.1)
@@ -271,7 +264,6 @@ def plot_shifted_variable(
         density,
         shape_norm,
         yscale,
-        xtick_rotation=kwargs.get("rotate_xticks", None),
     )
     default_style_config["rax_cfg"]["ylim"] = (0.25, 1.75)
     default_style_config["rax_cfg"]["ylabel"] = "Ratio"

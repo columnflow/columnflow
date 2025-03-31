@@ -313,6 +313,24 @@ def apply_variable_settings(
                 h = h[{var_inst.name: slice(slice_0, slice_1)}]
                 hists[proc_inst] = h
 
+        # additional x axis transformations
+        for trafo in law.util.make_list(get_attr_or_aux(var_inst, "x_transformations", None) or []):
+            # forced representation into equal bins
+            if trafo in {"equal_distance_with_edges", "equal_distance_with_indices"}:
+                hists, orig_edges = rebin_equal_width(hists, var_inst.name)
+                new_edges = list(hists.values())[0].axes[-1].edges
+                # store edge values as well as ticks if needed
+                ax_cfg = {"xlim": (new_edges[0], new_edges[-1])}
+                if trafo == "equal_distance_with_edges":
+                    # optionally round edges
+                    rnd = get_attr_or_aux(var_inst, "x_edge_rounding", (lambda e: e))
+                    edge_labels = [rnd(e) for e in orig_edges]
+                    ax_cfg |= {"xmajorticks": new_edges, "xmajorticklabels": edge_labels, "xminorticks": []}
+                variable_style_config[var_inst].setdefault("ax_cfg", {}).update(ax_cfg)
+                variable_style_config[var_inst].setdefault("rax_cfg", {}).update(ax_cfg)
+            else:
+                raise ValueError(f"unknown x transformation '{trafo}'")
+
     return hists, variable_style_config
 
 
@@ -460,16 +478,16 @@ def prepare_style_config(
     style_config = {
         "ax_cfg": {
             "xlim": xlim,
-            # TODO: need to make bin width and unit configurable in future
             "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False, unit_format=unit_format),
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
-            "xtick_rotation": kwargs.get("xtick_rotation", None),
+            "xrotation": variable_inst.x("x_label_rotation", None),
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
+            "xrotation": variable_inst.x("x_label_rotation", None),
         },
         "legend_cfg": {},
         "annotate_cfg": {"text": cat_label or ""},
@@ -914,18 +932,26 @@ def blind_sensitive_bins(
     return hists
 
 
-def rebin_equal_width(hists: dict[Hashable, hist.Hist]) -> tuple[dict[Hashable, hist.Hist], np.ndarray]:
+def rebin_equal_width(
+    hists: dict[Hashable, hist.Hist],
+    axis_name: str,
+) -> tuple[dict[Hashable, hist.Hist], np.ndarray]:
     """
-    In a dictionary, rebins the variable (last) axis of all histograms to have the same amount of bins but with equal
+    In a dictionary, rebins an axis named *axis_name* of all histograms to have the same amount of bins but with equal
     width. This is achieved by using integer edge values starting at 0. The original edge values are returned as well.
     Bin contents are not changed but copied to the rebinned histograms.
 
     :param hists: Dictionary of histograms to rebin.
+    :param axis_name: Name of the axis to rebin.
     :return: Tuple of the rebinned histograms and the new bin edges.
     """
     # get the variable axis from the first histogram
     assert hists
-    var_axis = list(hists.values())[0].axes[-1]
+    for var_index, var_axis in enumerate(list(hists.values())[0].axes):
+        if var_axis.name == axis_name:
+            break
+    else:
+        raise ValueError(f"axis '{axis_name}' not found in histograms")
     assert isinstance(var_axis, (hist.axis.Variable, hist.axis.Regular))
     orig_edges = var_axis.edges
 
@@ -939,7 +965,7 @@ def rebin_equal_width(hists: dict[Hashable, hist.Hist]) -> tuple[dict[Hashable, 
     new_hists = type(hists)()
     for key, h in hists.items():
         # create a new histogram
-        new_axes = h.axes[:-1] + (copy_axis(var_axis, **axis_kwargs),)
+        new_axes = h.axes[:var_index] + (copy_axis(var_axis, **axis_kwargs),) + h.axes[var_index + 1:]
         new_h = hist.Hist(*new_axes, storage=h.storage_type())
 
         # copy contents and save
