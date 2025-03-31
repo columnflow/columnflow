@@ -237,7 +237,11 @@ class CreateHistograms(_CreateHistograms):
 
                 # invoke the hist producer, potentially updating columns and creating the event weight
                 events = attach_coffea_behavior(events)
-                events, weight = self.hist_producer_inst(events, task=self)
+                try:
+                    events, weight = self.hist_producer_inst(events, task=self)
+                except:
+                    self.hist_producer_inst.run_teardown(task=self)
+                    raise
 
                 # merge category ids and check that they are defined as leaf categories
                 category_ids = ak.concatenate(

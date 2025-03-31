@@ -213,7 +213,11 @@ class ReduceEvents(_ReduceEvents):
                 if len(events):
                     n_all += len(events)
                     events = attach_coffea_behavior(events)
-                    events = self.reducer_inst(events, selection=sel, task=self)
+                    try:
+                        events = self.reducer_inst(events, selection=sel, task=self)
+                    except:
+                        self.reducer_inst.run_teardown(task=self)
+                        raise
                     n_reduced += len(events)
 
                 # remove columns

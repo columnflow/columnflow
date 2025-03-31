@@ -146,7 +146,11 @@ class ProduceColumns(_ProduceColumns):
                 # invoke the producer
                 if len(events):
                     events = attach_coffea_behavior(events)
-                    events = self.producer_inst(events, task=self)
+                    try:
+                        events = self.producer_inst(events, task=self)
+                    except:
+                        self.producer_inst.run_teardown(task=self)
+                        raise
 
                 # remove columns
                 events = route_filter(events)

@@ -216,13 +216,17 @@ class PrepareMLEvents(
                 events = set_ak_column(events, "fold_indices", events.deterministic_seed % self.ml_model_inst.folds)
                 # invoke the optional producer
                 if len(events) and self.preparation_producer_inst:
-                    events = self.preparation_producer_inst(
-                        events,
-                        task=self,
-                        stats=stats,
-                        fold_indices=events.fold_indices,
-                        ml_model_inst=self.ml_model_inst,
-                    )
+                    try:
+                        events = self.preparation_producer_inst(
+                            events,
+                            task=self,
+                            stats=stats,
+                            fold_indices=events.fold_indices,
+                            ml_model_inst=self.ml_model_inst,
+                        )
+                    except:
+                        self.preparation_producer_inst.run_teardown(task=self)
+                        raise
 
                 # read fold_indices from events array to allow masking training events
                 fold_indices = events.fold_indices
@@ -745,13 +749,17 @@ class MLEvaluation(
 
                 # invoke the optional producer
                 if len(events) and self.preparation_producer_inst:
-                    events = self.preparation_producer_inst(
-                        events,
-                        task=self,
-                        stats=stats,
-                        fold_indices=events.fold_indices,
-                        ml_model_inst=self.ml_model_inst,
-                    )
+                    try:
+                        events = self.preparation_producer_inst(
+                            events,
+                            task=self,
+                            stats=stats,
+                            fold_indices=events.fold_indices,
+                            ml_model_inst=self.ml_model_inst,
+                        )
+                    except:
+                        self.preparation_producer_inst.run_teardown(task=self)
+                        raise
 
                 # evaluate the model
                 events = self.ml_model_inst.evaluate(

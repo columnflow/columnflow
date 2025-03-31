@@ -152,7 +152,11 @@ class CalibrateEvents(_CalibrateEvents):
                 events = update_ak_array(events, *cols)
 
                 # just invoke the calibration function
-                events = self.calibrator_inst(events, task=self)
+                try:
+                    events = self.calibrator_inst(events, task=self)
+                except:
+                    self.calibrator_inst.run_teardown(task=self)
+                    raise
 
                 # remove columns
                 events = route_filter(events)

@@ -219,7 +219,11 @@ class SelectEvents(_SelectEvents):
                 )
 
                 # invoke the selection function
-                events, results = self.selector_inst(events, task=self, stats=stats, hists=hists)
+                try:
+                    events, results = self.selector_inst(events, task=self, stats=stats, hists=hists)
+                except:
+                    self.selector_inst.run_teardown(task=self)
+                    raise
 
                 # complain when there is no event mask
                 if results.event is None:
