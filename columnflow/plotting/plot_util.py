@@ -185,12 +185,15 @@ def hists_merge_cutflow_steps(
 
 
 def apply_process_settings(
-    hists: dict,
+    hists: dict[Hashable, hist.Hist],
     process_settings: dict | None = None,
-) -> dict:
+) -> tuple[dict[Hashable, hist.Hist], dict[str, Any]]:
     """
     applies settings from `process_settings` dictionary to the `process_insts`
     """
+    # store info gathered along application of process settings that can be inserted to the style config
+    process_style_config = {}
+
     # apply all settings on process insts
     apply_settings(
         hists.keys(),
@@ -198,10 +201,10 @@ def apply_process_settings(
         parent_check=(lambda proc, parent_name: proc.has_parent_process(parent_name)),
     )
 
-    return hists
+    return hists, process_style_config
 
 
-def apply_process_scaling(hists: dict) -> dict:
+def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hist.Hist]:
     # helper to compute the stack integral
     stack_integral = None
 
@@ -264,19 +267,24 @@ def remove_label_placeholders(
 
 
 def apply_variable_settings(
-    hists: dict,
+    hists: dict[Hashable, hist.Hist],
     variable_insts: list[od.Variable],
     variable_settings: dict | None = None,
-) -> dict:
+) -> tuple[dict[Hashable, hist.Hist], dict[od.Variable, dict[str, Any]]]:
     """
     applies settings from *variable_settings* dictionary to the *variable_insts*;
     the *rebin*, *overflow*, *underflow*, and *slice* settings are directly applied to the histograms
     """
+    # store info gathered along application of variable settings that can be inserted to the style config
+    variable_style_config = {}
+
     # apply all settings on variable insts
     apply_settings(variable_insts, variable_settings)
 
     # apply certain  setting directly to histograms
     for var_inst in variable_insts:
+        variable_style_config[var_inst] = {}
+
         # rebinning
         rebin_factor = get_attr_or_aux(var_inst, "rebin", None)
         if try_int(rebin_factor):
@@ -288,7 +296,6 @@ def apply_variable_settings(
         # overflow and underflow bins
         overflow = get_attr_or_aux(var_inst, "overflow", False)
         underflow = get_attr_or_aux(var_inst, "underflow", False)
-
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
                 h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
@@ -306,7 +313,7 @@ def apply_variable_settings(
                 h = h[{var_inst.name: slice(slice_0, slice_1)}]
                 hists[proc_inst] = h
 
-    return hists
+    return hists, variable_style_config
 
 
 def use_flow_bins(

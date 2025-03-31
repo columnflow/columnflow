@@ -58,16 +58,15 @@ def plot_variable_stack(
     variable_inst = variable_insts[0]
 
     # process-based settings (styles and attributes)
-    hists = apply_process_settings(hists, process_settings)
+    hists, process_style_config = apply_process_settings(hists, process_settings)
     # variable-based settings (rebinning, slicing, flow handling)
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
     # process scaling
     hists = apply_process_scaling(hists)
     # remove data in bins where sensitivity exceeds some threshold
     blinding_threshold = kwargs.get("blinding_threshold", None)
     if blinding_threshold:
         hists = blind_sensitive_bins(hists, config_inst, blinding_threshold)
-
     # density scaling per bin
     if density:
         hists = apply_density(hists, density)
@@ -101,9 +100,17 @@ def plot_variable_stack(
         yscale,
         xtick_rotation=kwargs.get("rotate_xticks", None),
     )
-    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    style_config = law.util.merge_dicts(
+        default_style_config,
+        process_style_config,
+        variable_style_config[variable_inst],
+        style_config,
+        deep=True,
+    )
+
+    # additional, plot function specific changes
     if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
+        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
 
     return plot_all(plot_config, style_config, **kwargs)
 
@@ -154,6 +161,7 @@ def plot_variable_variants(
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = None
+
     # setup style config
     default_style_config = prepare_style_config(
         config_inst,
@@ -170,7 +178,7 @@ def plot_variable_variants(
 
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
+        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
 
     return plot_all(plot_config, style_config, **kwargs)
 
@@ -195,8 +203,9 @@ def plot_shifted_variable(
     TODO.
     """
     variable_inst = variable_insts[0]
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
-    hists = apply_process_settings(hists, process_settings)
+
+    hists, process_style_config = apply_process_settings(hists, process_settings)
+    hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)
@@ -268,10 +277,15 @@ def plot_shifted_variable(
     default_style_config["rax_cfg"]["ylabel"] = "Ratio"
     if legend_title:
         default_style_config["legend_cfg"]["title"] = legend_title
-
-    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    style_config = law.util.merge_dicts(
+        default_style_config,
+        process_style_config,
+        variable_style_config[variable_inst],
+        style_config,
+        deep=True,
+    )
     if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = r"$\Delta N/N$"
+        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
 
     return plot_all(plot_config, style_config, **kwargs)
 
@@ -292,7 +306,7 @@ def plot_cutflow(
     """
     remove_residual_axis(hists, "shift")
 
-    hists = apply_process_settings(hists, process_settings)
+    hists, process_style_config = apply_process_settings(hists, process_settings)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)
@@ -343,7 +357,7 @@ def plot_cutflow(
             "com": config_inst.campaign.ecm,
         },
     }
-    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    style_config = law.util.merge_dicts(default_style_config, process_style_config, style_config, deep=True)
 
     # ratio plot not used here; set `skip_ratio` to True
     kwargs["skip_ratio"] = True
@@ -395,8 +409,8 @@ def plot_profile(
     # remove shift axis from histograms
     remove_residual_axis(hists, "shift")
 
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
-    hists = apply_process_settings(hists, process_settings)
+    hists, process_style_config = apply_process_settings(hists, process_settings)
+    hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)
@@ -458,7 +472,13 @@ def plot_profile(
     )
 
     default_style_config["ax_cfg"]["ylabel"] = f"profiled {variable_insts[1].x_title}"
-    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    style_config = law.util.merge_dicts(
+        default_style_config,
+        process_style_config,
+        variable_style_config[variable_insts[0]],
+        style_config,
+        deep=True,
+    )
 
     # ratio plot not used here; set `skip_ratio` to True
     kwargs["skip_ratio"] = True
@@ -493,7 +513,7 @@ def plot_profile(
     )
     ax1.set(
         ylim=(ax1_ymin, ax1_ymax),
-        ylabel=r"$\Delta N/N$",
+        ylabel="Normalized entries",
         yscale=base_distribution_yscale,
     )
 
