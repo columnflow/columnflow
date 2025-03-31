@@ -156,6 +156,57 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
     raise ValueError(f"unknown axis type '{axis_type}'")
 
 
+def get_axis_kwargs(axis: hist.axis.AxesMixin) -> dict[str, Any]:
+    """
+    Extract information from an *axis* instance that would be needed to create a new one.
+
+    :param axis: The axis instance to extract information from.
+    :return: The extracted information in a dict.
+    """
+    axis_attrs = ["name", "label"]
+    traits_attrs = []
+    kwargs = {}
+
+    if isinstance(axis, hist.axis.Variable):
+        axis_attrs.append("edges")
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+    elif isinstance(axis, hist.axis.Regular):
+        axis_attrs = ["transform"]
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+        kwargs["bins"] = axis.size
+        kwargs["start"] = axis.edges[0]
+        kwargs["stop"] = axis.edges[-1]
+    elif isinstance(axis, hist.axis.Integer):
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+        kwargs["start"] = axis.edges[0]
+        kwargs["stop"] = axis.edges[-1]
+    elif isinstance(axis, hist.axis.Boolean):
+        # nothing to add to common attributes
+        pass
+    elif isinstance(axis, (hist.axis.IntCategory, hist.axis.StrCategory)):
+        traits_attrs = ["overflow", "growth"]
+        kwargs["categories"] = list(axis)
+    else:
+        raise NotImplementedError(f"axis type '{type(axis).__name__}' not supported")
+
+    return (
+        {attr: getattr(axis, attr) for attr in axis_attrs} |
+        {attr: getattr(axis.traits, attr) for attr in traits_attrs} |
+        kwargs
+    )
+
+
+def copy_axis(axis: hist.axis.AxesMixin, **kwargs: dict[str, Any]) -> hist.axis.AxesMixin:
+    """
+    Copy an axis with the option to override its attributes.
+    """
+    # create arguments for new axis from overlay with current and requested ones
+    axis_kwargs = get_axis_kwargs(axis) | kwargs
+
+    # create new instance
+    return type(axis)(**axis_kwargs)
+
+
 def create_hist_from_variables(
     *variable_insts,
     categorical_axes: tuple[tuple[str, str]] | None = None,
