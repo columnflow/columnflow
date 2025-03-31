@@ -569,14 +569,15 @@ def create_category_combinations(
                 n_created_categories += 1
 
                 # ID uniqueness check: raise an error when a non-unique id is detected for a new category
-                if kwargs["id"] in unique_ids_cache:
-                    matching_cat = config.get_category(kwargs["id"])
-                    if matching_cat.name != cat_name:
-                        raise ValueError(
-                            f"non-unique category id '{kwargs['id']}' for '{cat_name}' has "
-                            f"already been used for category '{matching_cat.name}'",
-                        )
-                unique_ids_cache.add(kwargs["id"])
+                if isinstance(kwargs["id"], int):
+                    if kwargs["id"] in unique_ids_cache:
+                        matching_cat = config.get_category(kwargs["id"])
+                        if matching_cat.name != cat_name:
+                            raise ValueError(
+                                f"non-unique category id '{kwargs['id']}' for '{cat_name}' has already been used for "
+                                f"category '{matching_cat.name}'",
+                            )
+                    unique_ids_cache.add(kwargs["id"])
 
                 # find direct parents and connect them
                 for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
