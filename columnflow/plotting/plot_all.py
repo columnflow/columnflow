@@ -15,6 +15,7 @@ from columnflow.util import maybe_import, try_float
 from columnflow.config_util import group_shifts
 from columnflow.plotting.plot_util import (
     get_position,
+    apply_ax_kwargs,
     get_cms_label,
     remove_label_placeholders,
     apply_label_placeholders,
@@ -276,32 +277,32 @@ def plot_all(
     **kwargs,
 ) -> tuple[plt.Figure, tuple[plt.Axes, ...]]:
     """
-    Function that calls multiple plotting methods based on two configuration dictionaries,
-    *plot_config* and *style_config*.
+    Function that calls multiple plotting methods based on two configuration dictionaries, *plot_config* and
+    *style_config*.
 
     The *plot_config* expects dictionaries with fields:
-    "method": str, identical to the name of a function defined above,
-    "hist": hist.Hist or hist.Stack,
-    "kwargs": dict (optional),
-    "ratio_kwargs": dict (optional),
+
+        - "method": str, identical to the name of a function defined above
+        - "hist": hist.Hist or hist.Stack
+        - "kwargs": dict (optional)
+        - "ratio_kwargs": dict (optional)
 
     The *style_config* expects fields (all optional):
-    "gridspec_cfg": dict,
-    "ax_cfg": dict,
-    "rax_cfg": dict,
-    "legend_cfg": dict,
-    "cms_label_cfg": dict,
 
-    :param plot_config: Dictionary that defines which plot methods will be called with which
-        key word arguments.
+        - "gridspec_cfg": dict
+        - "ax_cfg": dict
+        - "rax_cfg": dict
+        - "legend_cfg": dict
+        - "cms_label_cfg": dict
+
+    :param plot_config: Dictionary that defines which plot methods will be called with which key word arguments.
     :param style_config: Dictionary that defines arguments on how to style the overall plot.
     :param skip_ratio: Optional bool parameter to not display the ratio plot.
     :param skip_legend: Optional bool parameter to not display the legend.
     :param cms_label: Optional string parameter to set the CMS label text.
-    :param whitespace_fraction: Optional float parameter that defines the ratio of which
-        the plot will consist of whitespace for the legend and labels
-    :param magnitudes: Optional float parameter that defines the displayed ymin when plotting
-        with a logarithmic scale.
+    :param whitespace_fraction: Optional float parameter that defines the ratio of which the plot will consist of
+        whitespace for the legend and labels
+    :param magnitudes: Optional float parameter that defines the displayed ymin when plotting with a logarithmic scale.
     :return: tuple of plot figure and axes
     """
     # general mplhep style
@@ -363,31 +364,8 @@ def plot_all(
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
 
-    # some settings cannot be handled by ax.set
-    xminorticks = ax_kwargs.pop("xminorticks", ax_kwargs.pop("minorxticks", None))
-    yminorticks = ax_kwargs.pop("yminorticks", ax_kwargs.pop("minoryticks", None))
-    xloc = ax_kwargs.pop("xloc", None)
-    yloc = ax_kwargs.pop("yloc", None)
-    x_rotation = ax_kwargs.pop("xtick_rotation", None)
-
-    # set all values
-    ax.set(**ax_kwargs)
-
-    # set manual configs
-    if xminorticks is not None:
-        ax.set_xticks(xminorticks, minor=True)
-    if yminorticks is not None:
-        ax.set_xticks(yminorticks, minor=True)
-    if xloc is not None:
-        ax.set_xlabel(ax.get_xlabel(), loc=xloc)
-    if yloc is not None:
-        ax.set_ylabel(ax.get_ylabel(), loc=yloc)
-    if "equal_distant_ticks_label" in kwargs:
-        pos, label = kwargs["equal_distant_ticks_label"]
-        ax.set_xticks(pos)
-        ax.set_xticklabels(np.round(label, 3))
-    if x_rotation:
-        ax.tick_params(axis="x", labelrotation=x_rotation)
+    # apply axis kwargs
+    apply_ax_kwargs(ax, ax_kwargs)
 
     # ratio plot
     if not skip_ratio:
@@ -401,21 +379,9 @@ def plot_all(
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
 
-        # some settings cannot be handled by ax.set
-        xloc = rax_kwargs.pop("xloc", None)
-        yloc = rax_kwargs.pop("yloc", None)
-        x_rotation = rax_kwargs.pop("xtick_rotation", 0)
+        # apply axis kwargs
+        apply_ax_kwargs(rax, rax_kwargs)
 
-        # set all values
-        rax.set(**rax_kwargs)
-
-        # set manual configs
-        if xloc is not None:
-            rax.set_xlabel(rax.get_xlabel(), loc=xloc)
-        if yloc is not None:
-            rax.set_ylabel(rax.get_ylabel(), loc=yloc)
-        if x_rotation:
-            rax.tick_params(axis="x", labelrotation=x_rotation)
         # remove x-label from main axis
         if "xlabel" in rax_kwargs:
             ax.set_xlabel("")

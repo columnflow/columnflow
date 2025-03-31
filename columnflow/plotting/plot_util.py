@@ -627,6 +627,55 @@ def prepare_stack_plot_config(
     return plot_config
 
 
+def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Split the given dictionary into two dictionaries based on the keys that are valid for matplotlib's ``ax.set()``
+    function, and all others, potentially accepted by :py:func:`apply_ax_kwargs`.
+    """
+    set_kwargs, other_kwargs = {}, {}
+    other_keys = {
+        "xmajorticks", "xminorticks", "xmajorticklabels", "xminorticklabels", "xloc", "xrotation",
+        "ymajorticks", "yminorticks", "yloc", "yrotation",
+    }
+    for key, value in kwargs.items():
+        (other_kwargs if key in other_keys else set_kwargs)[key] = value
+    return set_kwargs, other_kwargs
+
+
+def apply_ax_kwargs(ax: plt.Axes, kwargs: dict[str, Any]) -> None:
+    """
+    Apply the given keyword arguments to the given axis, splitting them into those that are valid for ``ax.set()`` and
+    those that are not, and applying them separately.
+    """
+    # split
+    set_kwargs, other_kwargs = split_ax_kwargs(kwargs)
+
+    # apply standard ones
+    ax.set(**set_kwargs)
+
+    # apply others
+    if other_kwargs.get("xmajorticks") is not None:
+        ax.set_xticks(other_kwargs.get("xmajorticks"), minor=False)
+    if other_kwargs.get("ymajorticks") is not None:
+        ax.set_yticks(other_kwargs.get("ymajorticks"), minor=False)
+    if other_kwargs.get("xminorticks") is not None:
+        ax.set_xticks(other_kwargs.get("xminorticks"), minor=True)
+    if other_kwargs.get("yminorticks") is not None:
+        ax.set_yticks(other_kwargs.get("yminorticks"), minor=True)
+    if other_kwargs.get("xmajorticklabels") is not None:
+        ax.set_xticklabels(other_kwargs.get("xmajorticklabels"), minor=False)
+    if other_kwargs.get("xminorticklabels") is not None:
+        ax.set_xticklabels(other_kwargs.get("xminorticklabels"), minor=True)
+    if other_kwargs.get("xloc") is not None:
+        ax.set_xlabel(ax.get_xlabel(), loc=other_kwargs.get("xloc"))
+    if other_kwargs.get("yloc") is not None:
+        ax.set_ylabel(ax.get_ylabel(), loc=other_kwargs.get("yloc"))
+    if other_kwargs.get("xrotation") is not None:
+        ax.tick_params(axis="x", labelrotation=other_kwargs.get("xrotation"))
+    if other_kwargs.get("yrotation") is not None:
+        ax.tick_params(axis="y", labelrotation=other_kwargs.get("yrotation"))
+
+
 def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: bool = False) -> float:
     """ get a relative position between a min and max value based on the scale """
     if logscale:
