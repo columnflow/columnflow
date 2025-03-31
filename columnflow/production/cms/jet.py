@@ -37,10 +37,10 @@ class JetIdConfig:
     corrections: dict[str, int]
 
     def __post_init__(self) -> None:
-        # for each correction, check if the bit fits into a uint8
+        # for each correction, check if the bit is set and fits into a uint8
         for cor_name, bit in self.corrections.items():
-            if not (0 <= bit <= 8):
-                raise ValueError(f"jet id bit must be between 0 and 8, got {bit} for {cor_name}")
+            if not (1 <= bit <= 8):
+                raise ValueError(f"jet id bit must be between 1 and 8, got {bit} for {cor_name}")
 
 
 @producer(
@@ -128,9 +128,6 @@ def jet_id_init(self: Producer, **kwargs) -> None:
     self.uses.update(f"{self.jet_name}.{col}" for col in self.jet_columns)
     self.produces.add(f"{self.jet_name}.jetId")
 
-    # store a lambda to identify good jets (a value of zero will be stored for others)
-    self.get_valid_mask = lambda variable_map: variable_map["chMultiplicity"] >= 0
-
 
 @jet_id.requires
 def jet_id_requires(self: Producer, task: law.Task, reqs: dict, **kwargs) -> None:
@@ -164,6 +161,9 @@ def jet_id_setup(
     # create the correctors
     correction_set = load_correction_set(self.get_jet_id_file(bundle.files))
     self.jet_id_correctors = {cor_name: correction_set[cor_name] for cor_name in self.cfg.corrections}
+
+    # store a lambda to identify good jets (a value of zero will be stored for others)
+    self.get_valid_mask = lambda variable_map: variable_map["chMultiplicity"] >= 0
 
 
 # derive with defaults for fatjets
