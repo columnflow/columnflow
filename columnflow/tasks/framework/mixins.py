@@ -2662,7 +2662,7 @@ class MergeHistogramMixin(
 class ParamsCacheMixin:
 
     # the get_param_values is called again for every value of this parameter (config by default included)
-    cache_param_sep = []
+    cache_param_sep = ["shift", "shift_sources"]
 
     # dict to store cached params for different tasks
     cache_param_values = dict()
