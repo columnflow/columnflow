@@ -2053,6 +2053,66 @@ class VariablesMixin(ConfigTask):
         return f"{len(self.variables)}_{law.util.create_hash(sorted(self.variables))}"
 
 
+class DatasetsMixin(ConfigTask):
+
+    datasets = law.CSVParameter(
+        default=(),
+        description="comma-separated dataset names or patters to select; can also be the key of a "
+        "mapping defined in the 'dataset_groups' auxiliary data of the config; when empty, uses "
+        "all datasets registered in the config; empty "
+        "default",
+        brace_expand=True,
+        parse_empty=True,
+    )
+
+    allow_empty_datasets = False
+
+    @classmethod
+    def resolve_param_values(cls, params):
+        params = super().resolve_param_values(params)
+
+        if "config_inst" not in params:
+            return params
+        config_inst = params["config_inst"]
+
+        # resolve datasets
+        if "datasets" in params:
+            if params["datasets"]:
+                datasets = cls.find_config_objects(
+                    params["datasets"],
+                    config_inst,
+                    od.Dataset,
+                    config_inst.x("dataset_groups", {}),
+                )
+
+            # complain when no datasets were found
+            if not datasets and not cls.allow_empty_datasets:
+                raise ValueError(f"no datasets found matching {params['datasets']}")
+
+            params["datasets"] = tuple(datasets)
+            params["dataset_insts"] = [config_inst.get_dataset(d) for d in params["datasets"]]
+
+        return params
+
+    @classmethod
+    def get_known_shifts(cls, config_inst, params):
+        shifts, upstream_shifts = super().get_known_shifts(config_inst, params)
+
+        # add shifts of all datasets to upstream ones
+        for dataset_inst in params.get("dataset_insts") or []:
+            if dataset_inst.is_mc:
+                upstream_shifts |= set(dataset_inst.info.keys())
+
+        return shifts, upstream_shifts
+
+    @property
+    def datasets_repr(self):
+        if len(self.datasets) == 1:
+            return self.datasets[0]
+
+        return f"{len(self.datasets)}_{law.util.create_hash(sorted(self.datasets))}"
+
+
 class DatasetsProcessesMixin(ConfigTask):
 
     datasets = law.CSVParameter(
