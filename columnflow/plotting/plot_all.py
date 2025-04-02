@@ -229,7 +229,10 @@ def plot_all(
         # invoke the method
         method = cfg["method"]
         h = cfg["hist"]
-        plot_methods[method](ax, h, **cfg.get("kwargs", {}))
+        if callable(method):
+            method(ax, h, **cfg.get("kwargs", {}))
+        else:
+            plot_methods[method](ax, h, **cfg.get("kwargs", {}))
 
         # repeat for ratio axes if configured
         if not skip_ratio and "ratio_kwargs" in cfg:
