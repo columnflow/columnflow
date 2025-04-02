@@ -134,7 +134,7 @@ def get_jerc_file_default(self: Calibrator, external_files: DotDict) -> str:
 
     :param external_files: Dictionary containing the information about the file location
     :return: path or url to correction file(s)
-    """ # noqa
+    """  # noqa
 
     # get config
     try_attrs = ("get_jec_config", "get_jer_config")
@@ -320,7 +320,7 @@ def jec(
         values to the missing transverse energy (MET) using
         :py:func:`~columnflow.calibration.util.propagate_met` for events where
         ``met.eta > *min_eta_met_prop*``.
-    """ # noqa
+    """  # noqa
     # use local variable for convenience
     jet_name = self.jet_name
 
@@ -601,6 +601,7 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
     sources = self.uncertainty_sources
     if sources is None:
         sources = jec_cfg.uncertainty_sources
+        self.uncertainty_sources = sources
 
     jec_keys = make_jme_keys(jec_cfg.levels)
     jec_keys_subset_type1_met = make_jme_keys(jec_cfg.levels_for_type1_met)
@@ -698,6 +699,10 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     get_jer_file=get_jerc_file_default,
     # function to determine the jer configuration dict
     get_jer_config=get_jer_config_default,
+    # function to determine the jec configuration dict
+    get_jec_config=get_jec_config_default,
+    # jec uncertainty sources to propagate jer to, defaults to config when empty
+    jec_uncertainty_sources=None,
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -745,7 +750,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     Throws an error if running on data.
 
     :param events: awkward array containing events to process
-    """ # noqa
+    """  # noqa
     # use local variables for convenience
     jet_name = self.jet_name
     gen_jet_name = self.gen_jet_name
@@ -850,6 +855,9 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         smear_factors_stochastic,
     )
 
+    # ensure array with correctionlib output 'Nan' are set to 0.0 in the next line
+    smear_factors = ak.nan_to_none(smear_factors)
+
     # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
     smear_factors = ak.fill_none(smear_factors, 0.0)
 
@@ -867,6 +875,22 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column_f32(events, f"{jet_name}.mass_jer_down", events[jet_name].mass * smear_factors[:, :, 2])
     events = set_ak_column_f32(events, f"{jet_name}.pt", events[jet_name].pt * smear_factors[:, :, 0])
     events = set_ak_column_f32(events, f"{jet_name}.mass", events[jet_name].mass * smear_factors[:, :, 0])
+
+    jetsum_before_jec_uncertainty = {}
+    for name in self.jec_uncertainty_sources:
+        for junc_dir in ("up", "down"):
+            # store pt and phi of the full jet system for each jec uncertainty to propagate met
+            if self.propagate_met:
+                jets = events[jet_name]
+                jets = set_ak_column_f32(jets, "pt", jets[f"pt_jec_{name}_{junc_dir}"])
+                jets = set_ak_column_f32(jets, "mass", jets[f"mass_jec_{name}_{junc_dir}"])
+                jetsum_before_jec_uncertainty[f"jec_{name}_{junc_dir}"] = jets.sum(axis=1)
+
+            # apply the smearing factors to the pt and mass for each jec uncertainty
+            events = set_ak_column_f32(events, f"{jet_name}.pt_jec_{name}_{junc_dir}", getattr(
+                events[jet_name], f"pt_jec_{name}_{junc_dir}") * smear_factors[:, :, 0])
+            events = set_ak_column_f32(events, f"{jet_name}.mass_jec_{name}_{junc_dir}", getattr(
+                events[jet_name], f"mass_jec_{name}_{junc_dir}") * smear_factors[:, :, 0])
 
     # recover coffea behavior
     events = self[attach_coffea_behavior](events, collections=[jet_name], **kwargs)
@@ -917,6 +941,30 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         events = set_ak_column_f32(events, f"{self.met_name}.phi_jer_up", met_phi_up)
         events = set_ak_column_f32(events, f"{self.met_name}.phi_jer_down", met_phi_down)
 
+        for name in self.jec_uncertainty_sources:
+            for junc_dir in ("up", "down"):
+
+                jets = events[jet_name]
+                jets = set_ak_column_f32(jets, "pt", jets[f"pt_jec_{name}_{junc_dir}"])
+                jets = set_ak_column_f32(jets, "mass", jets[f"mass_jec_{name}_{junc_dir}"])
+                jetsum = jets.sum(axis=1)
+
+                mets = events[self.met_name]
+                mets = set_ak_column_f32(mets, "pt", mets[f"pt_jec_{name}_{junc_dir}"])
+                mets = set_ak_column_f32(mets, "phi", mets[f"phi_jec_{name}_{junc_dir}"])
+
+                met_pt, met_phi = propagate_met(
+                    jetsum_before_jec_uncertainty[f"jec_{name}_{junc_dir}"].pt,
+                    jetsum_before_jec_uncertainty[f"jec_{name}_{junc_dir}"].phi,
+                    jetsum.pt,
+                    jetsum.phi,
+                    mets.pt,
+                    mets.phi,
+                )
+
+                events = set_ak_column_f32(events, f"{self.met_name}.pt_jec_{name}_{junc_dir}", met_pt)
+                events = set_ak_column_f32(events, f"{self.met_name}.phi_jec_{name}_{junc_dir}", met_phi)
+
     return events
 
 
@@ -942,6 +990,31 @@ def jer_init(self: Calibrator) -> None:
 
         # register produced MET columns
         self.produces.add(f"{self.met_name}.{{pt,phi}}{{,_jer_up,_jer_down,_unsmeared}}")
+
+    # add jec_cfg for applying smearing to jec variations
+    jec_cfg = self.get_jec_config()
+    sources = self.jec_uncertainty_sources
+    if sources is None:
+        sources = jec_cfg.uncertainty_sources
+        self.jec_uncertainty_sources = sources
+
+    self.produces |= {
+        f"{self.jet_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
+        for shifted_var in ("pt", "mass")
+        for junc_name in sources
+        for junc_dir in ("up", "down")
+    }
+
+    # add MET variables
+    if self.propagate_met:
+
+        # add shifted MET variables
+        self.produces |= {
+            f"{self.met_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
+            for shifted_var in ("pt", "phi")
+            for junc_name in sources
+            for junc_dir in ("up", "down")
+        }
 
 
 @jer.requires
