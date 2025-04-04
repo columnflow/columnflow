@@ -170,6 +170,8 @@ def get_br_from_inclusive_dataset(
     uses={"process_id", "mc_weight"},
     # name of the output column
     weight_name="normalization_weight",
+    # which luminosity to apply, uses the value stored in the config when None
+    luminosity=None,
     # whether to allow stitching datasets
     allow_stitching=False,
     get_xsecs_from_inclusive_dataset=False,
@@ -189,6 +191,9 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     The computation of all weights requires that the selection statistics ("stats" output of :py:class:`SelectEvents`)
     contains a field ``"sum_mc_weight_per_process"`` which itself is a dictionary mapping process ids to the sum of
     event weights for that process.
+
+    *luminosity* is used to scale the yield of the simulation. When *None*, the ``luminosity`` auxiliary field of the
+    config is used.
 
     When py:attr`allow_stitching` is set to True, the sum of event weights is computed for all datasets with a leaf
     process contained in the leaf processes of the py:attr:`dataset_inst`. For stitching, the process_id needs to be
@@ -311,8 +316,9 @@ def normalization_weights_setup(
     process_insts = {p for p in process_insts if p.id in allowed_ids}
     max_id = max(process_inst.id for process_inst in process_insts)
 
-    # get the luminosity from the config
-    lumi = self.config_inst.x.luminosity.nominal
+    # get the luminosity
+    lumi = self.config_inst.x.luminosity if self.luminosity is None else self.luminosity
+    lumi = lumi.nominal if isinstance(lumi, sn.Number) else float(lumi)
 
     # create a event weight lookup table
     process_weight_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
