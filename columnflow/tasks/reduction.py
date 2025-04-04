@@ -150,11 +150,11 @@ class ReduceEvents(_ReduceEvents):
         # define columns that will be written based on the reducer's produced columns,
         # but taking into account those that should be skipped (e.g. if not all routes added by a collection are needed)
         write_columns: set[Route] = set()
-        skip_columns: set[str] = set()
+        skip_columns: set[Route] = set()
         for c in self.reducer_inst.produced_columns:
             for r in self._expand_keep_column(c):
                 if r.has_tag("skip"):
-                    skip_columns.add(r.column)
+                    skip_columns.add(r)
                 else:
                     write_columns.add(r)
         route_filter = RouteFilter(keep=write_columns, remove=skip_columns)

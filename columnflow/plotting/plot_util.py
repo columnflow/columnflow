@@ -245,27 +245,6 @@ def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hi
     return hists
 
 
-def remove_label_placeholders(
-    label: str,
-    keep: str | Sequence[str] | None = None,
-    drop: str | Sequence[str] | None = None,
-) -> str:
-    # when placeholders should be kept, determine all existing ones and identify remaining to drop
-    if keep:
-        keep = law.util.make_list(keep)
-        placeholders = re.findall("__([^_]+)__", label)
-        drop = list(set(placeholders) - set(keep))
-
-    # drop specific placeholders or all
-    if drop:
-        drop = law.util.make_list(drop)
-        sel = f"({'|'.join(d.upper() for d in drop)})"
-    else:
-        sel = "[A-Z0-9]+"
-
-    return re.sub(f"__{sel}__", "", label)
-
-
 def apply_variable_settings(
     hists: dict[Hashable, hist.Hist],
     variable_insts: list[od.Variable],
@@ -1014,3 +993,24 @@ def apply_label_placeholders(
         label = label.replace("__SCALE__", scale_str)
 
     return label
+
+
+def remove_label_placeholders(
+    label: str,
+    keep: str | Sequence[str] | None = None,
+    drop: str | Sequence[str] | None = None,
+) -> str:
+    # when placeholders should be kept, determine all existing ones and identify remaining to drop
+    if keep:
+        keep = law.util.make_list(keep)
+        placeholders = re.findall("__([^_]+)__", label)
+        drop = list(set(placeholders) - set(keep))
+
+    # drop specific placeholders or all
+    if drop:
+        drop = law.util.make_list(drop)
+        sel = f"({'|'.join(d.upper() for d in drop)})"
+    else:
+        sel = "[A-Z0-9]+"
+
+    return re.sub(f"__{sel}__", "", label)

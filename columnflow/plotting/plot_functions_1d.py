@@ -75,7 +75,7 @@ def plot_variable_stack(
         for proc_inst, h in hists.items()
         if proc_inst.is_mc and getattr(proc_inst, "unstack", False)
     }
-    hists |= remove_residual_axis(unstacked_hists, "shift", select_value=0)
+    hists |= remove_residual_axis(unstacked_hists, "shift", select_value="nominal")
 
     # prepare the plot config
     plot_config = prepare_stack_plot_config(
