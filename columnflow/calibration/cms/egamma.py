@@ -14,10 +14,8 @@ from dataclasses import dataclass, field
 
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random
-from columnflow.util import maybe_import, InsertableDict
-from columnflow.columnar_util import (
-    set_ak_column, flat_np_view, ak_copy, optional_column,
-)
+from columnflow.util import maybe_import, load_correction_set, DotDict
+from columnflow.columnar_util import set_ak_column, flat_np_view, ak_copy, optional_column
 from columnflow.types import Any
 
 ak = maybe_import("awkward")
@@ -46,7 +44,7 @@ class egamma_scale_corrector(Calibrator):
         ...
 
     @abc.abstractmethod
-    def get_correction_file(self, external_files: law.FileTargetCollection) -> law.LocalFile:
+    def get_correction_file(self, external_files: law.FileTargetCollection) -> law.LocalFileTarget:
         """Function to retrieve the correction file from the external files.
 
         :param external_files: File target containing the files as requested
@@ -59,11 +57,7 @@ class egamma_scale_corrector(Calibrator):
         """Function to retrieve the configuration for the photon energy correction."""
         ...
 
-    def call_func(
-        self,
-        events: ak.Array,
-        **kwargs,
-    ) -> ak.Array:
+    def call_func(self, events: ak.Array, **kwargs) -> ak.Array:
         """
         Apply energy corrections to EGamma objects in the events array.
 
@@ -97,11 +91,11 @@ class egamma_scale_corrector(Calibrator):
         """
 
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
-
         if "rawPt" not in events[self.source_field].fields:
             events = set_ak_column_f32(
                 events, f"{self.source_field}.rawPt", events[self.source_field].pt,
             )
+
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
         # corrections are always applied to the raw pt - this is important if more than
         # one correction is applied in a row
@@ -110,9 +104,7 @@ class egamma_scale_corrector(Calibrator):
         # the final corrections must be applied to the current pt though
         pt_application = flat_np_view(events[self.source_field].pt, axis=1)
 
-        broadcasted_run = ak.broadcast_arrays(
-            events[self.source_field].pt, events.run,
-        )
+        broadcasted_run = ak.broadcast_arrays(events[self.source_field].pt, events.run)
         run = flat_np_view(broadcasted_run[1], axis=1)
         gain = flat_np_view(events[self.source_field].seedGain, axis=1)
         sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
@@ -164,7 +156,7 @@ class egamma_scale_corrector(Calibrator):
 
         return events
 
-    def init_func(self) -> None:
+    def init_func(self, **kwargs) -> None:
         """Function to initialize the calibrator.
 
         Sets the required and produced columns for the calibrator.
@@ -186,11 +178,10 @@ class egamma_scale_corrector(Calibrator):
 
         # add columns with unceratinties if requested
         # photon scale _uncertainties_ are only available for MC
-        if self.with_uncertainties and getattr(self, "dataset_inst", None):
-            if self.dataset_inst.is_mc:
-                self.produces |= {f"{self.source_field}.pt_scale_{{up,down}}"}
+        if self.with_uncertainties and self.dataset_inst.is_mc:
+            self.produces |= {f"{self.source_field}.pt_scale_{{up,down}}"}
 
-    def requires_func(self, reqs: dict) -> None:
+    def requires_func(self, task: law.Task, reqs: dict[str, DotDict[str, Any]], **kwargs) -> None:
         """Function to add necessary requirements.
 
         This function add the :py:class:`~columnflow.tasks.external.BundleExternalFiles`
@@ -198,14 +189,19 @@ class egamma_scale_corrector(Calibrator):
 
         :param reqs: Dictionary of requirements.
         """
+        if "external_files" in reqs:
+            return
+
         from columnflow.tasks.external import BundleExternalFiles
-        reqs["external_files"] = BundleExternalFiles.req(self.task)
+        reqs["external_files"] = BundleExternalFiles.req(task)
 
     def setup_func(
         self,
-        reqs: dict,
-        inputs: dict,
-        reader_targets: InsertableDict,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]],
+        inputs: dict[str, Any],
+        reader_targets: law.util.InsertableDict,
+        **kwargs,
     ) -> None:
         """Setup function before event chunk loop.
 
@@ -217,16 +213,11 @@ class egamma_scale_corrector(Calibrator):
         :param reader_targets: Dictionary for optional additional columns to load
             (not used).
         """
-        bundle = reqs["external_files"]
         self.scale_config = self.get_scale_config()
 
         # create the egamma corrector
-        import correctionlib
-        correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-        correction_set = correctionlib.CorrectionSet.from_string(
-            self.get_correction_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-        )
-        self.scale_corrector = correction_set[self.scale_config.correction_set]
+        corr_file = self.get_correction_file(reqs["external_files"].files)
+        self.scale_corrector = load_correction_set(corr_file)[self.scale_config.correction_set]
 
         # check versions
         assert self.scale_corrector.version in [0, 1, 2]
@@ -266,11 +257,7 @@ class egamma_resolution_corrector(Calibrator):
         """Function to retrieve the configuration for the photon energy correction."""
         ...
 
-    def call_func(
-        self,
-        events: ak.Array,
-        **kwargs,
-    ) -> ak.Array:
+    def call_func(self, events: ak.Array, **kwargs) -> ak.Array:
         """
         Apply energy resolution corrections to EGamma objects in the events array.
 
@@ -324,7 +311,7 @@ class egamma_resolution_corrector(Calibrator):
         variable_map = {
             "eta": sceta,
             "r9": r9,
-            **self.resolution_config.corrector_kwargs,
+            **self.resolution_cfg.corrector_kwargs,
         }
         args = tuple(
             variable_map[inp.name] for inp in self.resolution_corrector.inputs
@@ -395,7 +382,7 @@ class egamma_resolution_corrector(Calibrator):
 
         return events
 
-    def init_func(self) -> None:
+    def init_func(self, **kwargs) -> None:
         """Function to initialize the calibrator.
 
         Sets the required and produced columns for the calibrator.
@@ -411,11 +398,10 @@ class egamma_resolution_corrector(Calibrator):
         }
 
         # add columns with unceratinties if requested
-        if self.with_uncertainties and getattr(self, "dataset_inst", None):
-            if self.dataset_inst.is_mc:
-                self.produces |= {f"{self.source_field}.pt_res_{{up,down}}"}
+        if self.with_uncertainties and self.dataset_inst.is_mc:
+            self.produces |= {f"{self.source_field}.pt_res_{{up,down}}"}
 
-    def requires_func(self, reqs: dict) -> None:
+    def requires_func(self, task: law.Task, reqs: dict[str, DotDict[str, Any]], **kwargs) -> None:
         """Function to add necessary requirements.
 
         This function add the :py:class:`~columnflow.tasks.external.BundleExternalFiles`
@@ -423,10 +409,20 @@ class egamma_resolution_corrector(Calibrator):
 
         :param reqs: Dictionary of requirements.
         """
-        from columnflow.tasks.external import BundleExternalFiles
-        reqs["external_files"] = BundleExternalFiles.req(self.task)
+        if "external_files" in reqs:
+            return
 
-    def setup_func(self, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+        from columnflow.tasks.external import BundleExternalFiles
+        reqs["external_files"] = BundleExternalFiles.req(task)
+
+    def setup_func(
+        self,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]],
+        inputs: dict[str, Any],
+        reader_targets: law.util.InsertableDict,
+        **kwargs,
+    ) -> None:
         """Setup function before event chunk loop.
 
         This function loads the correction file and sets up the correction tool.
@@ -439,16 +435,11 @@ class egamma_resolution_corrector(Calibrator):
         :param reader_targets: Dictionary for optional additional columns to load
             (not used).
         """
-        bundle = reqs["external_files"]
-        self.resolution_config = self.get_resolution_config()
+        self.resolution_cfg = self.get_resolution_config()
 
         # create the egamma corrector
-        import correctionlib
-        correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-        correction_set = correctionlib.CorrectionSet.from_string(
-            self.get_correction_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-        )
-        self.resolution_corrector = correction_set[self.resolution_config.correction_set]
+        corr_file = self.get_correction_file(reqs["external_files"].files)
+        self.resolution_corrector = load_correction_set(corr_file)[self.resolution_cfg.correction_set]
 
         # check versions
         assert self.resolution_corrector.version in [0, 1, 2]
@@ -457,6 +448,7 @@ class egamma_resolution_corrector(Calibrator):
         if self.deterministic_seed_index >= 0:
             idx = self.deterministic_seed_index
             bit_generator = np.random.SFC64
+
             def deterministic_normal(loc, scale, seed, idx_offset=0):
                 return np.asarray([
                     np.random.Generator(bit_generator(_seed)).normal(_loc, _scale, size=idx + 1 + idx_offset)[-1]
@@ -513,10 +505,9 @@ def photons(self, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@photons.init
-def photons_init(self) -> None:
+@photons.pre_init
+def photons_pre_init(self, **kwargs) -> None:
     # forward argument to the producers
-
     if pec not in self.deps_kwargs:
         self.deps_kwargs[pec] = dict()
     if per not in self.deps_kwargs:
@@ -588,10 +579,9 @@ def electrons(self, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@electrons.init
-def electrons_init(self) -> None:
+@electrons.pre_init
+def electrons_pre_init(self, **kwargs) -> None:
     # forward argument to the producers
-
     if eec not in self.deps_kwargs:
         self.deps_kwargs[eec] = dict()
     if eer not in self.deps_kwargs:

@@ -26,14 +26,8 @@ set_ak_f32 = partial(set_ak_column, value_type=np.float32)
 
 
 @producer(
-    uses={
-        # nano columns
-        attach_coffea_behavior, "Jet.{pt,eta,phi,mass}",
-    },
-    produces={
-        # new columns
-        attach_coffea_behavior, "ht", "n_jet", "dijet.{pt,mass,dr}",
-    },
+    uses={"Jet.{pt,eta,phi,mass}"},
+    produces={"ht", "n_jet", "dijet.{pt,mass,dr}"},
 )
 def jet_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
@@ -42,7 +36,7 @@ def jet_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column(events, "n_jet", ak.num(events.Jet.pt, axis=1), value_type=np.int32)
 
     # attach coffea behaviour
-    events = self[attach_coffea_behavior](events, collections={}, **kwargs)
+    events = attach_coffea_behavior(events, collections={}, **kwargs)
     # object padding (Note that after padding, ak.num(events.Jet.pt, axis=1) would always be >= 2)
     events = set_ak_column(events, "Jet", ak.pad_none(events.Jet, 2))
 
@@ -57,16 +51,8 @@ def jet_features(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @producer(
-    uses={
-        mc_weight, category_ids,
-        # nano columns
-        "Jet.pt",
-    },
-    produces={
-        mc_weight, category_ids,
-        # new columns
-        "cutflow.jet1_pt",
-    },
+    uses={mc_weight, category_ids, "Jet.{pt,phi}"},
+    produces={mc_weight, category_ids, "cutflow.jet1_pt"},
 )
 def cutflow_features(
     self: Producer,

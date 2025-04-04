@@ -13,8 +13,9 @@ import order as od
 import scinum as sn
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 sp = maybe_import("scipy")
@@ -27,8 +28,8 @@ logger = law.logger.get_logger(__name__)
 
 def get_inclusive_dataset(self: Producer) -> od.Dataset:
     """
-    Helper function to obtain the inclusive dataset from a list of datasets that are required to
-    stitch this *dataset_inst*.
+    Helper function to obtain the inclusive dataset from a list of datasets that are required to stitch this
+    *dataset_inst*.
     """
     process_map = {d.processes.get_first(): d for d in self.stitching_datasets}
 
@@ -69,9 +70,8 @@ def get_br_from_inclusive_dataset(
     stats: dict,
 ) -> dict[int, float]:
     """
-    Helper function to compute the branching ratios from the inclusive sample.
-    This is done with ratios of event weights isolated per dataset and thus independent of the
-    overall mc weight normalization.
+    Helper function to compute the branching ratios from the inclusive sample. This is done with ratios of event weights
+    isolated per dataset and thus independent of the overall mc weight normalization.
     """
     # define helper variables and mapping between process ids and dataset names
     proc_ds_map = {
@@ -152,9 +152,8 @@ def get_br_from_inclusive_dataset(
         rel_unc = proc_br(sn.UP, unc=True, factor=True)
         if rel_unc > 0.05:
             logger.warning(
-                "large error on the branching ratio for process "
-                f"{inclusive_proc.get_process(proc_id).name} with process id {proc_id} "
-                f"({rel_unc * 100:.2f}%)",
+                f"large error on the branching ratio for process {inclusive_proc.get_process(proc_id).name} with "
+                f"process id {proc_id} ({rel_unc * 100:.2f}%)",
             )
 
         # just store the nominal value
@@ -171,6 +170,8 @@ def get_br_from_inclusive_dataset(
     uses={"process_id", "mc_weight"},
     # name of the output column
     weight_name="normalization_weight",
+    # which luminosity to apply, uses the value stored in the config when None
+    luminosity=None,
     # whether to allow stitching datasets
     allow_stitching=False,
     get_xsecs_from_inclusive_dataset=False,
@@ -182,19 +183,24 @@ def get_br_from_inclusive_dataset(
 )
 def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Uses luminosity information of internal py:attr:`config_inst`, the cross section of a process
-    obtained through :py:class:`category_ids` and the sum of event weights from the
-    py:attr:`selection_stats` attribute to assign each event a normalization weight.
-    The normalization weight is stored in a new column named after the py:attr:`weight_name`
-    attribute. When py:attr`allow_stitching` is set to True, the sum of event weights is computed
-    for all datasets with a leaf process contained in the leaf processes of the
-    py:attr:`dataset_inst`. For stitching, the process_id needs to be reconstructed for each leaf
-    process on a per event basis. Moreover, when stitching is enabled, an additional normalization
-    weight is computed for the inclusive dataset only and stored in a column named
-    `<weight_name>_inclusive_only`. This weight resembles the normalization weight for the
-    inclusive dataset, as if it were unstitched and should therefore only be applied, when using the
-    inclusive dataset as a standalone dataset.
+    Uses luminosity information of internal py:attr:`config_inst`, the cross section of a process obtained through
+    :py:class:`category_ids` and the sum of event weights from the py:attr:`selection_stats` attribute to assign each
+    event a normalization weight. The normalization weight is stored in a new column named after the
+    py:attr:`weight_name` attribute.
 
+    The computation of all weights requires that the selection statistics ("stats" output of :py:class:`SelectEvents`)
+    contains a field ``"sum_mc_weight_per_process"`` which itself is a dictionary mapping process ids to the sum of
+    event weights for that process.
+
+    *luminosity* is used to scale the yield of the simulation. When *None*, the ``luminosity`` auxiliary field of the
+    config is used.
+
+    When py:attr`allow_stitching` is set to True, the sum of event weights is computed for all datasets with a leaf
+    process contained in the leaf processes of the py:attr:`dataset_inst`. For stitching, the process_id needs to be
+    reconstructed for each leaf process on a per event basis. Moreover, when stitching is enabled, an additional
+    normalization weight is computed for the inclusive dataset only and stored in a column named
+    `<weight_name>_inclusive_only`. This weight resembles the normalization weight for the inclusive dataset, as if it
+    were unstitched and should therefore only be applied, when using the inclusive dataset as a standalone dataset.
     """
     # read the process id column
     process_id = np.asarray(events.process_id)
@@ -204,8 +210,8 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     invalid_ids = unique_process_ids - self.xs_process_ids
     if invalid_ids:
         raise Exception(
-            f"process_id field contains id(s) {invalid_ids} for which no cross sections were "
-            f"found; process ids with cross sections: {self.xs_process_ids}",
+            f"process_id field contains id(s) {invalid_ids} for which no cross sections were found; process ids with "
+            f"cross sections: {self.xs_process_ids}",
         )
 
     # read the weight per process (defined as lumi * xsec / sum_weights) from the lookup table
@@ -228,24 +234,26 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
 
 
 @normalization_weights.requires
-def normalization_weights_requires(self: Producer, reqs: dict) -> None:
+def normalization_weights_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     """
-    Adds the requirements needed by the underlying py:attr:`task` to access selection stats into
-    *reqs*.
+    Adds the requirements needed by the underlying py:attr:`task` to access selection stats into *reqs*.
     """
     # check that all datasets are known
     for dataset in self.stitching_datasets:
         if not self.config_inst.has_dataset(dataset):
-            raise Exception(
-                f"unknown dataset '{dataset}' required for normalization weights computation",
-            )
+            raise Exception(f"unknown dataset '{dataset}' required for normalization weights computation")
 
     from columnflow.tasks.selection import MergeSelectionStats
     reqs["selection_stats"] = {
         dataset.name: MergeSelectionStats.req_different_branching(
-            self.task,
+            task,
             dataset=dataset.name,
-            branch=-1 if self.task.is_workflow() else 0,
+            branch=-1 if task.is_workflow() else 0,
         )
         for dataset in self.stitching_datasets
     }
@@ -256,21 +264,22 @@ def normalization_weights_requires(self: Producer, reqs: dict) -> None:
 @normalization_weights.setup
 def normalization_weights_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     """
-    Sets up objects required by the computation of normalization weights and stores them as instance
-    attributes:
+    Sets up objects required by the computation of normalization weights and stores them as instance attributes:
 
-        - py: attr: `process_weight_table`: A sparse array serving as a lookup table for the
-        calculated process weights. This weight is defined as the product of the luminosity, the
-        cross section, divided by the sum of event weights per process.
+        - py: attr: `process_weight_table`: A sparse array serving as a lookup table for the calculated process weights.
+            This weight is defined as the product of the luminosity, the cross section, divided by the sum of event
+            weights per process.
     """
     # load the selection stats
     selection_stats = {
-        dataset: self.task.cached_value(
+        dataset: task.cached_value(
             key=f"selection_stats_{dataset}",
             func=lambda: inp["stats"].load(formatter="json"),
         )
@@ -299,22 +308,23 @@ def normalization_weights_setup(
     unknown_process_ids = allowed_ids - {p.id for p in process_insts}
     if unknown_process_ids:
         raise Exception(
-            f"selection stats contain ids of processes that were not previously registered to the "
-            f"config '{self.config_inst.name}': {', '.join(map(str, unknown_process_ids))}",
+            f"selection stats contain ids of processes that were not previously registered to the config "
+            f"'{self.config_inst.name}': {', '.join(map(str, unknown_process_ids))}",
         )
 
     # likewise, drop processes that were not seen during selection
     process_insts = {p for p in process_insts if p.id in allowed_ids}
     max_id = max(process_inst.id for process_inst in process_insts)
 
-    # get the luminosity from the config
-    lumi = self.config_inst.x.luminosity.nominal
+    # get the luminosity
+    lumi = self.config_inst.x.luminosity if self.luminosity is None else self.luminosity
+    lumi = lumi.nominal if isinstance(lumi, sn.Number) else float(lumi)
 
     # create a event weight lookup table
     process_weight_table = sp.sparse.lil_matrix((1, max_id + 1), dtype=np.float32)
     if self.allow_stitching and self.get_xsecs_from_inclusive_dataset:
         inclusive_dataset = self.inclusive_dataset
-        logger.info(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
+        logger.debug(f"using inclusive dataset {inclusive_dataset.name} for cross section lookup")
 
         # extract branching ratios from inclusive dataset(s)
         inclusive_proc = inclusive_dataset.processes.get_first()
@@ -327,8 +337,7 @@ def normalization_weights_setup(
             )
             if not branching_ratios:
                 raise Exception(
-                    "no branching ratios could be computed based on the inclusive dataset "
-                    f"{inclusive_dataset}",
+                    f"no branching ratios could be computed based on the inclusive dataset {inclusive_dataset}",
                 )
 
         # compute the weight the inclusive dataset would have on its own without stitching
@@ -348,8 +357,8 @@ def normalization_weights_setup(
         for process_inst in process_insts:
             if self.config_inst.campaign.ecm not in process_inst.xsecs.keys():
                 raise KeyError(
-                    f"no cross section registered for process {process_inst} for center-of-mass "
-                    f"energy of {self.config_inst.campaign.ecm}",
+                    f"no cross section registered for process {process_inst} for center-of-mass energy of "
+                    f"{self.config_inst.campaign.ecm}",
                 )
             sum_weights = merged_selection_stats["sum_mc_weight_per_process"][str(process_inst.id)]
             xsec = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
@@ -360,13 +369,10 @@ def normalization_weights_setup(
 
 
 @normalization_weights.init
-def normalization_weights_init(self: Producer) -> None:
+def normalization_weights_init(self: Producer, **kwargs) -> None:
     """
     Initializes the normalization weights producer by setting up the normalization weight column.
     """
-    if getattr(self, "dataset_inst", None) is None:
-        return
-
     self.produces.add(self.weight_name)
     if self.allow_stitching:
         self.stitching_datasets = self.get_stitching_datasets()
