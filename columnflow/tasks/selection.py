@@ -13,6 +13,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
 from columnflow.production import Producer
@@ -131,6 +132,7 @@ class SelectEvents(_SelectEvents):
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_selector_inst())
     def run(self):
         from columnflow.tasks.histograms import CreateHistograms
         from columnflow.columnar_util import (
@@ -254,7 +256,7 @@ class SelectEvents(_SelectEvents):
                     self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # teardown the selector
-        self.selector_inst.run_teardown(task=self)
+        self.teardown_selector_inst()
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
