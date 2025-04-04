@@ -120,18 +120,14 @@ class UniteColumns(_UniteColumns):
 
         # define columns that will be written
         write_columns: set[Route] = set()
-        skip_columns: set[str] = set()
+        skip_columns: set[Route] = set()
         for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
             for r in self._expand_keep_column(c):
                 if r.has_tag("skip"):
-                    skip_columns.add(r.column)
+                    skip_columns.add(r)
                 else:
                     write_columns.add(r)
-        write_columns = {
-            r for r in write_columns
-            if not law.util.multi_match(r.column, skip_columns, mode=any)
-        }
-        route_filter = RouteFilter(keep=write_columns)
+        route_filter = RouteFilter(keep=write_columns, remove=skip_columns)
 
         # define columns that need to be read
         read_columns = write_columns | set(mandatory_coffea_columns)

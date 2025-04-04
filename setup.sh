@@ -581,7 +581,7 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local pyv="3.9"
+    local pyv="${CF_PYTHON_VERSION:-3.9}"
     local conda_arch="${CF_CONDA_ARCH:-linux-64}"
     local ret
 
