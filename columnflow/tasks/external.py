@@ -472,10 +472,10 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         # path must be an ExternalFile
         if path.subpaths:
-            return {
-                name: cls.create_unique_basename(os.path.join(path.location, subpath))
+            return type(path.subpaths)(
+                (name, cls.create_unique_basename(os.path.join(path.location, subpath)))
                 for name, subpath in path.subpaths.items()
-            }
+            )
 
         return cls.create_unique_basename(path.location)
 
