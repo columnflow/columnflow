@@ -10,6 +10,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox
 
@@ -95,6 +96,7 @@ class CalibrateEvents(_CalibrateEvents):
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_calibrator_inst())
     def run(self):
         """
         Run method of this task.
@@ -152,11 +154,7 @@ class CalibrateEvents(_CalibrateEvents):
                 events = update_ak_array(events, *cols)
 
                 # just invoke the calibration function
-                try:
-                    events = self.calibrator_inst(events, task=self)
-                except:
-                    self.calibrator_inst.run_teardown(task=self)
-                    raise
+                events = self.calibrator_inst(events, task=self)
 
                 # remove columns
                 events = route_filter(events)
@@ -171,7 +169,7 @@ class CalibrateEvents(_CalibrateEvents):
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # teardown the calibrator
-        self.calibrator_inst.run_teardown(task=self)
+        self.teardown_calibrator_inst()
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

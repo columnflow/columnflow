@@ -28,7 +28,7 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.framework.decorators import view_output_plots
+from columnflow.tasks.framework.decorators import view_output_plots, on_failure
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict, maybe_import
@@ -138,6 +138,7 @@ class PrepareMLEvents(
     @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_preaparation_producer_inst())
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
@@ -216,17 +217,13 @@ class PrepareMLEvents(
                 events = set_ak_column(events, "fold_indices", events.deterministic_seed % self.ml_model_inst.folds)
                 # invoke the optional producer
                 if len(events) and self.preparation_producer_inst:
-                    try:
-                        events = self.preparation_producer_inst(
-                            events,
-                            task=self,
-                            stats=stats,
-                            fold_indices=events.fold_indices,
-                            ml_model_inst=self.ml_model_inst,
-                        )
-                    except:
-                        self.preparation_producer_inst.run_teardown(task=self)
-                        raise
+                    events = self.preparation_producer_inst(
+                        events,
+                        task=self,
+                        stats=stats,
+                        fold_indices=events.fold_indices,
+                        ml_model_inst=self.ml_model_inst,
+                    )
 
                 # read fold_indices from events array to allow masking training events
                 fold_indices = events.fold_indices
@@ -249,8 +246,7 @@ class PrepareMLEvents(
                     self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.abspath))
 
         # teardown the optional producer
-        if self.preparation_producer_inst:
-            self.preparation_producer_inst.run_teardown(task=self)
+        self.teardown_preaparation_producer_inst()
 
         # merge output files of all folds
         for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
@@ -660,6 +656,7 @@ class MLEvaluation(
     @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_preparation_producer_inst())
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
@@ -749,17 +746,13 @@ class MLEvaluation(
 
                 # invoke the optional producer
                 if len(events) and self.preparation_producer_inst:
-                    try:
-                        events = self.preparation_producer_inst(
-                            events,
-                            task=self,
-                            stats=stats,
-                            fold_indices=events.fold_indices,
-                            ml_model_inst=self.ml_model_inst,
-                        )
-                    except:
-                        self.preparation_producer_inst.run_teardown(task=self)
-                        raise
+                    events = self.preparation_producer_inst(
+                        events,
+                        task=self,
+                        stats=stats,
+                        fold_indices=events.fold_indices,
+                        ml_model_inst=self.ml_model_inst,
+                    )
 
                 # evaluate the model
                 events = self.ml_model_inst.evaluate(
@@ -783,8 +776,7 @@ class MLEvaluation(
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # teardown the optional producer
-        if self.preparation_producer_inst:
-            self.preparation_producer_inst.run_teardown(task=self)
+        self.teardown_preparation_producer_inst()
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

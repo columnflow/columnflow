@@ -17,6 +17,7 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
@@ -142,6 +143,7 @@ class CreateHistograms(_CreateHistograms):
     @law.decorator.log
     @law.decorator.localize(input=True, output=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_hist_producer_inst())
     def run(self):
         import numpy as np
         import awkward as ak
@@ -237,11 +239,7 @@ class CreateHistograms(_CreateHistograms):
 
                 # invoke the hist producer, potentially updating columns and creating the event weight
                 events = attach_coffea_behavior(events)
-                try:
-                    events, weight = self.hist_producer_inst(events, task=self)
-                except:
-                    self.hist_producer_inst.run_teardown(task=self)
-                    raise
+                events, weight = self.hist_producer_inst(events, task=self)
 
                 # merge category ids and check that they are defined as leaf categories
                 category_ids = ak.concatenate(
@@ -311,7 +309,7 @@ class CreateHistograms(_CreateHistograms):
                 self.check_histogram_compatibility(histograms[var_key])
 
         # teardown the hist producer
-        self.hist_producer_inst.run_teardown(task=self)
+        self.teardown_hist_producer_inst()
 
         # merge output files
         self.output()["hists"].dump(histograms, formatter="pickle")

@@ -15,6 +15,7 @@ import luigi
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ReducerMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
@@ -110,6 +111,7 @@ class ReduceEvents(_ReduceEvents):
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_reducer_inst())
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
@@ -213,11 +215,7 @@ class ReduceEvents(_ReduceEvents):
                 if len(events):
                     n_all += len(events)
                     events = attach_coffea_behavior(events)
-                    try:
-                        events = self.reducer_inst(events, selection=sel, task=self)
-                    except:
-                        self.reducer_inst.run_teardown(task=self)
-                        raise
+                    events = self.reducer_inst(events, selection=sel, task=self)
                     n_reduced += len(events)
 
                 # remove columns
@@ -233,7 +231,7 @@ class ReduceEvents(_ReduceEvents):
                 self.chunked_io.queue(sorted_ak_to_parquet, (ak.to_packed(events), chunk.abspath))
 
         # teardown the reducer
-        self.reducer_inst.run_teardown(task=self)
+        self.teardown_reducer_inst()
 
         # some logs
         self.publish_message(f"reduced {n_all:_} to {n_reduced:_} events ({safe_div(n_reduced, n_all) * 100:.2f}%)")
