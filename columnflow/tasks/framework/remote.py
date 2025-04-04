@@ -17,6 +17,7 @@ import law
 from columnflow import flavor as cf_flavor
 from columnflow.tasks.framework.base import Requirements, AnalysisTask
 from columnflow.tasks.framework.parameters import user_parameter_inst
+from columnflow.tasks.framework.decorators import only_local_env
 from columnflow.util import UNSET, real_path
 
 
@@ -61,6 +62,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
@@ -92,6 +94,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
@@ -171,6 +174,7 @@ class BuildBashSandbox(SandboxFileTask):
         # note: invoking self.env will already trigger installing the sandbox
         return law.LocalFileTarget(self.env["CF_SANDBOX_FLAG_FILE"])
 
+    @only_local_env
     def run(self):
         # no need to run anything as the sandboxing mechanism handles the installation
         return
@@ -232,6 +236,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
@@ -308,6 +313,7 @@ class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.Transfe
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     def run(self):
