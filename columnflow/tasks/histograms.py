@@ -191,13 +191,10 @@ class CreateHistograms(_CreateHistograms):
             for inp in ((
                 {variable_inst.expression}
                 if isinstance(variable_inst.expression, str)
-                # for variable_inst with custom expressions, read columns declared via aux key
-                else set(variable_inst.x("inputs", []))
-            ) | (
-                set()
-                if variable_inst.selection == "1"
-                # for variable_inst with selection, read columns declared via aux key
-                else set(variable_inst.x("inputs", []))
+                else set()
+            ) | set(
+                # read requested input columns if defined
+                variable_inst.x("inputs", []),
             ))
         }
 
