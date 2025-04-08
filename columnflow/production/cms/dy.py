@@ -11,8 +11,7 @@ import law
 from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import 
-from law.util import InsertableDict
+from columnflow.util import maybe_import, load_correction_set
 from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
@@ -44,9 +43,7 @@ class DrellYanConfig:
 @producer(
     uses={"GenPart.*"},
     produces={
-        "gen_dilepton_pt",
-        "gen_dilepton_vis.{pt,phi}",
-        "gen_dilepton_all.{pt,phi}",
+        "gen_dilepton_pt", "gen_dilepton_{vis,all}.{pt,phi}",
     },
 )
 def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
@@ -195,7 +192,7 @@ def dy_weights_init(self: Producer) -> None:
 
 
 @dy_weights.requires
-def dy_weights_requires(self: Producer, reqs: dict) -> None:
+def dy_weights_requires(self: Producer, task: law.Task, reqs: dict) -> None:
     """
     Adds the requirements needed the underlying task to derive the Drell-Yan weights into *reqs*.
     """
@@ -203,16 +200,16 @@ def dy_weights_requires(self: Producer, reqs: dict) -> None:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @dy_weights.setup
 def dy_weights_setup(
     self: Producer,
+    task: law.Task,
     reqs: dict,
     inputs: dict,
-    reader_targets: InsertableDict,
+    reader_targets: law.util.InsertableDict,
 ) -> None:
     """
     Loads the Drell-Yan weight calculator from the external files bundle and saves them in the
@@ -223,14 +220,7 @@ def dy_weights_setup(
     bundle = reqs["external_files"]
 
     # import all correctors from the external file
-    import correctionlib
-
-    correctionlib.highlevel.Correction.__call__ = (
-        correctionlib.highlevel.Correction.evaluate
-    )
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_dy_weight_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    correction_set = load_correction_set(self.get_dy_weight_file(bundle.files))
 
     # check number of fetched correctors
     if len(correction_set.keys()) != 2:
@@ -419,18 +409,22 @@ def recoil_corrections_init(self: Producer) -> None:
 
 
 @recoil_corrections.requires
-def recoil_corrections_requires(self: Producer, reqs: dict) -> None:
+def recoil_corrections_requires(self: Producer, task: law.Task, reqs: dict) -> None:
     # Ensure that external files are bundled.
     if "external_files" in reqs:
         return
-    from columnflow.tasks.external import BundleExternalFiles
 
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    from columnflow.tasks.external import BundleExternalFiles
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @recoil_corrections.setup
 def recoil_corrections_setup(
-    self: Producer, reqs: dict, inputs: dict, reader_targets: InsertableDict,
+    self: Producer,
+    task: law.Task,
+    reqs: dict,
+    inputs: dict,
+    reader_targets: law.util.InsertableDict,
 ) -> None:
     """
     Setup the recoil corrections by loading the CorrectionSet via correctionlib.
@@ -438,16 +432,7 @@ def recoil_corrections_setup(
     """
     bundle = reqs["external_files"]
 
-    import correctionlib
-
-    correctionlib.highlevel.Correction.__call__ = (
-        correctionlib.highlevel.Correction.evaluate
-    )
-
-    # Load the correction set from the external file.
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_dy_recoil_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    correction_set = load_correction_set(self.get_dy_recoil_file(bundle.files))
 
     # check number of fetched correctors
     if len(correction_set.keys()) != 4:
