@@ -43,7 +43,7 @@ class DrellYanConfig:
 @producer(
     uses={"GenPart.*"},
     produces={
-        "gen_dilepton_pt", "gen_dilepton_{vis,all}.{pt,phi}",
+        "gen_dilepton_pt", "gen_dilepton_{vis,all}.{pt,eta,phi,mass}",
     },
 )
 def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
@@ -100,9 +100,13 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     # finally, save the pt and phi of the lepton pair on generator level
     events = set_ak_column(events, "gen_dilepton_pt", lepton_pair_momenta.pt)
     events = set_ak_column(events, "gen_dilepton_vis.pt", lepton_pair_momenta_vis.pt)
+    events = set_ak_column(events, "gen_dilepton_vis.eta", lepton_pair_momenta_vis.eta)
     events = set_ak_column(events, "gen_dilepton_vis.phi", lepton_pair_momenta_vis.phi)
+    events = set_ak_column(events, "gen_dilepton_vis.mass", lepton_pair_momenta_vis.mass)
     events = set_ak_column(events, "gen_dilepton_all.pt", lepton_pair_momenta_all.pt)
+    events = set_ak_column(events, "gen_dilepton_all.eta", lepton_pair_momenta_all.eta)
     events = set_ak_column(events, "gen_dilepton_all.phi", lepton_pair_momenta_all.phi)
+    events = set_ak_column(events, "gen_dilepton_all.mass", lepton_pair_momenta_all.mass)
 
     return events
 
@@ -293,15 +297,15 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     })
 
     # Compute the recoil vector U = MET + vis - full
-    Ux = met.x + vis.x - full.x
-    Uy = met.y + vis.y - full.y
+    u_x = met.x + vis.x - full.x
+    u_y = met.y + vis.y - full.y
 
     # Project U onto the full boson direction
     full_pt = full.pt
     full_unit_x = full.x / full_pt
     full_unit_y = full.y / full_pt
-    upara = Ux * full_unit_x + Uy * full_unit_y
-    uperp = -Ux * full_unit_y + Uy * full_unit_x
+    upara = u_x * full_unit_x + u_y * full_unit_y
+    uperp = -u_x * full_unit_y + u_y * full_unit_x
 
     # Determine jet multiplicity for the event (jet selection as in original)
     jet_selection = ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) | (
@@ -330,12 +334,12 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     )
 
     # Reassemble the corrected U vector
-    U_corr_x = upara_corr * full_unit_x - uperp_corr * full_unit_y
-    U_corr_y = upara_corr * full_unit_y + uperp_corr * full_unit_x
+    ucorr_x = upara_corr * full_unit_x - uperp_corr * full_unit_y
+    ucorr_y = upara_corr * full_unit_y + uperp_corr * full_unit_x
 
     # Recompute corrected MET: MET_corr = U_corr - vis + full
-    met_corr_x = U_corr_x - vis.x + full.x
-    met_corr_y = U_corr_y - vis.y + full.y
+    met_corr_x = ucorr_x - vis.x + full.x
+    met_corr_y = ucorr_y - vis.y + full.y
     met_corr_pt = np.sqrt(met_corr_x**2 + met_corr_y**2)
     met_corr_phi = np.arctan2(met_corr_y, met_corr_x)
 
@@ -348,13 +352,13 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     # --- Systematic variations ---
     # Derive H from the nominal corrected MET: H = - (MET_corr + vis)
-    Hx = -met_corr_x - vis.x
-    Hy = -met_corr_y - vis.y
-    H_pt = np.sqrt(Hx**2 + Hy**2)
-    H_phi = np.arctan2(Hy, Hx)
+    h_x = -met_corr_x - vis.x
+    h_y = -met_corr_y - vis.y
+    h_pt = np.sqrt(h_x**2 + h_y**2)
+    h_phi = np.arctan2(h_y, h_x)
     # Project H into the full boson coordinate system
-    H_para = H_pt * np.cos(H_phi - full.phi)
-    H_perp = H_pt * np.sin(H_phi - full.phi)
+    hpara = h_pt * np.cos(h_phi - full.phi)
+    hperp = h_pt * np.sin(h_phi - full.phi)
 
     for syst in self.systematics:
         hpara_var = self.recoil_unc_corrector.evaluate(
@@ -363,7 +367,7 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             njet,
             events.gen_dilepton_all.pt,
             "Hpara",
-            H_para,
+            hpara,
             syst,
         )
         hperp_var = self.recoil_unc_corrector.evaluate(
@@ -372,15 +376,15 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             njet,
             events.gen_dilepton_all.pt,
             "Hperp",
-            H_perp,
+            hperp,
             syst,
         )
         # Reconstruct the corrected H vector in the full boson frame
-        H_corr_x = hpara_var * np.cos(full.phi) - hperp_var * np.sin(full.phi)
-        H_corr_y = hpara_var * np.sin(full.phi) + hperp_var * np.cos(full.phi)
+        hcorr_x = hpara_var * np.cos(full.phi) - hperp_var * np.sin(full.phi)
+        hcorr_y = hpara_var * np.sin(full.phi) + hperp_var * np.cos(full.phi)
         # Reconstruct the MET variation: MET_var = -H_corr - vis
-        met_var_x = -H_corr_x - vis.x
-        met_var_y = -H_corr_y - vis.y
+        met_var_x = -hcorr_x - vis.x
+        met_var_y = -hcorr_y - vis.y
         met_var_pt = np.sqrt(met_var_x**2 + met_var_y**2)
         met_var_phi = np.arctan2(met_var_y, met_var_x)
         events = set_ak_column(
