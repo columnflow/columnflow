@@ -69,13 +69,18 @@ def plot_variable_stack(
     # density scaling per bin
     if density:
         hists = apply_density(hists, density)
-    # remove shift axis of histograms that are not to be stacked
-    unstacked_hists = {
-        proc_inst: h
-        for proc_inst, h in hists.items()
-        if proc_inst.is_mc and getattr(proc_inst, "unstack", False)
-    }
-    hists |= remove_residual_axis(unstacked_hists, "shift", select_value="nominal")
+
+    if len(shift_insts) == 1:
+        # when there is exactly one shift bin, we can remove the shift axis
+        remove_residual_axis(hists, "shift", select_value=shift_insts[0].name)
+    else:
+        # remove shift axis of histograms that are not to be stacked
+        unstacked_hists = {
+            proc_inst: h
+            for proc_inst, h in hists.items()
+            if proc_inst.is_mc and getattr(proc_inst, "unstack", False)
+        }
+        hists |= remove_residual_axis(unstacked_hists, "shift", select_value="nominal")
 
     # prepare the plot config
     plot_config = prepare_stack_plot_config(
