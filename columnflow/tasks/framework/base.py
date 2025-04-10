@@ -283,7 +283,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             items = [
                 parse(key, value)
                 for key, value in law.config.items("resources")
-                if value
+                if value and not key.startswith("_")
             ]
             cls._cfg_resources_dict = cls._structure_cfg_items(items)
 
@@ -364,7 +364,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     @classmethod
     def _dfs_key_lookup(
         cls,
-        keys: law.util.InsertableDict[str, str] | Sequence[str],
+        keys: law.util.InsertableDict[str, str | Sequence[str]] | Sequence[str | Sequence[str]],
         nested_dict: dict[str, Any],
         empty_value: Any = None,
     ) -> str | Callable | None:
@@ -374,12 +374,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         if not nested_dict:
             return empty_value
 
-        # the keys to use for the lookup are the values of the keys dict
-        keys = collections.deque(keys.values() if isinstance(keys, dict) else keys)
+        # the keys to use for the lookup are the flattened values of the keys dict
+        flat_keys = collections.deque(law.util.flatten(keys.values() if isinstance(keys, dict) else keys))
 
         # start tree traversal using a queue lookup consisting of names and values of tree nodes,
         # as well as the remaining keys (as a deferred function) to compare for that particular path
-        lookup = collections.deque([tpl + ((lambda: keys.copy()),) for tpl in nested_dict.items()])
+        lookup = collections.deque([tpl + ((lambda: flat_keys.copy()),) for tpl in nested_dict.items()])
         while lookup:
             pattern, obj, keys_func = lookup.popleft()
 

@@ -32,11 +32,10 @@ def fill_hist(
     fill_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """
-    Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*.
-    The data is assumed to be structured in the same way as the histogram axes. If
-    *last_edge_inclusive* is *True*, values that would land exactly on the upper-most bin edge of an
-    axis are shifted into the last bin. If it is *None*, the behavior is determined automatically
-    and depends on the variable axis type. In this case, shifting is applied to all continuous,
+    Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*. The data is assumed
+    to be structured in the same way as the histogram axes. If *last_edge_inclusive* is *True*, values that would land
+    exactly on the upper-most bin edge of an axis are shifted into the last bin. If it is *None*, the behavior is
+    determined automatically and depends on the variable axis type. In this case, shifting is applied to all continuous,
     non-circular axes.
     """
     if fill_kwargs is None:
@@ -60,7 +59,7 @@ def fill_hist(
     # check data
     if not isinstance(data, dict):
         if len(axis_names) != 1:
-            raise ValueError("got multi-dimensional hist but only one dimensional data")
+            raise ValueError("got multi-dimensional hist but only one-dimensional data")
         data = {axis_names[0]: data}
     else:
         for name in axis_names:
@@ -74,15 +73,30 @@ def fill_hist(
             data[ax.name] = ak.copy(data[ax.name])
             flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
 
+    # check if conversion to records is needed
+    arr_types = (ak.Array, np.ndarray)
+    vals = list(data.values())
+    convert = (
+        # values is a mixture of singular and array types
+        (any(isinstance(v, arr_types) for v in vals) and not all(isinstance(v, arr_types) for v in vals)) or
+        # values contain at least one array with more than one dimension
+        any(isinstance(v, arr_types) and v.ndim != 1 for v in vals)
+    )
+
+    # actual conversion
+    if convert:
+        arrays = ak.flatten(ak.cartesian(data))
+        data = {field: arrays[field] for field in arrays.fields}
+        del arrays
+
     # fill
-    arrays = ak.flatten(ak.cartesian(data))
-    h.fill(**fill_kwargs, **{field: arrays[field] for field in arrays.fields})
+    h.fill(**fill_kwargs, **data)
 
 
 def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist:
     """
-    Add an axis to a histogram based on a variable instance. The axis_type is chosen
-    based on the variable instance's "axis_type" auxiliary.
+    Add an axis to a histogram based on a variable instance. The axis_type is chosen based on the variable instance's
+    "axis_type" auxiliary.
 
     :param histogram: The histogram to add the axis to.
     :param variable_inst: The variable instance to use for the axis.
@@ -131,10 +145,7 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
 
     if axis_type in {"regular", "reg"}:
         if not variable_inst.even_binning:
-            logger.warning(
-                "regular axis with uneven binning is not supported, using first and last bin edge "
-                "instead",
-            )
+            logger.warning("regular axis with uneven binning is not supported, using first and last bin edge instead")
         return histogram.Regular(
             variable_inst.n_bins,
             variable_inst.bin_edges[0],
@@ -145,10 +156,62 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
     raise ValueError(f"unknown axis type '{axis_type}'")
 
 
+def get_axis_kwargs(axis: hist.axis.AxesMixin) -> dict[str, Any]:
+    """
+    Extract information from an *axis* instance that would be needed to create a new one.
+
+    :param axis: The axis instance to extract information from.
+    :return: The extracted information in a dict.
+    """
+    axis_attrs = ["name", "label"]
+    traits_attrs = []
+    kwargs = {}
+
+    if isinstance(axis, hist.axis.Variable):
+        axis_attrs.append("edges")
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+    elif isinstance(axis, hist.axis.Regular):
+        axis_attrs = ["transform"]
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+        kwargs["bins"] = axis.size
+        kwargs["start"] = axis.edges[0]
+        kwargs["stop"] = axis.edges[-1]
+    elif isinstance(axis, hist.axis.Integer):
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+        kwargs["start"] = axis.edges[0]
+        kwargs["stop"] = axis.edges[-1]
+    elif isinstance(axis, hist.axis.Boolean):
+        # nothing to add to common attributes
+        pass
+    elif isinstance(axis, (hist.axis.IntCategory, hist.axis.StrCategory)):
+        traits_attrs = ["overflow", "growth"]
+        kwargs["categories"] = list(axis)
+    else:
+        raise NotImplementedError(f"axis type '{type(axis).__name__}' not supported")
+
+    return (
+        {attr: getattr(axis, attr) for attr in axis_attrs} |
+        {attr: getattr(axis.traits, attr) for attr in traits_attrs} |
+        kwargs
+    )
+
+
+def copy_axis(axis: hist.axis.AxesMixin, **kwargs: dict[str, Any]) -> hist.axis.AxesMixin:
+    """
+    Copy an axis with the option to override its attributes.
+    """
+    # create arguments for new axis from overlay with current and requested ones
+    axis_kwargs = get_axis_kwargs(axis) | kwargs
+
+    # create new instance
+    return type(axis)(**axis_kwargs)
+
+
 def create_hist_from_variables(
     *variable_insts,
     categorical_axes: tuple[tuple[str, str]] | None = None,
     weight: bool = True,
+    storage: str | None = None,
 ) -> hist.Hist:
     histogram = hist.Hist.new
 
@@ -166,9 +229,18 @@ def create_hist_from_variables(
     for variable_inst in variable_insts:
         histogram = add_hist_axis(histogram, variable_inst)
 
-    # weight storage
-    if weight:
+    # add the storage
+    if storage is None:
+        # use weight value for backwards compatibility
+        storage = "weight" if weight else "double"
+    else:
+        storage = storage.lower()
+    if storage == "weight":
         histogram = histogram.Weight()
+    elif storage == "double":
+        histogram = histogram.Double()
+    else:
+        raise ValueError(f"unknown storage type '{storage}'")
 
     return histogram
 

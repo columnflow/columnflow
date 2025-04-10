@@ -18,7 +18,8 @@ import order as od
 import scinum as sn
 
 from columnflow.util import maybe_import, try_int, try_complex, UNSET
-from columnflow.types import Iterable, Any, Callable, Sequence
+from columnflow.hist_util import copy_axis
+from columnflow.types import Iterable, Any, Callable, Sequence, Hashable
 
 math = maybe_import("math")
 hist = maybe_import("hist")
@@ -184,12 +185,15 @@ def hists_merge_cutflow_steps(
 
 
 def apply_process_settings(
-    hists: dict,
+    hists: dict[Hashable, hist.Hist],
     process_settings: dict | None = None,
-) -> dict:
+) -> tuple[dict[Hashable, hist.Hist], dict[str, Any]]:
     """
     applies settings from `process_settings` dictionary to the `process_insts`
     """
+    # store info gathered along application of process settings that can be inserted to the style config
+    process_style_config = {}
+
     # apply all settings on process insts
     apply_settings(
         hists.keys(),
@@ -197,10 +201,10 @@ def apply_process_settings(
         parent_check=(lambda proc, parent_name: proc.has_parent_process(parent_name)),
     )
 
-    return hists
+    return hists, process_style_config
 
 
-def apply_process_scaling(hists: dict) -> dict:
+def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hist.Hist]:
     # helper to compute the stack integral
     stack_integral = None
 
@@ -241,41 +245,25 @@ def apply_process_scaling(hists: dict) -> dict:
     return hists
 
 
-def remove_label_placeholders(
-    label: str,
-    keep: str | Sequence[str] | None = None,
-    drop: str | Sequence[str] | None = None,
-) -> str:
-    # when placeholders should be kept, determine all existing ones and identify remaining to drop
-    if keep:
-        keep = law.util.make_list(keep)
-        placeholders = re.findall("__([^_]+)__", label)
-        drop = list(set(placeholders) - set(keep))
-
-    # drop specific placeholders or all
-    if drop:
-        drop = law.util.make_list(drop)
-        sel = f"({'|'.join(d.upper() for d in drop)})"
-    else:
-        sel = "[A-Z0-9]+"
-
-    return re.sub(f"__{sel}__", "", label)
-
-
 def apply_variable_settings(
-    hists: dict,
+    hists: dict[Hashable, hist.Hist],
     variable_insts: list[od.Variable],
     variable_settings: dict | None = None,
-) -> dict:
+) -> tuple[dict[Hashable, hist.Hist], dict[od.Variable, dict[str, Any]]]:
     """
     applies settings from *variable_settings* dictionary to the *variable_insts*;
     the *rebin*, *overflow*, *underflow*, and *slice* settings are directly applied to the histograms
     """
+    # store info gathered along application of variable settings that can be inserted to the style config
+    variable_style_config = {}
+
     # apply all settings on variable insts
     apply_settings(variable_insts, variable_settings)
 
     # apply certain  setting directly to histograms
     for var_inst in variable_insts:
+        variable_style_config[var_inst] = {}
+
         # rebinning
         rebin_factor = get_attr_or_aux(var_inst, "rebin", None)
         if try_int(rebin_factor):
@@ -287,7 +275,6 @@ def apply_variable_settings(
         # overflow and underflow bins
         overflow = get_attr_or_aux(var_inst, "overflow", False)
         underflow = get_attr_or_aux(var_inst, "underflow", False)
-
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
                 h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
@@ -305,7 +292,25 @@ def apply_variable_settings(
                 h = h[{var_inst.name: slice(slice_0, slice_1)}]
                 hists[proc_inst] = h
 
-    return hists
+        # additional x axis transformations
+        for trafo in law.util.make_list(get_attr_or_aux(var_inst, "x_transformations", None) or []):
+            # forced representation into equal bins
+            if trafo in {"equal_distance_with_edges", "equal_distance_with_indices"}:
+                hists, orig_edges = rebin_equal_width(hists, var_inst.name)
+                new_edges = list(hists.values())[0].axes[-1].edges
+                # store edge values as well as ticks if needed
+                ax_cfg = {"xlim": (new_edges[0], new_edges[-1])}
+                if trafo == "equal_distance_with_edges":
+                    # optionally round edges
+                    rnd = get_attr_or_aux(var_inst, "x_edge_rounding", (lambda e: e))
+                    edge_labels = [rnd(e) for e in orig_edges]
+                    ax_cfg |= {"xmajorticks": new_edges, "xmajorticklabels": edge_labels, "xminorticks": []}
+                variable_style_config[var_inst].setdefault("ax_cfg", {}).update(ax_cfg)
+                variable_style_config[var_inst].setdefault("rax_cfg", {}).update(ax_cfg)
+            else:
+                raise ValueError(f"unknown x transformation '{trafo}'")
+
+    return hists, variable_style_config
 
 
 def use_flow_bins(
@@ -429,6 +434,7 @@ def prepare_style_config(
     density: bool | None = False,
     shape_norm: bool | None = False,
     yscale: str | None = "",
+    **kwargs: Any,
 ) -> dict:
     """
     small helper function that sets up a default style config based on the instances
@@ -451,15 +457,16 @@ def prepare_style_config(
     style_config = {
         "ax_cfg": {
             "xlim": xlim,
-            # TODO: need to make bin width and unit configurable in future
             "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False, unit_format=unit_format),
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
+            "xrotation": variable_inst.x("x_label_rotation", None),
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
+            "xrotation": variable_inst.x("x_label_rotation", None),
         },
         "legend_cfg": {},
         "annotate_cfg": {"text": cat_label or ""},
@@ -622,6 +629,55 @@ def prepare_stack_plot_config(
                     plot_cfg[key]["yerr"] = False
 
     return plot_config
+
+
+def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Split the given dictionary into two dictionaries based on the keys that are valid for matplotlib's ``ax.set()``
+    function, and all others, potentially accepted by :py:func:`apply_ax_kwargs`.
+    """
+    set_kwargs, other_kwargs = {}, {}
+    other_keys = {
+        "xmajorticks", "xminorticks", "xmajorticklabels", "xminorticklabels", "xloc", "xrotation",
+        "ymajorticks", "yminorticks", "yloc", "yrotation",
+    }
+    for key, value in kwargs.items():
+        (other_kwargs if key in other_keys else set_kwargs)[key] = value
+    return set_kwargs, other_kwargs
+
+
+def apply_ax_kwargs(ax: plt.Axes, kwargs: dict[str, Any]) -> None:
+    """
+    Apply the given keyword arguments to the given axis, splitting them into those that are valid for ``ax.set()`` and
+    those that are not, and applying them separately.
+    """
+    # split
+    set_kwargs, other_kwargs = split_ax_kwargs(kwargs)
+
+    # apply standard ones
+    ax.set(**set_kwargs)
+
+    # apply others
+    if other_kwargs.get("xmajorticks") is not None:
+        ax.set_xticks(other_kwargs.get("xmajorticks"), minor=False)
+    if other_kwargs.get("ymajorticks") is not None:
+        ax.set_yticks(other_kwargs.get("ymajorticks"), minor=False)
+    if other_kwargs.get("xminorticks") is not None:
+        ax.set_xticks(other_kwargs.get("xminorticks"), minor=True)
+    if other_kwargs.get("yminorticks") is not None:
+        ax.set_yticks(other_kwargs.get("yminorticks"), minor=True)
+    if other_kwargs.get("xmajorticklabels") is not None:
+        ax.set_xticklabels(other_kwargs.get("xmajorticklabels"), minor=False)
+    if other_kwargs.get("xminorticklabels") is not None:
+        ax.set_xticklabels(other_kwargs.get("xminorticklabels"), minor=True)
+    if other_kwargs.get("xloc") is not None:
+        ax.set_xlabel(ax.get_xlabel(), loc=other_kwargs.get("xloc"))
+    if other_kwargs.get("yloc") is not None:
+        ax.set_ylabel(ax.get_ylabel(), loc=other_kwargs.get("yloc"))
+    if other_kwargs.get("xrotation") is not None:
+        ax.tick_params(axis="x", labelrotation=other_kwargs.get("xrotation"))
+    if other_kwargs.get("yrotation") is not None:
+        ax.tick_params(axis="y", labelrotation=other_kwargs.get("yrotation"))
 
 
 def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: bool = False) -> float:
@@ -855,6 +911,49 @@ def blind_sensitive_bins(
     return hists
 
 
+def rebin_equal_width(
+    hists: dict[Hashable, hist.Hist],
+    axis_name: str,
+) -> tuple[dict[Hashable, hist.Hist], np.ndarray]:
+    """
+    In a dictionary, rebins an axis named *axis_name* of all histograms to have the same amount of bins but with equal
+    width. This is achieved by using integer edge values starting at 0. The original edge values are returned as well.
+    Bin contents are not changed but copied to the rebinned histograms.
+
+    :param hists: Dictionary of histograms to rebin.
+    :param axis_name: Name of the axis to rebin.
+    :return: Tuple of the rebinned histograms and the new bin edges.
+    """
+    # get the variable axis from the first histogram
+    assert hists
+    for var_index, var_axis in enumerate(list(hists.values())[0].axes):
+        if var_axis.name == axis_name:
+            break
+    else:
+        raise ValueError(f"axis '{axis_name}' not found in histograms")
+    assert isinstance(var_axis, (hist.axis.Variable, hist.axis.Regular))
+    orig_edges = var_axis.edges
+
+    # prepare arguments for the axis copy
+    if isinstance(var_axis, hist.axis.Variable):
+        axis_kwargs = {"edges": list(range(len(orig_edges)))}
+    else:  # hist.axis.Regular
+        axis_kwargs = {"start": orig_edges[0], "stop": orig_edges[-1]}
+
+    # rebin all histograms
+    new_hists = type(hists)()
+    for key, h in hists.items():
+        # create a new histogram
+        new_axes = h.axes[:var_index] + (copy_axis(var_axis, **axis_kwargs),) + h.axes[var_index + 1:]
+        new_h = hist.Hist(*new_axes, storage=h.storage_type())
+
+        # copy contents and save
+        new_h.view()[...] = h.view()
+        new_hists[key] = new_h
+
+    return new_hists, orig_edges
+
+
 def apply_label_placeholders(
     label: str,
     apply: str | Sequence[str] | None = None,
@@ -894,3 +993,24 @@ def apply_label_placeholders(
         label = label.replace("__SCALE__", scale_str)
 
     return label
+
+
+def remove_label_placeholders(
+    label: str,
+    keep: str | Sequence[str] | None = None,
+    drop: str | Sequence[str] | None = None,
+) -> str:
+    # when placeholders should be kept, determine all existing ones and identify remaining to drop
+    if keep:
+        keep = law.util.make_list(keep)
+        placeholders = re.findall("__([^_]+)__", label)
+        drop = list(set(placeholders) - set(keep))
+
+    # drop specific placeholders or all
+    if drop:
+        drop = law.util.make_list(drop)
+        sel = f"({'|'.join(d.upper() for d in drop)})"
+    else:
+        sel = "[A-Z0-9]+"
+
+    return re.sub(f"__{sel}__", "", label)

@@ -208,6 +208,10 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         self.calibrator_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_calibrator_inst(self) -> None:
+        if self.calibrator_inst:
+            self.calibrator_inst.run_teardown(task=self)
+
     @property
     def calibrator_repr(self) -> str:
         """
@@ -285,6 +289,24 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
         parts = super().store_parts()
         parts.insert_after(self.config_store_anchor, "calibrators", f"calib__{self.calibrators_repr}")
         return parts
+
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: CalibratorClassesMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the calibrator names
+        calibrators = (
+            inst_or_params.get("calibrators")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "calibrators", None)
+        )
+        if calibrators not in {law.NO_STR, None, "", ()}:
+            keys["calibrators"] = [f"calib_{calibrator}" for calibrator in calibrators]
+
+        return keys
 
 
 class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
@@ -571,6 +593,10 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         self.selector_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_selector_inst(self) -> None:
+        if self.selector_inst:
+            self.selector_inst.run_teardown(task=self)
+
     @property
     def selector_repr(self) -> str:
         """
@@ -764,6 +790,10 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
         self.reducer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_reducer_inst(self) -> None:
+        if self.reducer_inst:
+            self.reducer_inst.run_teardown(task=self)
+
     @property
     def reducer_repr(self) -> str:
         """
@@ -935,6 +965,10 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         self.producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_producer_inst(self) -> None:
+        if self.producer_inst:
+            self.producer_inst.run_teardown(task=self)
+
     @property
     def producer_repr(self) -> str:
         """
@@ -1012,6 +1046,24 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
         parts = super().store_parts()
         parts.insert_after(self.config_store_anchor, "producers", f"prod__{self.producers_repr}")
         return parts
+
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: ProducerClassesMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the producer names
+        producers = (
+            inst_or_params.get("producers")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "producers", None)
+        )
+        if producers not in {law.NO_STR, None, "", ()}:
+            keys["producers"] = [f"prod_{producer}" for producer in producers]
+
+        return keys
 
 
 class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
@@ -1413,6 +1465,10 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
 
     build_producer_inst = ProducerMixin.build_producer_inst
 
+    def teardown_preparation_producer_inst(self) -> None:
+        if self.preparation_producer_inst:
+            self.preparation_producer_inst.run_teardown(task=self)
+
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         ml_model_inst = params["ml_model_inst"]
@@ -1703,6 +1759,10 @@ class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
     def _array_function_post_init(self, **kwargs) -> None:
         self.hist_producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
+
+    def teardown_hist_producer_inst(self) -> None:
+        if self.hist_producer_inst:
+            self.hist_producer_inst.run_teardown(task=self)
 
     @property
     def hist_producer_repr(self) -> str:
