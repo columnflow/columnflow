@@ -814,8 +814,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         *,
         sep: str = "__",
         prepend_count: bool = False,
-        max_count: int = default_repr_max_count,
         max_len: int = default_repr_max_len,
+        max_count: int = default_repr_max_count,
         hash_len: int = default_repr_hash_len,
     ) -> str:
         """
@@ -823,9 +823,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         :param objects: The object or objects to be represented.
         :param sep: The separator used to join the objects.
-        :param prepend_count: When *True*, the number of objects is prepended to the string.
-        :param max_count: The maximum number of objects to include in the string. Additional objects are hashed.
+        :param prepend_count: When *True*, the number of objects is prepended to the string, followed by *sep*.
         :param max_len: The maximum length of the string. If exceeded, the string is truncated and hashed.
+        :param max_count: The maximum number of objects to include in the string. Additional objects are hashed, but
+            only if the resulting representation length does not exceed *max_len*. If so, the overall truncation and
+            hashing is applied instead.
         :param hash_len: The length of the hash that is appended to the string when it is truncated.
         :return: The string representation.
         """
@@ -834,19 +836,23 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # join objects when a sequence is given
         if isinstance(objects, (list, tuple)):
-            r = f"{len(objects)}_" if prepend_count else ""
-            if max_count > 0:
+            r = f"{len(objects)}{sep}" if prepend_count else ""
+            # truncate when requested and the expected length will not exceed max_len, in which case the overall
+            # truncation applies the hashing
+            if (
+                0 < max_count < len(objects) and
+                not (0 < max_len < (len(r) + sum(map(len, objects[:max_count])) + len(sep) * max_count + hash_len))
+            ):
                 r += sep.join(objects[:max_count])
-                if len(objects) > max_count:
-                    r += f"{sep}{law.util.create_hash(objects[max_count:], l=hash_len)}"
+                r += f"{sep}{law.util.create_hash(objects[max_count:], l=hash_len)}"
             else:
-                r += sep.join(objects[:max_count])
+                r += sep.join(objects)
         else:
             r = str(objects)
 
         # handle overall truncation
         if max_len > 0 and len(r) > max_len:
-            r = r[:max_len - hash_len - 1] + "_" + law.util.create_hash(r, l=hash_len)
+            r = f"{r[:max_len - hash_len - len(sep)]}{sep}{law.util.create_hash(r, l=hash_len)}"
 
         return r
 
