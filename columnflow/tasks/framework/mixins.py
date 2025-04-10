@@ -1295,9 +1295,10 @@ class MLModelMixinBase(ConfigTask):
 
 class MLModelTrainingMixin(
     MLModelMixinBase,
-    ProducerClassesMixin,
-    SelectorClassMixin,
     CalibratorClassesMixin,
+    SelectorClassMixin,
+    ReducerClassMixin,
+    ProducerClassesMixin,
 ):
     """
     A mixin class for training machine learning models.
