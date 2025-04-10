@@ -207,6 +207,10 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         self.calibrator_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_calibrator_inst(self) -> None:
+        if self.calibrator_inst:
+            self.calibrator_inst.run_teardown(task=self)
+
     @property
     def calibrator_repr(self) -> str:
         """
@@ -596,6 +600,10 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         self.selector_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_selector_inst(self) -> None:
+        if self.selector_inst:
+            self.selector_inst.run_teardown(task=self)
+
     @property
     def selector_repr(self) -> str:
         """
@@ -789,6 +797,10 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
         self.reducer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_reducer_inst(self) -> None:
+        if self.reducer_inst:
+            self.reducer_inst.run_teardown(task=self)
+
     @property
     def reducer_repr(self) -> str:
         """
@@ -959,6 +971,10 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
     def _array_function_post_init(self, **kwargs) -> None:
         self.producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
+
+    def teardown_producer_inst(self) -> None:
+        if self.producer_inst:
+            self.producer_inst.run_teardown(task=self)
 
     @property
     def producer_repr(self) -> str:
@@ -1464,6 +1480,10 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
 
     build_producer_inst = ProducerMixin.build_producer_inst
 
+    def teardown_preparation_producer_inst(self) -> None:
+        if self.preparation_producer_inst:
+            self.preparation_producer_inst.run_teardown(task=self)
+
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         ml_model_inst = params["ml_model_inst"]
@@ -1754,6 +1774,10 @@ class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
     def _array_function_post_init(self, **kwargs) -> None:
         self.hist_producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
+
+    def teardown_hist_producer_inst(self) -> None:
+        if self.hist_producer_inst:
+            self.hist_producer_inst.run_teardown(task=self)
 
     @property
     def hist_producer_repr(self) -> str:
