@@ -121,6 +121,10 @@ class egamma_scale_corrector(Calibrator):
             "gain": gain,
             "r9": r9,
             "run": run,
+            "seedGain": gain,
+            "pt": pt_eval,
+            "AbsScEta": np.abs(sceta),
+            "ScEta": sceta,
             **self.scale_config.corrector_kwargs,
         }
         args = tuple(
@@ -130,7 +134,7 @@ class egamma_scale_corrector(Calibrator):
 
         # varied corrections are only applied to MC
         if self.with_uncertainties and self.dataset_inst.is_mc:
-            scale_uncertainties = self.scale_corrector("total_uncertainty", *args)
+            scale_uncertainties = self.scale_corrector.evaluate(self.scale_config.corrector_strings["type"], *args)
             scales_up = (1 + scale_uncertainties)
             scales_down = (1 - scale_uncertainties)
 
@@ -306,52 +310,67 @@ class egamma_resolution_corrector(Calibrator):
             )
 
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
-
         sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
         r9 = flat_np_view(events[self.source_field].r9, axis=1)
         flat_seeds = flat_np_view(events[self.source_field].deterministic_seed, axis=1)
 
-        # prepare arguments
-        # we use pt as et since there depends in linear (following the recoomendations)
+        # we use pt as et since there depends in linear (following the recommendations)
         # (energy is part of the LorentzVector behavior)
+        pt = flat_np_view(events[self.source_field].rawPt, axis=1)
+
+        # prepare arguments
         variable_map = {
+            "AbsScEta": np.abs(sceta),
             "eta": sceta,
             "r9": r9,
+            "pt": pt,
             **self.resolution_cfg.corrector_kwargs,
         }
+
         args = tuple(
-            variable_map[inp.name] for inp in self.resolution_corrector.inputs
+            variable_map[inp.name]
+            for inp in self.resolution_corrector.inputs
             if inp.name in variable_map
         )
 
         # calculate the smearing scale
-        rho = self.resolution_corrector("rho", *args)
+        # available option are for Et: smear, esmear or escale, e = error
+
+        # TODO : ask Marcel/philip about this
+        # NOTE: the presence of the scale uncertainties ("escale") among the "EGMSmearAndSyst",
+        # as mentioned in the example above, allows us to apply them directly to the MC simulation.
+        rho = self.resolution_corrector.evaluate(self.resolution_cfg.corrector_strings["type"], *args)
 
         # -- stochastic smearing
         # normally distributed random numbers according to EGamma resolution
 
         # varied corrections
         if self.with_uncertainties and self.dataset_inst.is_mc:
-            rho_unc = self.resolution_corrector("err_rho", *args)
+            rho_unc = self.resolution_corrector(self.resolution_cfg.corrector_strings["unc_type"], *args)
+            random_normal_number = functools.partial(ak_random, 0, 1)
+            smearing_func = lambda rng_array, variation: rng_array * variation + 1
+
             smearing_up = (
-                ak_random(
-                    1, rho + rho_unc, flat_seeds,
-                    rand_func=self.deterministic_normal_up,
+                smearing_func(
+                    random_normal_number(flat_seeds, rand_func=self.deterministic_normal),
+                    rho + rho_unc,
                 )
                 if self.deterministic_seed_index >= 0
-                else ak_random(1, rho + rho_unc, rand_func=np.random.Generator(
-                    np.random.SFC64(events.event.to_list())).normal,
+                else smearing_func(
+                    random_normal_number(rand_func=np.random.Generator(np.random.SFC64(events.event.to_list())).normal),
+                    rho + rho_unc,
                 )
             )
 
             smearing_down = (
-                ak_random(
-                    1, rho - rho_unc, flat_seeds,
-                    rand_func=self.deterministic_normal_down,
+                smearing_func(
+                    random_normal_number(flat_seeds, rand_func=self.deterministic_normal),
+                    rho - rho_unc,
                 )
                 if self.deterministic_seed_index >= 0
-                else ak_random(1, rho - rho_unc, rand_func=np.random.Generator(
-                    np.random.SFC64(events.event.to_list())).normal,
+                else smearing_func(
+                    random_normal_number(rand_func=np.random.Generator(np.random.SFC64(events.event.to_list())).normal),
+                    rho - rho_unc,
                 )
             )
 
