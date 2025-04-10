@@ -29,6 +29,8 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 @dataclass
 class EGammaCorrectionConfig:
     correction_set: str = "Scale"
+    compound: bool = False
+    corrector_strings: dict[str] = field(default_factory=dict)
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
@@ -68,8 +70,8 @@ class egamma_scale_corrector(Calibrator):
         functions:
 
         - *source_field*: The field name of the EGamma objects in the events array (i.e. `Electron` or `Photon`).
-        - *get_correction_file*: Function to retrieve the correction file, e.g.
-            from the list of external files in the current `config_inst`.
+        - *get_correction_file*: Function to retrieve the correction file, e.g.from the list ,
+        of external files in the current `config_inst`.
         - *get_scale_config*: Function to retrieve the configuration for the energy correction.
             This config must be an instance of :py:class:`~columnflow.calibration.cms.egamma.EGammaCorrectionConfig`.
 
@@ -214,13 +216,17 @@ class egamma_scale_corrector(Calibrator):
             (not used).
         """
         self.scale_config = self.get_scale_config()
-
         # create the egamma corrector
         corr_file = self.get_correction_file(reqs["external_files"].files)
-        self.scale_corrector = load_correction_set(corr_file)[self.scale_config.correction_set]
+        # init and extend the correction set
+        corr_set = load_correction_set(corr_file)
+        if self.scale_config.compound:
+            corr_set = corr_set.compound
+        self.scale_corrector = corr_set[self.scale_config.correction_set]
 
-        # check versions
-        assert self.scale_corrector.version in [0, 1, 2]
+        if not self.scale_config.compound:
+            # check version, does not exist for compound
+            assert self.scale_corrector.version in [0, 1, 2]
 
 
 class egamma_resolution_corrector(Calibrator):
@@ -436,13 +442,16 @@ class egamma_resolution_corrector(Calibrator):
             (not used).
         """
         self.resolution_cfg = self.get_resolution_config()
-
         # create the egamma corrector
         corr_file = self.get_correction_file(reqs["external_files"].files)
-        self.resolution_corrector = load_correction_set(corr_file)[self.resolution_cfg.correction_set]
+        corr_set = load_correction_set(corr_file)
+        if self.resolution_cfg.compound:
+            corr_set = corr_set.compound
+        self.resolution_corrector = corr_set[self.resolution_cfg.correction_set]
 
-        # check versions
-        assert self.resolution_corrector.version in [0, 1, 2]
+        if not self.resolution_cfg.compound:
+            # check versions, does not exist for compound version
+            assert self.resolution_corrector.version in [0, 1, 2]
 
         # use deterministic seeds for random smearing if requested
         if self.deterministic_seed_index >= 0:
