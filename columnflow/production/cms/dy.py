@@ -35,23 +35,18 @@ class DrellYanConfig:
             not self.correction or
             not self.unc_correction
         ):
-            raise ValueError(
-                "Incomplete dy_weight_config: missing era, order, correction or unc_correction.",
-            )  # noqa
+            raise ValueError("incomplete dy_weight_config: missing era, order, correction or unc_correction")
 
 
 @producer(
     uses={"GenPart.*"},
-    produces={
-        "gen_dilepton_pt", "gen_dilepton_{vis,all}.{pt,eta,phi,mass}",
-    },
+    produces={"gen_dilepton_pt", "gen_dilepton_{vis,all}.{pt,eta,phi,mass}"},
 )
 def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     """
     Reconstruct the di-lepton pair from generator level info. This considers only visible final-state particles.
     In addition it provides the four-momenta of all leptons (including neutrinos) from the hard process.
     """
-
     # get the absolute pdg id (to account for anti-particles) and status of the particles
     pdg_id = abs(events.GenPart.pdgId)
     status = events.GenPart.status
@@ -184,7 +179,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 @dy_weights.init
 def dy_weights_init(self: Producer) -> None:
     # the number of weights in partial run 3 is always 10
-    if self.config_inst.campaign.x.year not in (2022, 2023):
+    if self.config_inst.campaign.x.year not in {2022, 2023}:
         raise NotImplementedError(
             f"campaign year {self.config_inst.campaign.x.year} is not yet supported by {self.cls_name}",
         )
@@ -256,6 +251,7 @@ def dy_weights_setup(
     },
     produces={
         "RecoilCorrMET.{pt,phi}",
+        "RecoilCorrMET.{pt,phi}_{recoilresp,recoilres}_{up,down}",
     },
     mc_only=True,
     # function to determine the recoil correction file from external files
@@ -265,7 +261,7 @@ def dy_weights_setup(
 )
 def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Producer for bosonic recoil corrections.
+    Producer for bosonic recoil corrections which are applied to PuppiMET to create a new ``RecoilCorrMET`` collection.
 
     Steps:
       1) Build transverse vectors for MET and the generator-level boson (full and visible).
@@ -308,8 +304,9 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     uperp = -u_x * full_unit_y + u_y * full_unit_x
 
     # Determine jet multiplicity for the event (jet selection as in original)
-    jet_selection = ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) | (
-        (events.Jet.pt > 50) & (np.abs(events.Jet.eta) >= 2.5)
+    jet_selection = (
+        ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) |
+        ((events.Jet.pt > 50) & (np.abs(events.Jet.eta) >= 2.5))
     )
     selected_jets = events.Jet[jet_selection]
     njet = np.asarray(ak.num(selected_jets, axis=1), dtype=np.float32)
@@ -343,12 +340,8 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     met_corr_pt = np.sqrt(met_corr_x**2 + met_corr_y**2)
     met_corr_phi = np.arctan2(met_corr_y, met_corr_x)
 
-    events = set_ak_column(
-        events, "RecoilCorrMET.pt", met_corr_pt, value_type=np.float32,
-    )
-    events = set_ak_column(
-        events, "RecoilCorrMET.phi", met_corr_phi, value_type=np.float32,
-    )
+    events = set_ak_column(events, "RecoilCorrMET.pt", met_corr_pt, value_type=np.float32)
+    events = set_ak_column(events, "RecoilCorrMET.phi", met_corr_phi, value_type=np.float32)
 
     # --- Systematic variations ---
     # Derive H from the nominal corrected MET: H = - (MET_corr + vis)
@@ -360,7 +353,12 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     hpara = h_pt * np.cos(h_phi - full.phi)
     hperp = h_pt * np.sin(h_phi - full.phi)
 
-    for syst in self.systematics:
+    for syst, postfix in [
+        ("RespUp", "recoilresp_up"),
+        ("RespDown", "recoilresp_down"),
+        ("ResolUp", "recoilres_up"),
+        ("ResolDown", "recoilres_down"),
+    ]:
         hpara_var = self.recoil_unc_corrector.evaluate(
             self.dy_recoil_config.era,
             self.dy_recoil_config.order,
@@ -387,29 +385,10 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         met_var_y = -hcorr_y - vis.y
         met_var_pt = np.sqrt(met_var_x**2 + met_var_y**2)
         met_var_phi = np.arctan2(met_var_y, met_var_x)
-        events = set_ak_column(
-            events, f"RecoilCorrMET.pt_{syst}", met_var_pt, value_type=np.float32,
-        )
-        events = set_ak_column(
-            events, f"RecoilCorrMET.phi_{syst}", met_var_phi, value_type=np.float32,
-        )
+        events = set_ak_column(events, f"RecoilCorrMET.pt_{postfix}", met_var_pt, value_type=np.float32)
+        events = set_ak_column(events, f"RecoilCorrMET.phi_{postfix}", met_var_phi, value_type=np.float32)
 
     return events
-
-
-@recoil_corrections.init
-def recoil_corrections_init(self: Producer) -> None:
-    # the number of weights in partial run 3 is always 10
-    if self.config_inst.campaign.x.year not in (2022, 2023):
-        raise NotImplementedError(
-            f"campaign year {self.config_inst.campaign.x.year} is not yet supported by {self.cls_name}",
-        )
-
-    self.systematics = ["RespUp", "RespDown", "ResolUp", "ResolDown"]
-    # register dynamically systematics
-    for syst in self.systematics:
-        self.produces.add(f"RecoilCorrMET.pt_{syst}")
-        self.produces.add(f"RecoilCorrMET.phi_{syst}")
 
 
 @recoil_corrections.requires
