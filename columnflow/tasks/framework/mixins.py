@@ -26,6 +26,7 @@ from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler, TaskArrayFunction
 from columnflow.util import maybe_import, DotDict, get_docs_url, get_code_url
+from columnflow.types import Callable
 
 ak = maybe_import("awkward")
 
@@ -95,7 +96,7 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the calibrator class.
         """
-        return self.array_function_cls_repr(self.calibrator)
+        return self.build_repr(self.array_function_cls_repr(self.calibrator))
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -216,7 +217,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         """
         Return a string representation of the calibrator instance.
         """
-        return self.array_function_inst_repr(self.calibrator_inst)
+        return self.build_repr(self.array_function_inst_repr(self.calibrator_inst))
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
@@ -277,13 +278,9 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the calibrators.
         """
-        calibs_repr = "none"
-        if self.calibrators:
-            reprs = list(map(self.array_function_cls_repr, self.calibrators))
-            calibs_repr = "__".join(reprs[:5])
-            if len(reprs) > 5:
-                calibs_repr += f"__{law.util.create_hash(reprs[5:])}"
-        return calibs_repr
+        if not self.calibrators:
+            return "none"
+        return self.build_repr(list(map(self.array_function_cls_repr, self.calibrators)))
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -394,13 +391,9 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         """
         Return a string representation of the calibrators.
         """
-        calibs_repr = "none"
-        if self.calibrators:
-            reprs = list(map(self.array_function_inst_repr, self.calibrator_insts))
-            calibs_repr = "__".join(reprs[:5])
-            if len(reprs) > 5:
-                calibs_repr += f"__{law.util.create_hash(reprs[5:])}"
-        return calibs_repr
+        if not self.calibrators:
+            return "none"
+        return self.build_repr(list(map(self.array_function_inst_repr, self.calibrator_insts)))
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
@@ -487,12 +480,12 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the selector class.
         """
-        sel_repr = self.array_function_cls_repr(self.selector)
+        sel_repr = self.build_repr(self.array_function_cls_repr(self.selector))
         steps = self.selector_steps
         if steps and not self.selector_steps_order_sensitive:
             steps = sorted(steps)
         if steps:
-            sel_repr += "__steps_" + "_".join(steps)
+            sel_repr += "__steps_" + self.build_repr(steps, sep="_")
         return sel_repr
 
     def store_parts(self) -> law.util.InsertableDict:
@@ -609,14 +602,14 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         """
         Return a string representation of the selector instance.
         """
-        sel_repr = self.array_function_inst_repr(self.selector_inst)
+        sel_repr = self.build_repr(self.array_function_inst_repr(self.selector_inst))
         # add representation of steps only if this class does not invoke the selector itself
         if not self.invokes_selector:
             steps = self.selector_steps
             if steps and not self.selector_steps_order_sensitive:
                 steps = sorted(steps)
             if steps:
-                sel_repr += "__steps_" + "_".join(steps)
+                sel_repr += "__steps_" + self.build_repr(steps, sep="_")
 
         return sel_repr
 
@@ -685,7 +678,7 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the reducer class.
         """
-        return self.array_function_cls_repr(self.reducer)
+        return self.build_repr(self.array_function_cls_repr(self.reducer))
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -806,7 +799,7 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
         """
         Return a string representation of the reducer instance.
         """
-        return self.array_function_inst_repr(self.reducer_inst)
+        return self.build_repr(self.array_function_inst_repr(self.reducer_inst))
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
@@ -860,7 +853,7 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the producer class.
         """
-        return self.array_function_cls_repr(self.producer)
+        return self.build_repr(self.array_function_cls_repr(self.producer))
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -981,7 +974,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         """
         Return a string representation of the producer instance.
         """
-        return self.array_function_inst_repr(self.producer_inst)
+        return self.build_repr(self.array_function_inst_repr(self.producer_inst))
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
@@ -1042,13 +1035,9 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the producers.
         """
-        prods_repr = "none"
-        if self.producers:
-            reprs = list(map(self.array_function_cls_repr, self.producers))
-            prods_repr = "__".join(reprs[:5])
-            if len(reprs) > 5:
-                prods_repr += f"__{law.util.create_hash(reprs[5:])}"
-        return prods_repr
+        if not self.producers:
+            return "none"
+        return self.build_repr(list(map(self.array_function_cls_repr, self.producers)))
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -1159,13 +1148,9 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         """
         Return a string representation of the producers.
         """
-        prods_repr = "none"
-        if self.producers:
-            reprs = list(map(self.array_function_inst_repr, self.producer_insts))
-            prods_repr = "__".join(reprs[:5])
-            if len(reprs) > 5:
-                prods_repr += f"__{law.util.create_hash(reprs[5:])}"
-        return prods_repr
+        if not self.producers:
+            return "none"
+        return self.build_repr(list(map(self.array_function_inst_repr, self.producer_insts)))
 
     def find_keep_columns(self, collection: ColumnCollection) -> set[Route]:
         """
@@ -1216,7 +1201,7 @@ class MLModelMixinBase(ConfigTask):
         """
         Returns a string representation of the ML model instance.
         """
-        return str(self.ml_model_inst)
+        return self.build_repr(self.ml_model_inst)
 
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
@@ -1532,7 +1517,7 @@ class MLModelsMixin(ConfigTask):
         """
         Returns a string representation of the ML models.
         """
-        return "__".join(map(str, self.ml_model_insts))
+        return self.build_repr(self.ml_model_insts)
 
     @classmethod
     def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -1661,7 +1646,7 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
         """
         Return a string representation of the hist producer class.
         """
-        return self.array_function_cls_repr(self.hist_producer)
+        return self.build_repr(self.array_function_cls_repr(self.hist_producer))
 
     def store_parts(self) -> law.util.InsertableDict:
         """
@@ -1785,7 +1770,7 @@ class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
         """
         Return a string representation of the hist producer instance.
         """
-        return self.array_function_inst_repr(self.hist_producer_inst)
+        return self.build_repr(self.array_function_inst_repr(self.hist_producer_inst))
 
 
 class InferenceModelClassMixin(ConfigTask):
@@ -1969,8 +1954,8 @@ class CategoriesMixin(ConfigTask):
     @property
     def categories_repr(self) -> str:
         if len(self.categories) == 1:
-            return self.categories[0]
-        return f"{len(self.categories)}_{law.util.create_hash(sorted(self.categories))}"
+            return self.build_repr(self.categories[0])
+        return self.build_repr(self.categories, prepend_count=True)
 
 
 class VariablesMixin(ConfigTask):
@@ -2069,8 +2054,8 @@ class VariablesMixin(ConfigTask):
     @property
     def variables_repr(self) -> str:
         if len(self.variables) == 1:
-            return self.variables[0]
-        return f"{len(self.variables)}_{law.util.create_hash(sorted(self.variables))}"
+            return self.build_repr(self.variables[0])
+        return self.build_repr(sorted(self.variables), prepend_count=True)
 
 
 class DatasetsProcessesMixin(ConfigTask):
@@ -2329,8 +2314,8 @@ class ShiftSourcesMixin(ConfigTask):
         if not self.shift_sources:
             return "none"
         if len(self.shift_sources) == 1:
-            return self.shift_sources[0]
-        return f"{len(self.shift_sources)}_{law.util.create_hash(sorted(self.shift_sources))}"
+            return self.build_repr(self.shift_sources[0])
+        return self.build_repr(sorted(self.shift_sources), prepend_count=True)
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
@@ -2468,6 +2453,22 @@ class HistHookMixin(ConfigTask):
         "plotting to update a potentially nested dictionary of histograms; default: empty",
     )
 
+    def _get_hist_hook(self, name: str) -> Callable:
+        func = None
+        if not self.has_single_config():
+            # only check the analysis
+            func = self.analysis_inst.x("hist_hooks", {}).get(name)
+        elif not (func := self.config_inst.x("hist_hooks", {}).get(name)):
+            # check the config, fallback to the analysis
+            func = self.analysis_inst.x("hist_hooks", {}).get(name)
+
+        if not func:
+            raise KeyError(
+                f"hist hook '{name}' not found in 'hist_hooks' for {self.config_mode()} config task {self!r}",
+            )
+
+        return func
+
     def invoke_hist_hooks(
         self,
         hists: dict[od.Config, dict[od.Process, Any]],
@@ -2484,18 +2485,7 @@ class HistHookMixin(ConfigTask):
                 continue
 
             # get the hook
-            func = None
-            if self.has_single_config():
-                # check the config, fallback to the analysis
-                if not (func := self.config_inst.x("hist_hooks", {}).get(hook)):
-                    func = self.analysis_inst.x("hist_hooks", {}).get(hook)
-            else:
-                # only check the analysis
-                func = self.analysis_inst.x("hist_hooks", {}).get(hook)
-            if not func:
-                raise KeyError(
-                    f"hist hook '{hook}' not found in 'hist_hooks' for {self.config_mode()} config task {self!r}",
-                )
+            func = self._get_hist_hook(hook)
 
             # validate it
             if not callable(func):
@@ -2512,10 +2502,13 @@ class HistHookMixin(ConfigTask):
         """
         Return a string representation of the hist hooks.
         """
-        hooks = [hook for hook in self.hist_hooks if hook not in {None, "", law.NO_STR}]
+        # prepare names
+        names = [name for name in self.hist_hooks if name not in {None, "", law.NO_STR}]
 
-        hooks_repr = "__".join(hooks[:5])
-        if len(hooks) > 5:
-            hooks_repr += f"__{law.util.create_hash(hooks[5:])}"
+        # lookup the functions for an alternative store_name
+        names = [
+            getattr(self._get_hist_hook(name), "store_name", name)
+            for name in names
+        ]
 
-        return hooks_repr
+        return self.build_repr(names)

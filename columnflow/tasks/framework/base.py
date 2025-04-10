@@ -34,6 +34,9 @@ logger_dev = law.logger.get_logger(f"{__name__}-dev")
 default_analysis = law.config.get_expanded("analysis", "default_analysis")
 default_config = law.config.get_expanded("analysis", "default_config")
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
+default_repr_max_len = law.config.get_expanded_int("analysis", "repr_max_len")
+default_repr_max_count = law.config.get_expanded_int("analysis", "repr_max_count")
+default_repr_hash_len = law.config.get_expanded_int("analysis", "repr_hash_len")
 
 # placeholder to denote a default value that is resolved dynamically
 RESOLVE_DEFAULT = "DEFAULT"
@@ -804,7 +807,56 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             )
         return first
 
-    def __init__(self, *args, **kwargs):
+    @classmethod
+    def build_repr(
+        cls,
+        objects: Any | Sequence[Any],
+        *,
+        sep: str = "__",
+        prepend_count: bool = False,
+        max_len: int = default_repr_max_len,
+        max_count: int = default_repr_max_count,
+        hash_len: int = default_repr_hash_len,
+    ) -> str:
+        """
+        Generic method to construct a string representation given a single or a sequece of *objects*.
+
+        :param objects: The object or objects to be represented.
+        :param sep: The separator used to join the objects.
+        :param prepend_count: When *True*, the number of objects is prepended to the string, followed by *sep*.
+        :param max_len: The maximum length of the string. If exceeded, the string is truncated and hashed.
+        :param max_count: The maximum number of objects to include in the string. Additional objects are hashed, but
+            only if the resulting representation length does not exceed *max_len*. If so, the overall truncation and
+            hashing is applied instead.
+        :param hash_len: The length of the hash that is appended to the string when it is truncated.
+        :return: The string representation.
+        """
+        if 0 < max_len < hash_len:
+            raise ValueError(f"max_len must be greater than hash_len: {max_len} <= {hash_len}")
+
+        # join objects when a sequence is given
+        if isinstance(objects, (list, tuple)):
+            r = f"{len(objects)}{sep}" if prepend_count else ""
+            # truncate when requested and the expected length will not exceed max_len, in which case the overall
+            # truncation applies the hashing
+            if (
+                0 < max_count < len(objects) and
+                not (0 < max_len < (len(r) + sum(map(len, objects[:max_count])) + len(sep) * max_count + hash_len))
+            ):
+                r += sep.join(objects[:max_count])
+                r += f"{sep}{law.util.create_hash(objects[max_count:], l=hash_len)}"
+            else:
+                r += sep.join(objects)
+        else:
+            r = str(objects)
+
+        # handle overall truncation
+        if max_len > 0 and len(r) > max_len:
+            r = f"{r[:max_len - hash_len - len(sep)]}{sep}{law.util.create_hash(r, l=hash_len)}"
+
+        return r
+
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         # store the analysis instance
