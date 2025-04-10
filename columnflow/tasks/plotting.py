@@ -202,7 +202,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                             hists_config[process_inst] = h
 
                 # after merging all processes, sort the histograms by process order and store them
-                hists[config] = {
+                hists[config_inst] = {
                     proc_inst: hists_config[proc_inst]
                     for proc_inst in sorted(
                         hists_config.keys(), key=list(config_process_map[config_inst].keys()).index,
@@ -224,7 +224,7 @@ class PlotVariablesBase(_PlotVariablesBase):
             if len(self.config_insts) != 1:
                 process_memory = {}
                 merged_hists = {}
-                for config, _hists in hists.items():
+                for _hists in hists.values():
                     for process_inst, h in _hists.items():
                         if process_inst.id in merged_hists:
                             merged_hists[process_inst.id] += h
@@ -235,7 +235,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                 process_insts = list(process_memory.values())
                 hists = {process_memory[process_id]: h for process_id, h in merged_hists.items()}
             else:
-                hists = hists[self.config_inst.name]
+                hists = hists[self.config_inst]
                 process_insts = list(hists.keys())
 
             # axis selections and reductions

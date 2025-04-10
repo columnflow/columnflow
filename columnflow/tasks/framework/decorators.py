@@ -4,7 +4,41 @@ Custom law task method decorators.
 
 import law
 
+from columnflow import env_is_local
 from columnflow.types import Any, Callable
+
+
+@law.decorator.factory(accept_generator=True)
+def only_local_env(
+    fn: Callable,
+    opts: Any,
+    task: law.Task,
+    *args: Any,
+    **kwargs: Any,
+) -> tuple[Callable, Callable, Callable]:
+    """ only_local_env()
+    A decorator that ensures that the task's decorated method is only executed in the local environment, and not by
+    (e.g.) remote jobs.
+
+    :param fn: The decorated function.
+    :param opts: Options for the decorator.
+    :param task: The task instance.
+    :param args: Arguments to be passed to the function call.
+    :param kwargs: Keyword arguments to be passed to the function call.
+    :return: A tuple containing the before_call, call, and after_call functions.
+    """
+    def before_call() -> None:
+        return None
+
+    def call(state: Any) -> Any:
+        if not env_is_local:
+            raise RuntimeError(f"{task.task_family}.{fn.__name__}() can only be executed locally")
+        return fn(task, *args, **kwargs)
+
+    def after_call(state: Any) -> None:
+        return None
+
+    return before_call, call, after_call
 
 
 @law.decorator.factory(callback=None, accept_generator=True)
