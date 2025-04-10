@@ -363,7 +363,7 @@ class MergeHistograms(_MergeHistograms):
         CreateHistograms=CreateHistograms,
     )
 
-    invokes_hist_producer = True
+    invokes_hist_producer = False
 
     @classmethod
     def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
