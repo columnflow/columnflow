@@ -507,21 +507,23 @@ def prepare_stack_plot_config(
     data_hists, data_hide_stat_errors = [], []
     data_label = None
 
+    default_shift = shift_insts[0].name if len(shift_insts) == 1 else "nominal"
+
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
         proc_hide_stat_errors = get_attr_or_aux(process_inst, "hide_stat_errors", hide_stat_errors)
         if process_inst.is_data:
-            data_hists.append(remove_residual_axis_single(h, "shift", select_value="nominal"))
+            data_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
             data_hide_stat_errors.append(proc_hide_stat_errors)
             if data_label is None:
                 data_label = process_inst.label
         elif get_attr_or_aux(process_inst, "unstack", False):
-            line_hists.append(remove_residual_axis_single(h, "shift", select_value="nominal"))
+            line_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
             line_colors.append(process_inst.color1)
             line_labels.append(process_inst.label)
             line_hide_stat_errors.append(proc_hide_stat_errors)
         else:
-            mc_hists.append(remove_residual_axis_single(h, "shift", select_value="nominal"))
+            mc_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
             mc_colors.append(process_inst.color1)
             mc_edgecolors.append(process_inst.color2)
             mc_labels.append(process_inst.label)
