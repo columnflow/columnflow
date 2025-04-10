@@ -28,7 +28,7 @@ from collections import OrderedDict
 import law
 import luigi
 
-from columnflow import env_is_dev, env_is_remote, docs_url, release_url
+from columnflow import env_is_dev, env_is_remote, docs_url, github_url
 from columnflow.types import Callable, Any, Sequence, Union, ModuleType
 
 
@@ -188,11 +188,26 @@ def get_docs_url(*parts: str, anchor: str | None = None) -> str:
     return url
 
 
+def get_github_url(*parts: str) -> str:
+    """
+    Returns a URL pointing to the repository on github including additional URL fragments *parts*.
+    """
+    url = "/".join([github_url, *(str(part).strip("/") for part in parts)])
+    return url
+
+
 def get_release_url(tag: str) -> str:
     """
     Returns a URL pointing to the release notes of a particular tag.
     """
-    return f"{release_url}/v{tag.lstrip('/v')}"
+    return get_github_url("releases", "tag", f"v{tag.lstrip('/v')}")
+
+
+def get_code_url(*parts: str, branch: str = "master") -> str:
+    """
+    Returns a URL pointing to specific code on the github repository, defined by *parts* and the corresponding *branch*.
+    """
+    return get_github_url("blob", branch, *parts)
 
 
 def create_random_name() -> str:

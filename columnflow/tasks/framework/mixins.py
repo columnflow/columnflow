@@ -21,27 +21,29 @@ from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
 from columnflow.reduction import Reducer
 from columnflow.production import Producer
-from columnflow.weight import WeightProducer
+from columnflow.histograming import HistProducer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
-from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler
-from columnflow.util import maybe_import, DotDict
+from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler, TaskArrayFunction
+from columnflow.util import maybe_import, DotDict, get_docs_url, get_code_url
 
 ak = maybe_import("awkward")
 
+
+logger = law.logger.get_logger(__name__)
 logger_dev = law.logger.get_logger(f"{__name__}-dev")
 
 
 class ArrayFunctionClassMixin(ConfigTask):
 
-    def array_function_cls_repr(self, array_function) -> str:
+    def array_function_cls_repr(self, array_function_name: str) -> str:
         """
-        Central definition of how to obtain representation of array function from the name
+        Central definition of how to obtain representation of array function from the name.
 
         :param array_function: name of the array function (NOTE: change to class?)
         :return: sring representation of the array function
         """
-        return str(array_function)
+        return str(array_function_name)
 
 
 class ArrayFunctionInstanceMixin(DatasetTask):
@@ -52,7 +54,7 @@ class ArrayFunctionInstanceMixin(DatasetTask):
         """
         return None
 
-    def array_function_inst_repr(self, array_function_inst) -> None:
+    def array_function_inst_repr(self, array_function_inst: TaskArrayFunction) -> None:
         return str(array_function_inst)
 
 
@@ -63,8 +65,7 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
 
     calibrator = luigi.Parameter(
         default=RESOLVE_DEFAULT,
-        description="the name of the calibrator to be applied; default: value of the "
-        "'default_calibrator' analysis aux",
+        description="the name of the calibrator to be applied; default: value of the 'default_calibrator' analysis aux",
     )
 
     @classmethod
@@ -156,8 +157,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
 
         :param calibrator: Name of the calibrator class to instantiate.
         :param params: Arguments forwarded to the calibrator constructor.
-        :raises RuntimeError: If the calibrator class is not
-            :py:attr:`~columnflow.calibration.Calibrator.exposed`.
+        :raises RuntimeError: If the calibrator class is not :py:attr:`~columnflow.calibration.Calibrator.exposed`.
         :return: The calibrator instance.
         """
         calibrator_cls = Calibrator.get_cls(calibrator)
@@ -207,6 +207,10 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         self.calibrator_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_calibrator_inst(self) -> None:
+        if self.calibrator_inst:
+            self.calibrator_inst.run_teardown(task=self)
+
     @property
     def calibrator_repr(self) -> str:
         """
@@ -236,8 +240,8 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
 
     calibrators = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated names of calibrators to be applied; default: value of the "
-        "'default_calibrator' analysis aux",
+        description="comma-separated names of calibrators to be applied; default: value of the 'default_calibrator' "
+        "analysis aux",
         brace_expand=True,
         parse_empty=True,
     )
@@ -289,6 +293,24 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
         parts.insert_after(self.config_store_anchor, "calibrators", f"calib__{self.calibrators_repr}")
         return parts
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: CalibratorClassesMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the calibrator names
+        calibrators = (
+            inst_or_params.get("calibrators")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "calibrators", None)
+        )
+        if calibrators not in {law.NO_STR, None, "", ()}:
+            keys["calibrators"] = [f"calib_{calibrator}" for calibrator in calibrators]
+
+        return keys
+
 
 class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
     """
@@ -320,8 +342,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
 
         :param calibrators: Name of the calibrator class to instantiate.
         :param params: Arguments forwarded to the calibrator constructors.
-        :raises RuntimeError: If any calibrator class is not
-            :py:attr:`~columnflow.calibration.Calibrator.exposed`.
+        :raises RuntimeError: If any calibrator class is not :py:attr:`~columnflow.calibration.Calibrator.exposed`.
         :return: The list of calibrator instances.
         """
         inst_dict = cls.get_calibrator_dict(params) if params else None
@@ -330,9 +351,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         for calibrator in calibrators:
             calibrator_cls = Calibrator.get_cls(calibrator)
             if not calibrator_cls.exposed:
-                raise RuntimeError(
-                    f"cannot use unexposed calibrator '{calibrator}' in {cls.__name__}",
-                )
+                raise RuntimeError(f"cannot use unexposed calibrator '{calibrator}' in {cls.__name__}")
             insts.append(calibrator_cls(inst_dict=inst_dict))
 
         return insts
@@ -532,8 +551,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
 
         :param selector: Name of the selector class to instantiate.
         :param params: Arguments forwarded to the selector constructor.
-        :raises RuntimeError: If the selector class is not
-            :py:attr:`~columnflow.selection.Selector.exposed`.
+        :raises RuntimeError: If the selector class is not :py:attr:`~columnflow.selection.Selector.exposed`.
         :return: The selector instance.
         """
         selector_cls = Selector.get_cls(selector)
@@ -581,6 +599,10 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
     def _array_function_post_init(self, **kwargs) -> None:
         self.selector_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
+
+    def teardown_selector_inst(self) -> None:
+        if self.selector_inst:
+            self.selector_inst.run_teardown(task=self)
 
     @property
     def selector_repr(self) -> str:
@@ -635,7 +657,20 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
                 container=container,
                 default_str="default_reducer",
                 multi_strategy="same",
-            ) or "cf_default"
+            )
+
+            # !! to be removed in a future release
+            if not params["reducer"]:
+                # fallback to cf's default and trigger a verbose warning
+                params["reducer"] = "cf_default"
+                docs_url = get_docs_url("user_guide", "02_03_transition.html")
+                code_url = get_code_url("columnflow", "reduction", "default.py")
+                logger.warning_once(
+                    "reducer_undefined",
+                    "the resolution of the '--reducer' parameter resulted in an empty value, most likely caused by a "
+                    f"missing auxiliary field 'default_reducer' in your configuration; see {docs_url} for more "
+                    f"information; using '{params['reducer']}' ({code_url}) as a fallback",
+                )
 
         return params
 
@@ -762,6 +797,10 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
         self.reducer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_reducer_inst(self) -> None:
+        if self.reducer_inst:
+            self.reducer_inst.run_teardown(task=self)
+
     @property
     def reducer_repr(self) -> str:
         """
@@ -791,8 +830,7 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
 
     producer = luigi.Parameter(
         default=RESOLVE_DEFAULT,
-        description="the name of the producer to be applied; default: value of the "
-        "'default_producer' analysis aux",
+        description="the name of the producer to be applied; default: value of the 'default_producer' analysis aux",
     )
 
     @classmethod
@@ -934,6 +972,10 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         self.producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_producer_inst(self) -> None:
+        if self.producer_inst:
+            self.producer_inst.run_teardown(task=self)
+
     @property
     def producer_repr(self) -> str:
         """
@@ -963,8 +1005,8 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
 
     producers = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated names of producers to be applied; default: value of the "
-        "'default_producer' analysis aux",
+        description="comma-separated names of producers to be applied; default: value of the 'default_producer' "
+        "analysis aux",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1016,6 +1058,24 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
         parts.insert_after(self.config_store_anchor, "producers", f"prod__{self.producers_repr}")
         return parts
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: ProducerClassesMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the producer names
+        producers = (
+            inst_or_params.get("producers")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "producers", None)
+        )
+        if producers not in {law.NO_STR, None, "", ()}:
+            keys["producers"] = [f"prod_{producer}" for producer in producers]
+
+        return keys
+
 
 class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
     """
@@ -1047,8 +1107,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
 
         :param producers: Name of the producer class to instantiate.
         :param params: Arguments forwarded to the producer constructors.
-        :raises RuntimeError: If any producer class is not
-            :py:attr:`~columnflow.production.Producer.exposed`.
+        :raises RuntimeError: If any producer class is not :py:attr:`~columnflow.production.Producer.exposed`.
         :return: The list of producer instances.
         """
         inst_dict = cls.get_producer_dict(params) if params else None
@@ -1057,9 +1116,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         for producer in producers:
             producer_cls = Producer.get_cls(producer)
             if not producer_cls.exposed:
-                raise RuntimeError(
-                    f"cannot use unexposed producer '{producer}' in {cls.__name__}",
-                )
+                raise RuntimeError(f"cannot use unexposed producer '{producer}' in {cls.__name__}")
             insts.append(producer_cls(inst_dict=inst_dict))
 
         return insts
@@ -1132,9 +1189,8 @@ class MLModelMixinBase(ConfigTask):
     """
     Base mixin to include a machine learning application into tasks.
 
-    Inheriting from this mixin will allow a task to instantiate and access a
-    :py:class:`~columnflow.ml.MLModel` instance with name *ml_model*, which is an input parameter
-    for this task.
+    Inheriting from this mixin will allow a task to instantiate and access a :py:class:`~columnflow.ml.MLModel` instance
+    with name *ml_model*, which is an input parameter for this task.
     """
 
     ml_model = luigi.Parameter(
@@ -1148,15 +1204,15 @@ class MLModelMixinBase(ConfigTask):
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
+
     exclude_params_index = {"ml_model_inst"}
     exclude_params_repr = {"ml_model_inst"}
     exclude_params_sandbox = {"ml_model_inst"}
     exclude_params_remote_workflow = {"ml_model_inst"}
-
     exclude_params_repr_empty = {"ml_model"}
 
     @property
-    def ml_model_repr(self):
+    def ml_model_repr(self) -> str:
         """
         Returns a string representation of the ML model instance.
         """
@@ -1168,9 +1224,9 @@ class MLModelMixinBase(ConfigTask):
         Get the required parameters for the task, preferring the ``--ml-model`` set on task-level
         via CLI.
 
-        This method first checks if the ``--ml-model`` parameter is set at the task-level via the command line.
-        If it is, this parameter is preferred and added to the '_prefer_cli' key in the kwargs dictionary.
-        The method then calls the 'req_params' method of the superclass with the updated kwargs.
+        This method first checks if the ``--ml-model`` parameter is set at the task-level via the command line. If it
+        is, this parameter is preferred and added to the '_prefer_cli' key in the kwargs dictionary. The method then
+        calls the 'req_params' method of the superclass with the updated kwargs.
 
         :param inst: The current task instance.
         :param kwargs: Additional keyword arguments that may contain parameters for the task.
@@ -1192,9 +1248,8 @@ class MLModelMixinBase(ConfigTask):
         """
         Get requested *ml_model* instance.
 
-        This method retrieves the requested *ml_model* instance.
-        If *requested_configs* are provided, they are used for the training of
-        the ML application.
+        This method retrieves the requested *ml_model* instance. If *requested_configs* are provided, they are used for
+        the training of the ML application.
 
         :param ml_model: Name of :py:class:`~columnflow.ml.MLModel` to load.
         :param analysis_inst: Forward this analysis inst to the init function of new MLModel sub class.
@@ -1202,7 +1257,6 @@ class MLModelMixinBase(ConfigTask):
         :param kwargs: Additional keyword arguments to forward to the :py:class:`~columnflow.ml.MLModel` instance.
         :return: :py:class:`~columnflow.ml.MLModel` instance.
         """
-
         ml_model_inst: MLModel = MLModel.get_cls(ml_model)(analysis_inst, **kwargs)
         if requested_configs:
             configs = ml_model_inst.training_configs(list(requested_configs))
@@ -1241,20 +1295,22 @@ class MLModelMixinBase(ConfigTask):
 
 class MLModelTrainingMixin(
     MLModelMixinBase,
-    ProducerClassesMixin,
-    SelectorClassMixin,
     CalibratorClassesMixin,
+    SelectorClassMixin,
+    ReducerClassMixin,
+    ProducerClassesMixin,
 ):
     """
     A mixin class for training machine learning models.
     """
+
     single_config = False
 
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         # NOTE: we can only build TAF insts from the MLModel after ml_model_inst is set
-        if not cls.resolution_task_class:
-            raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
+        if not cls.resolution_task_cls:
+            raise ValueError(f"resolution_task_cls must be set for multi-config task {cls.task_family}")
 
         cls.get_known_shifts(params, shifts)
 
@@ -1271,8 +1327,8 @@ class MLModelTrainingMixin(
                 logger_dev.debug(
                     f"building taf insts for {ml_model_inst.cls_name} {config_inst.name}, {dataset_inst.name}",
                 )
-                cls.resolution_task_class.resolve_instances(_params, shifts)
-                cls.resolution_task_class.get_known_shifts(_params, shifts)
+                cls.resolution_task_cls.resolve_instances(_params, shifts)
+                cls.resolution_task_cls.get_known_shifts(_params, shifts)
 
         params["known_shifts"] = shifts
 
@@ -1283,13 +1339,12 @@ class MLModelTrainingMixin(
         """
         Resolve the parameter values for the given parameters.
 
-        This method retrieves the parameters and resolves the ML model instance and the configs.
-        It also calls the model's setup hook.
+        This method retrieves the parameters and resolves the ML model instance and the configs. It also calls the
+        model's setup hook.
 
         :param params: A dictionary of parameters that may contain the analysis instance and ML model.
         :return: A dictionary containing the resolved parameters.
-        :raises Exception: If the ML model instance received configs to define training configs,
-            but did not define any.
+        :raises Exception: If the ML model instance received configs to define training configs, but did not define any.
         """
         # NOTE: we need to resolve ml_model_inst before CSPs because the ml_model_inst itself defines
         # used CSPs and datasets
@@ -1314,8 +1369,8 @@ class MLModelTrainingMixin(
         params["configs"] = tuple(ml_model_inst.training_configs(list(_configs)))
         if not params["configs"]:
             raise Exception(
-                f"MLModel '{ml_model_inst.cls_name}' received configs '{_configs}' to define "
-                "training configs, but did not define any",
+                f"MLModel '{ml_model_inst.cls_name}' received configs '{_configs}' to define training configs, but did "
+                "not define any",
             )
         ml_model_inst._set_configs(params["configs"])
 
@@ -1335,9 +1390,8 @@ class MLModelTrainingMixin(
 
     def store_parts(self) -> law.util.InsertableDict[str, str]:
         """
-        Generate a dictionary of store parts for the current instance.
-
-        This method extends the base method to include the ML model parameter.
+        Generate a dictionary of store parts for the current instance. This method extends the base method to include
+        the ML model parameter.
 
         :return: An InsertableDict containing the store parts.
         """
@@ -1378,7 +1432,7 @@ class MLModelMixin(MLModelMixinBase):
         )
 
         # when both config_inst and ml_model are set, initialize the ml_model_inst
-        if all(params.get(x) not in (None, law.NO_STR) for x in ("config_inst", "ml_model")):
+        if all(params.get(x) not in {None, law.NO_STR} for x in ("config_inst", "ml_model")):
             if not params.get("ml_model_inst"):
                 params["ml_model_inst"] = cls.get_ml_model_inst(
                     params["ml_model"],
@@ -1408,10 +1462,12 @@ class MLModelMixin(MLModelMixinBase):
 
 
 class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
+
     preparation_producer_inst = DerivableInstParameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
+
     exclude_params_index = {"preparation_producer_inst"}
     exclude_params_repr = {"preparation_producer_inst"}
     exclude_params_sandbox = {"preparation_producer_inst"}
@@ -1423,11 +1479,11 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
     def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
         return cls.get_array_function_dict(params)
 
-    # @property
-    # def preparation_producer(self):
-    #     return self.ml_model_inst.preparation_producer(self.analysis_inst)
-
     build_producer_inst = ProducerMixin.build_producer_inst
+
+    def teardown_preparation_producer_inst(self) -> None:
+        if self.preparation_producer_inst:
+            self.preparation_producer_inst.run_teardown(task=self)
 
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
@@ -1443,6 +1499,7 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
 
 
 class MLModelDataMixin(PreparationProducerMixin):
+
     single_config = True
     allow_empty_ml_model = False
 
@@ -1461,15 +1518,14 @@ class MLModelsMixin(ConfigTask):
 
     ml_models = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated names of ML models to be applied; default: value of the "
-        "'default_ml_model' config",
+        description="comma-separated names of ML models to be applied; default: value of the 'default_ml_model' config",
         brace_expand=True,
         parse_empty=True,
     )
 
-    allow_empty_ml_models = True
-
     exclude_params_repr_empty = {"ml_models"}
+
+    allow_empty_ml_models = True
 
     @property
     def ml_models_repr(self) -> str:
@@ -1555,15 +1611,14 @@ class MLModelsMixin(ConfigTask):
         return columns
 
 
-class WeightProducerClassMixin(ArrayFunctionClassMixin):
+class HistProducerClassMixin(ArrayFunctionClassMixin):
     """
-    Mixin to include and access single :py:class:`~columnflow.weight.WeightProducer` class.
+    Mixin to include and access single :py:class:`~columnflow.histograming.HistProducer` class.
     """
 
-    weight_producer = luigi.Parameter(
+    hist_producer = luigi.Parameter(
         default=RESOLVE_DEFAULT,
-        description="the name of the weight producer to be applied; default: value of the "
-        "'default_weight_producer' config",
+        description="the name of the hist producer to be applied; default: value of the 'default_hist_producer' config",
     )
 
     @classmethod
@@ -1572,111 +1627,119 @@ class WeightProducerClassMixin(ArrayFunctionClassMixin):
 
         # resolve the default class if necessary
         if (container := cls._get_config_container(params)):
-            params["weight_producer"] = cls.resolve_config_default(
-                param=params.get("weight_producer"),
+            params["hist_producer"] = cls.resolve_config_default(
+                param=params.get("hist_producer"),
                 task_params=params,
                 container=container,
-                default_str="default_weight_producer",
+                default_str="default_hist_producer",
                 multi_strategy="same",
             )
+
+            # !! to be removed in a future release
+            if not params["hist_producer"]:
+                # fallback to cf's default and trigger a verbose warning
+                params["hist_producer"] = "cf_default"
+                docs_url = get_docs_url("user_guide", "02_03_transition.html")
+                code_url = get_code_url("columnflow", "histograming", "default.py")
+                logger.warning_once(
+                    "hist_producer_undefined",
+                    "the resolution of the '--hist-producer' parameter resulted in an empty value, most likely caused "
+                    f"by a missing auxiliary field 'default_hist_producer' in your configuration; see {docs_url} for "
+                    f"more information; using '{params['hist_producer']}' ({code_url}) as a fallback",
+                )
 
         return params
 
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
-        # prefer --weight-producer set on task-level via cli
-        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"weight_producer"}
+        # prefer --hist-producer set on task-level via cli
+        kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"hist_producer"}
         return super().req_params(inst, **kwargs)
 
     @property
-    def weight_producer_repr(self) -> str:
+    def hist_producer_repr(self) -> str:
         """
-        Return a string representation of the weight producer class.
+        Return a string representation of the hist producer class.
         """
-        return self.array_function_cls_repr(self.weight_producer)
+        return self.array_function_cls_repr(self.hist_producer)
 
     def store_parts(self) -> law.util.InsertableDict:
         """
         :return: Dictionary with parts that will be translated into an output directory path.
         """
         parts = super().store_parts()
-        # NOTE: anticipate that WeightProducer will be generalized to HistProducer, so use "hist" rather than "weight"
-        #       already for output paths to be forward-compatible
-        parts.insert_after(self.config_store_anchor, "weight_producer", f"hist__{self.weight_producer_repr}")
+        parts.insert_after(self.config_store_anchor, "hist_producer", f"hist__{self.hist_producer_repr}")
         return parts
 
     @classmethod
     def get_config_lookup_keys(
         cls,
-        inst_or_params: WeightProducerClassMixin | dict[str, Any],
+        inst_or_params: HistProducerClassMixin | dict[str, Any],
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
 
-        # add the weight producer name
+        # add the hist producer name
         producer = (
-            inst_or_params.get("weight_producer")
+            inst_or_params.get("hist_producer")
             if isinstance(inst_or_params, dict)
-            else getattr(inst_or_params, "weight_producer", None)
+            else getattr(inst_or_params, "hist_producer", None)
         )
         if producer not in (law.NO_STR, None, ""):
-            # NOTE: use "hist", same as in store_parts
-            keys["weight_producer"] = f"hist_{producer}"
+            keys["hist_producer"] = f"hist_{producer}"
 
         return keys
 
 
-class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
+class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
     """
-    Mixin to include and access a single :py:class:`~columnflow.weight.WeightProducer` instance.
+    Mixin to include and access a single :py:class:`~columnflow.histograming.HistProducer` instance.
     """
 
-    weight_producer_inst = DerivableInstParameter(
+    hist_producer_inst = DerivableInstParameter(
         default=None,
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
 
-    exclude_params_index = {"weight_producer_inst"}
-    exclude_params_repr = {"weight_producer_inst"}
-    exclude_params_sandbox = {"weight_producer_inst"}
-    exclude_params_remote_workflow = {"weight_producer_inst"}
+    exclude_params_index = {"hist_producer_inst"}
+    exclude_params_repr = {"hist_producer_inst"}
+    exclude_params_sandbox = {"hist_producer_inst"}
+    exclude_params_remote_workflow = {"hist_producer_inst"}
 
-    # decides whether the task itself invokes the weight_producer
-    invokes_weight_producer = False
+    # decides whether the task itself invokes the hist_producer
+    invokes_hist_producer = False
 
     @classmethod
-    def get_weight_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+    def get_hist_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
         return cls.get_array_function_dict(params)
 
     @classmethod
-    def build_weight_producer_inst(
+    def build_hist_producer_inst(
         cls,
-        weight_producer: str,
+        hist_producer: str,
         params: dict[str, Any] | None = None,
     ) -> Producer:
         """
-        Instantiate and return the :py:class:`~columnflow.weight.WeightProducer` instance.
+        Instantiate and return the :py:class:`~columnflow.histograming.HistProducer` instance.
 
-        :param producer: Name of the weight producer class to instantiate.
-        :param params: Arguments forwarded to the weight producer constructor.
-        :raises RuntimeError: If the weight producer class is not
-            :py:attr:`~columnflow.weight.WeightProducer.exposed`.
-        :return: The weight producer instance.
+        :param producer: Name of the hist producer class to instantiate.
+        :param params: Arguments forwarded to the hist producer constructor.
+        :raises RuntimeError: If the hist producer class is not
+            :py:attr:`~columnflow.histograming.HistProducer.exposed`.
+        :return: The hist producer instance.
         """
-        weight_producer_cls = WeightProducer.get_cls(weight_producer)
-        if not weight_producer_cls.exposed:
-            raise RuntimeError(
-                f"cannot use unexposed weight_producer '{weight_producer}' in {cls.__name__}",
-            )
+        hist_producer_cls = HistProducer.get_cls(hist_producer)
+        if not hist_producer_cls.exposed:
+            raise RuntimeError(f"cannot use unexposed hist_producer '{hist_producer}' in {cls.__name__}")
 
-        inst_dict = cls.get_weight_producer_dict(params) if params else None
-        return weight_producer_cls(inst_dict=inst_dict)
+        inst_dict = cls.get_hist_producer_dict(params) if params else None
+        return hist_producer_cls(inst_dict=inst_dict)
 
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
-        # add the weight producer instance
-        if not params.get("weight_producer_inst"):
-            params["weight_producer_inst"] = cls.build_weight_producer_inst(
-                params["weight_producer"],
+        # add the hist producer instance
+        if not params.get("hist_producer_inst"):
+            params["hist_producer_inst"] = cls.build_hist_producer_inst(
+                params["hist_producer"],
                 params,
             )
 
@@ -1696,9 +1759,9 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         :param params: Dictionary of task parameters.
         :param shifts: TaskShifts object to adjust.
         """
-        # get the weight producer, update it and add its shifts
-        weight_producer_shifts = params["weight_producer_inst"].all_shifts
-        (shifts.local if cls.invokes_weight_producer else shifts.upstream).update(weight_producer_shifts)
+        # get the hist producer, update it and add its shifts
+        hist_producer_shifts = params["hist_producer_inst"].all_shifts
+        (shifts.local if cls.invokes_hist_producer else shifts.upstream).update(hist_producer_shifts)
 
         super().get_known_shifts(params, shifts)
 
@@ -1706,27 +1769,31 @@ class WeightProducerMixin(ArrayFunctionInstanceMixin, WeightProducerClassMixin):
         super().__init__(*args, **kwargs)
 
         # overwrite the sandbox when set
-        if self.invokes_weight_producer and (sandbox := self.weight_producer_inst.get_sandbox()):
+        if self.invokes_hist_producer and (sandbox := self.hist_producer_inst.get_sandbox()):
             self.reset_sandbox(sandbox)
 
     def _array_function_post_init(self, **kwargs) -> None:
-        self.weight_producer_inst.run_post_init(task=self, **kwargs)
+        self.hist_producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
+    def teardown_hist_producer_inst(self) -> None:
+        if self.hist_producer_inst:
+            self.hist_producer_inst.run_teardown(task=self)
+
     @property
-    def weight_producer_repr(self) -> str:
+    def hist_producer_repr(self) -> str:
         """
-        Return a string representation of the weight producer instance.
+        Return a string representation of the hist producer instance.
         """
-        return self.array_function_inst_repr(self.weight_producer_inst)
+        return self.array_function_inst_repr(self.hist_producer_inst)
 
 
 class InferenceModelClassMixin(ConfigTask):
 
     inference_model = luigi.Parameter(
         default=RESOLVE_DEFAULT,
-        description="the name of the inference model to be used; default: value of the "
-        "'default_inference_model' config",
+        description="the name of the inference model to be used; default: value of the 'default_inference_model' "
+        "config",
     )
 
     @classmethod
@@ -1818,8 +1885,8 @@ class InferenceModelMixin(InferenceModelClassMixin):
 
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
-        if not cls.resolution_task_class:
-            raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
+        if not cls.resolution_task_cls:
+            raise ValueError(f"resolution_task_cls must be set for multi-config task {cls.task_family}")
 
         cls.get_known_shifts(params, shifts)
 
@@ -1837,8 +1904,8 @@ class InferenceModelMixin(InferenceModelClassMixin):
                     "dataset": dataset,
                 }
                 logger_dev.debug(f"building taf insts for {config_inst.name}, {dataset}")
-                cls.resolution_task_class.resolve_instances(_params, shifts)
-                cls.resolution_task_class.get_known_shifts(_params, shifts)
+                cls.resolution_task_cls.resolve_instances(_params, shifts)
+                cls.resolution_task_cls.get_known_shifts(_params, shifts)
 
         params["known_shifts"] = shifts
 
@@ -1879,7 +1946,6 @@ class CategoriesMixin(ConfigTask):
                     task_params=params,
                     container=container,
                     default_str="default_categories",
-                    # groups_str="category_groups",
                     multi_strategy="union",
                 )
                 # resolve them
@@ -1911,9 +1977,9 @@ class VariablesMixin(ConfigTask):
 
     variables = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated variable names or patterns to select; can also be the key "
-        "of a mapping defined in the 'variable_group' auxiliary data of the config; when empty, "
-        "uses all variables of the config; empty default",
+        description="comma-separated variable names or patterns to select; can also be the key of a mapping defined in "
+        "the 'variable_group' auxiliary data of the config; when empty, uses all variables of the config; empty "
+        "default",
         brace_expand=True,
         parse_empty=True,
     )
@@ -1932,7 +1998,7 @@ class VariablesMixin(ConfigTask):
         # resolve variables
         if (variables := params.get("variables", law.no_value)) != law.no_value:
             # when empty, use the ones defined on class level
-            if variables in ((), (RESOLVE_DEFAULT,)) and cls.default_variables:
+            if variables in {(), (RESOLVE_DEFAULT,)} and cls.default_variables:
                 variables = tuple(cls.default_variables)
 
             # additional resolution and expansion requires a config
@@ -2008,7 +2074,7 @@ class VariablesMixin(ConfigTask):
 
 
 class DatasetsProcessesMixin(ConfigTask):
-    # single_config = True
+
     datasets = law.CSVParameter(
         default=(),
         description="comma-separated dataset names or patters to select; can also be the key of a mapping defined in "
@@ -2137,8 +2203,8 @@ class DatasetsProcessesMixin(ConfigTask):
 
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
-        if not cls.resolution_task_class:
-            raise ValueError(f"resolution_task_class must be set for multi-config task {cls.task_family}")
+        if not cls.resolution_task_cls:
+            raise ValueError(f"resolution_task_cls must be set for multi-config task {cls.task_family}")
 
         cls.get_known_shifts(params, shifts)
 
@@ -2158,8 +2224,8 @@ class DatasetsProcessesMixin(ConfigTask):
                     "dataset": dataset,
                 }
                 logger_dev.debug(f"building taf insts for {config_inst.name}, {dataset}")
-                cls.resolution_task_class.resolve_instances(_params, shifts)
-                cls.resolution_task_class.get_known_shifts(_params, shifts)
+                cls.resolution_task_cls.resolve_instances(_params, shifts)
+                cls.resolution_task_cls.get_known_shifts(_params, shifts)
 
         params["known_shifts"] = shifts
 
@@ -2195,6 +2261,7 @@ class DatasetsProcessesMixin(ConfigTask):
 
 
 class ShiftSourcesMixin(ConfigTask):
+
     shift_sources = law.CSVParameter(
         default=(),
         description="comma-separated shift source names (without direction) or patterns to select; can also be the key "
@@ -2317,10 +2384,7 @@ class ChunkedIOMixin(ConfigTask):
 
         for route in get_ak_routes(ak_array):
             if ak.any(~np.isfinite(ak.flatten(route.apply(ak_array), axis=None))):
-                raise ValueError(
-                    f"found one or more non-finite values in column '{route.column}' "
-                    f"of array {ak_array}",
-                )
+                raise ValueError(f"found one or more non-finite values in column '{route.column}' of array {ak_array}")
 
     @classmethod
     def raise_if_overlapping(cls, ak_arrays: Sequence[ak.Array]) -> None:
@@ -2400,9 +2464,8 @@ class HistHookMixin(ConfigTask):
 
     hist_hooks = law.CSVParameter(
         default=(),
-        description="names of functions in the config's auxiliary dictionary 'hist_hooks' that are "
-        "invoked before plotting to update a potentially nested dictionary of histograms; "
-        "default: empty",
+        description="names of functions in the config's auxiliary dictionary 'hist_hooks' that are invoked before "
+        "plotting to update a potentially nested dictionary of histograms; default: empty",
     )
 
     def invoke_hist_hooks(
@@ -2421,7 +2484,6 @@ class HistHookMixin(ConfigTask):
                 continue
 
             # get the hook
-            # TODO: is this actually generalizable / provided via functions by @mafrahm?
             func = None
             if self.has_single_config():
                 # check the config, fallback to the analysis

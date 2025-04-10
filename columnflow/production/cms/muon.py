@@ -85,8 +85,8 @@ def muon_weights(
     subset of muons.
     """
     # flat absolute eta and pt views
-    abs_eta = flat_np_view(abs(events.Muon.eta[muon_mask]), axis=1)
-    pt = flat_np_view(events.Muon.pt[muon_mask], axis=1)
+    abs_eta = flat_np_view(abs(events.Muon["eta"][muon_mask]), axis=1)
+    pt = flat_np_view(events.Muon["pt"][muon_mask], axis=1)
 
     variable_map = {
         "year": self.muon_config.campaign,
@@ -111,7 +111,7 @@ def muon_weights(
         sf_flat = self.muon_sf_corrector(*inputs)
 
         # add the correct layout to it
-        sf = layout_ak_array(sf_flat, events.Muon.pt[muon_mask])
+        sf = layout_ak_array(sf_flat, events.Muon["pt"][muon_mask])
 
         # create the product over all muons in one event
         weight = ak.prod(sf, axis=1, mask_identity=False)

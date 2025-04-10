@@ -13,14 +13,14 @@ In this section, debugging tools already implemented in columnflow to inspect th
 
 ### Debugging outputs of supported extensions (ROOT, Parquet, JSON and Pickle)
 
-columnflow comes equipped with the command ```cf_inspect```, which is available in the columnflow environment after sourcing the ```setup.sh``` file.
+columnflow comes equipped with the command `cf_inspect`, which is available in the columnflow environment after sourcing the `setup.sh` file.
 The command takes the pathes of one or more files (space seperated) you want to inspect as arguments and enters an IPython shell in a development sandbox, where analysis tools and packages (awkward, coffea etc.) as well as the columnflow API are available.
-The input files are loaded into memory and can be accessed via the variables ```objetcs```.
-Make sure to avoid pathes, which are accesed via file protocol (e.g. ```file://```, ```davs://```, etc.), as the file loader may not support this.
+The input files are loaded into memory and can be accessed via the variables `objetcs`.
+Make sure to avoid pathes, which are accesed via file protocol (e.g. `file://`, `davs://`, etc.), as the file loader may not support this.
 
 :::{dropdown} Where to find the path of my outputs?
 
-After running a task, the path of the output can be yielded by appending  ```--print-output <index>``` to the command, where ```<index>``` is the task index in the workflow tree.
+After running a task, the path of the output can be yielded by appending  `--print-output <index>` to the command, where `<index>` is the task index in the workflow tree.
 For the main task of the command the index is 0.
 For example, for the output path of the Selection task, the command would be
 
@@ -32,34 +32,34 @@ law run cf.SelectEvents --version v1 --{other options} --print-output 0
 
 ### Debugging histograms
 
-Histograms can be inspected with the ```cf_inspect``` command as well.
+Histograms can be inspected with the `cf_inspect` command as well.
 However columnflow provides a more specialized tool for this purpose in the form of task.
 This can be the better choice if you want to inspect multiple histograms of multiple variables, since this can offer a more structured way to do so.
-The task can be accessed by calling ```law run cf.InspectHistograms --{options}``` for the nominal shift or ```law run cf.InspectShiftedHistograms --shift-sources {source} --{options}``` for nominal and shifted histograms respectively.
-In both cases the ```{options}``` are the same parameters, which would be passed to create the histogram in the task ```law run cf.CreateHistograms --{options}```.
+The task can be accessed by calling `law run cf.InspectHistograms --{options}` for the nominal shift or `law run cf.InspectShiftedHistograms --shift-sources {source} --{options}` for nominal and shifted histograms respectively.
+In both cases the `{options}` are the same parameters, which would be passed to create the histogram in the task `law run cf.CreateHistograms --{options}`.
 The task also enters an IPython shell in a development sandbox, where the following variables are available:
 
-- ```self```: the task instance, from which the config, analysis and datasets instances can be accessed
-- ```hists```: a dictionary of the histograms, where the keys are the variables names and the values are the histograms
-- ```dataset```: name of the dataset
-- ```variable```: name of the last histogrammed variable in the ```--variables``` option
-- ```h_in```: histogram of ```variable```
+- `self`: the task instance, from which the config, analysis and datasets instances can be accessed
+- `hists`: a dictionary of the histograms, where the keys are the variables names and the values are the histograms
+- `dataset`: name of the dataset
+- `variable`: name of the last histogrammed variable in the `--variables` option
+- `h_in`: histogram of `variable`
 
-An advatage of this debugging methode comapred to the ```cf_inspect``` command is that the histogram files are not required to exist, since the task (like all other tasks) will set up the workflow to produce missing requirements.
+An advatage of this debugging methode comapred to the `cf_inspect` command is that the histogram files are not required to exist, since the task (like all other tasks) will set up the workflow to produce missing requirements.
 
 ## FAQ
 
 ### Troubleshooting:
 
-- "I have changed something in the code and called the corresponding ```law run``` bash command, but the task isn't starting/the task started is further down the task tree."
+- "I have changed something in the code and called the corresponding `law run` bash command, but the task isn't starting/the task started is further down the task tree."
 
-A: Do not forget to remove the corresponding intermediate output(s), for example with ```--remove-output``` (see {doc}`law`), or start a new version with ```--version``` if you do explicitely want to conserve the previous output before the change in the code.
+A: Do not forget to remove the corresponding intermediate output(s), for example with `--remove-output` (see {doc}`law`), or start a new version with `--version` if you do explicitely want to conserve the previous output before the change in the code.
 
 - "Where do I find the outputs of my tasks?"
 
 A: When you run "source setup.sh {name_of_the_setup}" in columnflow for the first time, you choose the storage locations.
 You can find the storage locations again by opening the ".setups/{name_of_the_setup}.sh" file in the analysis repository.
-You may also use law functions to ease the search, namely with the ```--print-output``` command, see in the {doc}`law` section.
+You may also use law functions to ease the search, namely with the `--print-output` command, see in the {doc}`law` section.
 
 - "I get an error telling me that some columns could not be found/produced.
 What can I do?"

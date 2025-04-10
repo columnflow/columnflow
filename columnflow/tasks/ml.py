@@ -28,7 +28,7 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.framework.plotting import ProcessPlotSettingMixin, PlotBase
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.framework.decorators import view_output_plots
+from columnflow.tasks.framework.decorators import view_output_plots, on_failure
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.util import dev_sandbox, safe_div, DotDict, maybe_import
@@ -138,6 +138,7 @@ class PrepareMLEvents(
     @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_preaparation_producer_inst())
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
@@ -245,8 +246,7 @@ class PrepareMLEvents(
                     self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.abspath))
 
         # teardown the optional producer
-        if self.preparation_producer_inst:
-            self.preparation_producer_inst.run_teardown(task=self)
+        self.teardown_preaparation_producer_inst()
 
         # merge output files of all folds
         for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
@@ -455,7 +455,7 @@ class MLTraining(
     RemoteWorkflow,
 ):
     # use the MergeMLEvents task to trigger upstream TaskArrayFunction initialization
-    resolution_task_class = MergeMLEvents
+    resolution_task_cls = MergeMLEvents
 
     single_config = False
     allow_empty_ml_model = False
@@ -656,6 +656,7 @@ class MLEvaluation(
     @law.decorator.log
     @law.decorator.localize
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_preparation_producer_inst())
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, sorted_ak_to_parquet, update_ak_array, add_ak_aliases,
@@ -775,8 +776,7 @@ class MLEvaluation(
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # teardown the optional producer
-        if self.preparation_producer_inst:
-            self.preparation_producer_inst.run_teardown(task=self)
+        self.teardown_preparation_producer_inst()
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]

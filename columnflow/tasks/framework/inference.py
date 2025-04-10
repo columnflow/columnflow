@@ -11,7 +11,7 @@ import order as od
 
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
-    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, WeightProducerClassMixin,
+    CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, HistProducerClassMixin,
     InferenceModelMixin, HistHookMixin, MLModelsMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
@@ -28,7 +28,7 @@ class SerializeInferenceModelBase(
     ReducerClassMixin,
     ProducerClassesMixin,
     MLModelsMixin,
-    WeightProducerClassMixin,
+    HistProducerClassMixin,
     InferenceModelMixin,
     HistHookMixin,
     law.LocalWorkflow,
@@ -219,9 +219,9 @@ class SerializeInferenceModelBase(
                     # axis selections
                     h = h[{
                         "process": [
-                            hist.loc(p.id)
+                            hist.loc(p.name)
                             for p in sub_process_insts
-                            if p.id in h.axes["process"]
+                            if p.name in h.axes["process"]
                         ],
                     }]
 

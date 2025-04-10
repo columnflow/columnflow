@@ -263,13 +263,16 @@ class CreateCutflowHistograms(_CreateCutflowHistograms):
                         last_edge_inclusive=self.last_edge_inclusive,
                     )
 
-        # change category axis from int to str
+        # change some axes from int to str
         for var_key in self.variable_tuples.keys():
-            histograms[var_key] = translate_hist_intcat_to_strcat(
-                histograms[var_key],
-                "category",
-                category_map,
-            )
+            # category
+            histograms[var_key] = translate_hist_intcat_to_strcat(histograms[var_key], "category", category_map)
+            # process
+            process_map = {
+                proc_id: self.config_inst.get_process(proc_id).name
+                for proc_id in histograms[var_key].axes["category"]
+            }
+            histograms[var_key] = translate_hist_intcat_to_strcat(histograms[var_key], "process", process_map)
 
         # dump the histograms
         for var_key in histograms.keys():

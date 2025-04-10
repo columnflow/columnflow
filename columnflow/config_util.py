@@ -10,7 +10,7 @@ __all__ = []
 
 import re
 import itertools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import order as od
@@ -308,6 +308,23 @@ def add_shift_aliases(
         shift.x.column_aliases = _aliases
 
 
+def get_shift_from_configs(configs: list[od.Config], shift: str | od.Shift, silent: bool = False) -> od.Shift | None:
+    """
+
+    """
+    if isinstance(shift, od.Shift):
+        shift = shift.name
+
+    for config in configs:
+        if config.has_shift(shift):
+            return config.get_shift(shift)
+
+    if silent:
+        return None
+
+    raise ValueError(f"shift '{shift}' not found in any of the given configs: {configs}")
+
+
 def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) -> list[od.Shift]:
     """
     Takes a *config* object and returns a list of shift instances for both directions given a
@@ -320,6 +337,39 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) ->
         ),
         [],
     )
+
+
+def group_shifts(
+    shifts: od.Shift | Sequence[od.Shift],
+) -> tuple[od.Shift | None, dict[str, tuple[od.Shift, od.Shift]]]:
+    """
+    Takes several :py:class:`order.Shift` instances *shifts* and groups them according to their
+    shift source. The nominal shift, if present, is returned separately. The remaining shifts are
+    grouped by their source and the corresponding up and down shifts are stored in a dictionary.
+    Example:
+    .. code-block:: python
+        # assuming the following shifts exist
+        group_shifts([nominal, x_up, y_up, y_down, x_down])
+        # -> (nominal, {"x": (x_up, x_down), "y": (y_up, y_down)})
+    An exception is raised in case a shift source is represented only by its up or down shift.
+    """
+    nominal = None
+    grouped = defaultdict(lambda: [None, None])
+
+    up_sources = set()
+    down_sources = set()
+    for shift in law.util.make_list(shifts):
+        if shift.name == "nominal":
+            nominal = shift
+        else:
+            grouped[shift.source][shift.is_up] = shift
+            (up_sources if shift.is_up else down_sources).add(shift.source)
+
+    # check completeness of shifts
+    if (diff := up_sources.symmetric_difference(down_sources)):
+        raise ValueError(f"shift sources {diff} are not complete and cannot be grouped")
+
+    return nominal, dict(grouped)
 
 
 def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
@@ -455,8 +505,24 @@ def create_category_combinations(
             return {"id": "+"}
 
         create_category_combinations(cfg, categories, name_fn, kwargs_fn)
+
+    :param config: :py:class:`order.Config` object for which the categories are created.
+    :param categories: Dictionary that maps group names to sequences of categories.
+    :param name_fn: Callable that receives a dictionary mapping group names to categories and
+        returns the name of the newly created category.
+    :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and
+        returns a dictionary of keyword arguments that are forwarded to the category constructor.
+    :param skip_existing: If *True*, skip the creation of a category when it already exists in
+        *config*.
+    :param skip_fn: Callable that receives a dictionary mapping group names to categories and
+        returns *True* if the combination should be skipped.
+    :raises TypeError: If *name_fn* is not a callable.
+    :raises TypeError: If *kwargs_fn* is not a callable when set.
+    :raises ValueError: If a non-unique category id is detected.
+    :return: Number of newly created categories.
     """
     n_created_categories = 0
+    unique_ids_cache = {cat.id for cat, _, _ in config.walk_categories()}
     n_groups = len(categories)
     group_names = list(categories.keys())
 
@@ -501,6 +567,17 @@ def create_category_combinations(
                 # create the new category
                 cat = od.Category(name=cat_name, **kwargs)
                 n_created_categories += 1
+
+                # ID uniqueness check: raise an error when a non-unique id is detected for a new category
+                if isinstance(kwargs["id"], int):
+                    if kwargs["id"] in unique_ids_cache:
+                        matching_cat = config.get_category(kwargs["id"])
+                        if matching_cat.name != cat_name:
+                            raise ValueError(
+                                f"non-unique category id '{kwargs['id']}' for '{cat_name}' has already been used for "
+                                f"category '{matching_cat.name}'",
+                            )
+                    unique_ids_cache.add(kwargs["id"])
 
                 # find direct parents and connect them
                 for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
