@@ -70,7 +70,9 @@ class egamma_scale_corrector(Calibrator):
         https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/66f581d0549e8d67fc55420d8bba15c9369fff7c/examples/egmScaleAndSmearingExample.py
 
         Requires an external file in the config under ``electron_ss``. Example:
+
         .. code-block:: python
+
             cfg.x.external_files = DotDict.wrap({
                 "electron_ss": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-120c4271/POG/EGM/2022_Summer22//electronSS_EtDependent.json.gz",  # noqa
             })
@@ -82,9 +84,9 @@ class egamma_scale_corrector(Calibrator):
 
             cfg.x.eec = EGammaCorrectionConfig(
                 correction_set="EGMScale_Compound_Ele_2022preEE",
-                compound=True,
                 value_type="scale",
                 uncertainty_type="escale",
+                compound=True,
             )
 
         Derivatives of this base class require additional member variables and functions:
@@ -295,7 +297,9 @@ class egamma_resolution_corrector(Calibrator):
         https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/66f581d0549e8d67fc55420d8bba15c9369fff7c/examples/egmScaleAndSmearingExample.py
 
         Requires an external file in the config under ``electron_ss``. Example:
+
         .. code-block:: python
+
             cfg.x.external_files = DotDict.wrap({
                 "electron_ss": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-120c4271/POG/EGM/2022_Summer22/electronSS_EtDependent.json.gz",  # noqa
             })
@@ -307,7 +311,6 @@ class egamma_resolution_corrector(Calibrator):
 
             cfg.x.eec = EGammaCorrectionConfig(
                 correction_set="EGMSmearAndSyst_ElePTsplit_2022preEE",
-                compound=False,
                 value_type="smear",
                 uncertainty_type="esmear",
             )
@@ -350,7 +353,6 @@ class egamma_resolution_corrector(Calibrator):
         sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
         r9 = flat_np_view(events[self.source_field].r9, axis=1)
         flat_seeds = flat_np_view(events[self.source_field].deterministic_seed, axis=1)
-
         pt = flat_np_view(events[self.source_field].rawPt, axis=1)
 
         # prepare arguments
