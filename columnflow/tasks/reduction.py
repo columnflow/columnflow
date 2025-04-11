@@ -15,6 +15,7 @@ import luigi
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ReducerMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
@@ -110,6 +111,7 @@ class ReduceEvents(_ReduceEvents):
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_reducer_inst())
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
@@ -150,11 +152,11 @@ class ReduceEvents(_ReduceEvents):
         # define columns that will be written based on the reducer's produced columns,
         # but taking into account those that should be skipped (e.g. if not all routes added by a collection are needed)
         write_columns: set[Route] = set()
-        skip_columns: set[str] = set()
+        skip_columns: set[Route] = set()
         for c in self.reducer_inst.produced_columns:
             for r in self._expand_keep_column(c):
                 if r.has_tag("skip"):
-                    skip_columns.add(r.column)
+                    skip_columns.add(r)
                 else:
                     write_columns.add(r)
         route_filter = RouteFilter(keep=write_columns, remove=skip_columns)
@@ -229,7 +231,7 @@ class ReduceEvents(_ReduceEvents):
                 self.chunked_io.queue(sorted_ak_to_parquet, (ak.to_packed(events), chunk.abspath))
 
         # teardown the reducer
-        self.reducer_inst.run_teardown(task=self)
+        self.teardown_reducer_inst()
 
         # some logs
         self.publish_message(f"reduced {n_all:_} to {n_reduced:_} events ({safe_div(n_reduced, n_all) * 100:.2f}%)")

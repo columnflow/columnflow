@@ -12,11 +12,12 @@ import law
 import order as od
 
 from columnflow.tasks.framework.base import (
-    Requirements, AnalysisTask, wrapper_factory, RESOLVE_DEFAULT,
+    Requirements, AnalysisTask, ShiftTask, wrapper_factory, RESOLVE_DEFAULT,
 )
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin, SelectorMixin, VariablesMixin, CategoriesMixin, ChunkedIOMixin,
     DatasetsProcessesMixin,
+    CalibratorClassesMixin, SelectorClassMixin,
 )
 from columnflow.tasks.framework.plotting import (
     PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
@@ -197,7 +198,7 @@ class CreateCutflowHistograms(_CreateCutflowHistograms):
 
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
-            unique_category_ids = np.unique(category_ids)
+            unique_category_ids = np.unique(ak.flatten(category_ids))
             if any(cat_id not in category_map for cat_id in unique_category_ids):
                 undefined_category_ids = set(unique_category_ids) - set(category_map)
                 raise ValueError(
@@ -270,7 +271,7 @@ class CreateCutflowHistograms(_CreateCutflowHistograms):
             # process
             process_map = {
                 proc_id: self.config_inst.get_process(proc_id).name
-                for proc_id in histograms[var_key].axes["category"]
+                for proc_id in histograms[var_key].axes["process"]
             }
             histograms[var_key] = translate_hist_intcat_to_strcat(histograms[var_key], "process", process_map)
 
@@ -286,13 +287,21 @@ CreateCutflowHistogramsWrapper = wrapper_factory(
 )
 
 
-class PlotCutflowBase(
-    CalibratorsMixin,
-    SelectorMixin,
+class _PlotCutflowBase(
+    ShiftTask,
+    CalibratorClassesMixin,
+    SelectorClassMixin,
     CategoriesMixin,
     PlotBase,
     law.LocalWorkflow,
     RemoteWorkflow,
+):
+    resolution_task_cls = CreateCutflowHistograms
+    single_config = True
+
+
+class PlotCutflowBase(
+    _PlotCutflowBase,
 ):
     selector_steps = CreateCutflowHistograms.selector_steps
 
@@ -311,6 +320,9 @@ class PlotCutflowBase(
         parts = super().store_parts()
         parts.insert_after(self.config_store_anchor, "plot", f"datasets_{self.datasets_repr}")
         return parts
+
+    def get_plot_shifts(self):
+        return [self.config_inst.get_shift(self.shift)]
 
 
 class _PlotCutflow(
@@ -426,7 +438,7 @@ class PlotCutflow(_PlotCutflow):
                 # select shift
                 if (n_shifts := len(h_in.axes["shift"])) != 1:
                     raise Exception(f"shift axis is supposed to only contain 1 bin, found {n_shifts}")
-                h_in = h_in[{"shift": hist.loc(self.global_shift_inst.id)}]
+                h_in = h_in[{"shift": hist.loc(self.global_shift_inst.name)}]
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
@@ -441,9 +453,9 @@ class PlotCutflow(_PlotCutflow):
                     h = h_in.copy()
                     h = h[{
                         "process": [
-                            hist.loc(p.id)
+                            hist.loc(p.name)
                             for p in sub_process_insts[process_inst]
-                            if p.id in h.axes["process"]
+                            if p.name in h.axes["process"]
                         ],
                     }]
                     h = h[{"process": sum}]
@@ -482,6 +494,7 @@ class PlotCutflow(_PlotCutflow):
                 hists=hists,
                 config_inst=self.config_inst,
                 category_inst=category_inst.copy_shallow(),
+                shift_insts=self.get_plot_shifts(),
                 **self.get_plot_parameters(),
             )
 
@@ -611,7 +624,7 @@ class PlotCutflowVariablesBase(
                 # select shift
                 if (n_shifts := len(h_in.axes["shift"])) != 1:
                     raise Exception(f"shift axis is supposed to only contain 1 bin, found {n_shifts}")
-                h_in = h_in[{"shift": hist.loc(self.global_shift_inst.id)}]
+                h_in = h_in[{"shift": hist.loc(self.global_shift_inst.name)}]
 
                 # loop and extract one histogram per process
                 for process_inst in process_insts:
@@ -626,9 +639,9 @@ class PlotCutflowVariablesBase(
                     h = h_in.copy()
                     h = h[{
                         "process": [
-                            hist.loc(p.id)
+                            hist.loc(p.name)
                             for p in sub_process_insts[process_inst]
-                            if p.id in h.axes["process"]
+                            if p.name in h.axes["process"]
                         ],
                     }]
                     h = h[{"process": sum}]
@@ -755,6 +768,7 @@ class PlotCutflowVariables1D(_PlotCutflowVariables1D):
                     config_inst=self.config_inst,
                     category_inst=category_inst.copy_shallow(),
                     variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                    shift_insts=self.get_plot_shifts(),
                     style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                     **self.get_plot_parameters(),
                 )
@@ -779,6 +793,7 @@ class PlotCutflowVariables1D(_PlotCutflowVariables1D):
                     config_inst=self.config_inst,
                     category_inst=category_inst.copy_shallow(),
                     variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                    shift_insts=self.get_plot_shifts(),
                     style_config={"legend_cfg": {"title": process_inst.label}},
                     **self.get_plot_parameters(),
                 )
@@ -837,6 +852,7 @@ class PlotCutflowVariables2D(_PlotCutflowVariables2D):
                 config_inst=self.config_inst,
                 category_inst=category_inst.copy_shallow(),
                 variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                shift_insts=self.get_plot_shifts(),
                 style_config={"legend_cfg": {"title": f"Step '{step}'"}},
                 **self.get_plot_parameters(),
             )

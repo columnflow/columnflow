@@ -10,13 +10,17 @@ from collections import defaultdict
 import luigi
 import law
 
+from columnflow.types import Any
+
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin
+from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin, ProducerMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
-from columnflow.production import Producer
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div, DotDict
+from columnflow.tasks.framework.parameters import DerivableInstParameter
+
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -131,6 +135,7 @@ class SelectEvents(_SelectEvents):
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_selector_inst())
     def run(self):
         from columnflow.tasks.histograms import CreateHistograms
         from columnflow.columnar_util import (
@@ -254,7 +259,7 @@ class SelectEvents(_SelectEvents):
                     self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # teardown the selector
-        self.selector_inst.run_teardown(task=self)
+        self.teardown_selector_inst()
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
@@ -397,7 +402,7 @@ MergeSelectionStatsWrapper = wrapper_factory(
 class _MergeSelectionMasks(
     CalibratorsMixin,
     SelectorMixin,
-    law.LocalWorkflow,
+    law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
     """
@@ -418,15 +423,26 @@ class MergeSelectionMasks(_MergeSelectionMasks):
         SelectEvents=SelectEvents,
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    norm_weights_producer = "normalization_weights"
+    norm_weight_producer_inst = DerivableInstParameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
 
-        # store the normalization weight producer for MC
-        self.norm_weight_producer = None
-        if self.dataset_inst.is_mc:
-            self.norm_weight_producer = Producer.get_cls("normalization_weights")(
-                inst_dict=self.get_producer_kwargs(self),
-            )
+    @classmethod
+    def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        return cls.get_array_function_dict(params)
+
+    build_producer_inst = ProducerMixin.build_producer_inst
+
+    @classmethod
+    def resolve_instances(cls, params: dict[str, Any], shifts) -> dict[str, Any]:
+        if not params.get("norm_weight_producer_inst"):
+            params["norm_weight_producer_inst"] = cls.build_producer_inst(cls.norm_weights_producer, params)
+
+        params = super().resolve_instances(params, shifts)
+
+        return params
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
@@ -436,7 +452,7 @@ class MergeSelectionMasks(_MergeSelectionMasks):
         reqs = {"selection": self.reqs.SelectEvents.req_different_branching(self)}
 
         if self.dataset_inst.is_mc:
-            reqs["normalization"] = self.norm_weight_producer.run_requires(task=self)
+            reqs["normalization"] = self.norm_weight_producer_inst.run_requires(task=self)
 
         return reqs
 
@@ -449,7 +465,7 @@ class MergeSelectionMasks(_MergeSelectionMasks):
         }
 
         if self.dataset_inst.is_mc:
-            reqs["normalization"] = self.norm_weight_producer.run_requires(task=self)
+            reqs["normalization"] = self.norm_weight_producer_inst.run_requires(task=self)
 
         return reqs
 
@@ -484,8 +500,8 @@ class MergeSelectionMasks(_MergeSelectionMasks):
         # setup the normalization weights producer
         if self.dataset_inst.is_mc:
             self._array_function_post_init()
-            self.norm_weight_producer.run_post_init(task=self)
-            self.norm_weight_producer.run_setup(
+            self.norm_weight_producer_inst.run_post_init(task=self)
+            self.norm_weight_producer_inst.run_setup(
                 task=self,
                 reqs=self.requires()["forest_merge"]["normalization"],
                 inputs=self.input()["forest_merge"]["normalization"],
@@ -516,7 +532,7 @@ class MergeSelectionMasks(_MergeSelectionMasks):
 
             # add normalization weight
             if self.dataset_inst.is_mc:
-                events = self.norm_weight_producer(events, task=self)
+                events = self.norm_weight_producer_inst(events, task=self)
 
             # remove columns
             events = route_filter(events)
@@ -530,7 +546,7 @@ class MergeSelectionMasks(_MergeSelectionMasks):
 
         # teardown the normalization weights producer
         if self.dataset_inst.is_mc:
-            self.norm_weight_producer.run_teardown(task=self)
+            self.norm_weight_producer_inst.run_teardown(task=self)
 
         return chunks
 

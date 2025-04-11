@@ -12,6 +12,7 @@ import law
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import ProducerMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.util import dev_sandbox
 
@@ -79,6 +80,7 @@ class ProduceColumns(_ProduceColumns):
     @law.decorator.log
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_producer_inst())
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
@@ -161,7 +163,7 @@ class ProduceColumns(_ProduceColumns):
                 self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # teardown the producer
-        self.producer_inst.run_teardown(task=self)
+        self.teardown_producer_inst()
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
