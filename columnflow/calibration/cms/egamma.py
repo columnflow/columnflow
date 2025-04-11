@@ -62,13 +62,30 @@ class egamma_scale_corrector(Calibrator):
 
     def call_func(self, events: ak.Array, **kwargs) -> ak.Array:
         """
-        Apply energy corrections to EGamma objects in the events array.
-
-        There are two types of implementations: standard and Et dependent. For Run2 the standard
-        implementation is used, while for Run3 the Et dependent is recommended by the EGammaPog:
-        https://twiki.cern.ch/twiki/bin/viewauth/CMS/EgammSFandSSRun3?rev=41 The Et dependendent
-        recipe follows the example given in:
+        Apply energy corrections to EGamma objects in the events array. There are two types of implementations: standard
+        and Et dependent.
+        For Run2 the standard implementation is used, while for Run3 the Et dependent is recommended by the EGammaPog:
+        https://twiki.cern.ch/twiki/bin/viewauth/CMS/EgammSFandSSRun3?rev=41
+        The Et dependendent recipe follows the example given in:
         https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/66f581d0549e8d67fc55420d8bba15c9369fff7c/examples/egmScaleAndSmearingExample.py
+
+        Requires an external file in the config under ``electron_ss``. Example:
+        .. code-block:: python
+            cfg.x.external_files = DotDict.wrap({
+                "electron_ss": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-120c4271/POG/EGM/2022_Summer22//electronSS_EtDependent.json.gz",  # noqa
+            })
+
+        The pairs of correction set, value and uncertainty type names,  and if a compound method is used should be configured using the :py:class:`EGammaCorrectionConfig` as an
+        auxiliary entry in the config:
+
+        .. code-block:: python
+
+            cfg.x.eec = EGammaCorrectionConfig(
+                correction_set="EGMScale_Compound_Ele_2022preEE",
+                compound=True,
+                value_type="scale",
+                uncertainty_type="escale",
+            )
 
         Derivatives of this base class require additional member variables and functions:
 
@@ -276,6 +293,24 @@ class egamma_resolution_corrector(Calibrator):
         https://twiki.cern.ch/twiki/bin/viewauth/CMS/EgammSFandSSRun3?rev=41 The Et dependendent
         recipe follows the example given in:
         https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/66f581d0549e8d67fc55420d8bba15c9369fff7c/examples/egmScaleAndSmearingExample.py
+
+        Requires an external file in the config under ``electron_ss``. Example:
+        .. code-block:: python
+            cfg.x.external_files = DotDict.wrap({
+                "electron_ss": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-120c4271/POG/EGM/2022_Summer22/electronSS_EtDependent.json.gz",  # noqa
+            })
+
+        The pairs of correction set, value and uncertainty type names, and if a compound method is used should be configured using the :py:class:`EGammaCorrectionConfig` as an
+        auxiliary entry in the config:
+
+        .. code-block:: python
+
+            cfg.x.eec = EGammaCorrectionConfig(
+                correction_set="EGMSmearAndSyst_ElePTsplit_2022preEE",
+                compound=False,
+                value_type="smear",
+                uncertainty_type="esmear",
+            )
 
         Derivatives of this base class require additional member variables and functions:
 
