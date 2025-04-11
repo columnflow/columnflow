@@ -1201,7 +1201,7 @@ class MLModelMixinBase(ConfigTask):
         """
         Returns a string representation of the ML model instance.
         """
-        return self.build_repr(self.ml_model_inst)
+        return self.build_repr(str(self.ml_model_inst))
 
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
@@ -1517,7 +1517,7 @@ class MLModelsMixin(ConfigTask):
         """
         Returns a string representation of the ML models.
         """
-        return self.build_repr(self.ml_model_insts)
+        return self.build_repr(tuple(map(str, self.ml_model_insts)))
 
     @classmethod
     def resolve_param_values_pre_init(cls, params: dict[str, Any]) -> dict[str, Any]:
