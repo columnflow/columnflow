@@ -201,7 +201,7 @@ def draw_hist(
     error_type: str = "variance",
     **kwargs,
 ) -> None:
-    assert error_type in ("variance", "poisson_unweighted", "poisson_weighted")
+    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
 
     if kwargs.get("color", "") is None:
         # when color is set to None, remove it such that matplotlib automatically chooses a color
@@ -213,12 +213,12 @@ def draw_hist(
         "histtype": "step",
     }
     defaults.update(kwargs)
-    if "yerr" not in defaults and not (h.storage_type.accumulator is hist.accumulators.WeightedSum):
-        raise TypeError(
-            "Error bars calculation only implemented for histograms with storage type WeightedSum "
-            "either change the Histogram storage_type or set yerr manually",
-        )
-    if "yerr" not in defaults and (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+    if "yerr" not in defaults:
+        if h.storage_type.accumulator is not hist.accumulators.WeightedSum:
+            raise TypeError(
+                "Error bars calculation only implemented for histograms with storage type WeightedSum "
+                "either change the Histogram storage_type or set yerr manually",
+            )
         yerr = calculate_error(h, error_type)
         # normalize yerr to the histogram = error propagation on standard deviation
         yerr = yerr / norm
@@ -242,7 +242,7 @@ def draw_profile(
     """
     Profiled histograms contains the storage type "Mean" and can therefore not be normalized
     """
-    assert error_type in ("variance", "poisson_unweighted", "poisson_weighted")
+    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
 
     if kwargs.get("color", "") is None:
         # when color is set to None, remove it such that matplotlib automatically chooses a color
@@ -254,12 +254,12 @@ def draw_profile(
         "histtype": "step",
     }
     defaults.update(kwargs)
-    if "yerr" not in defaults and not (h.storage_type.accumulator is hist.accumulators.WeightedSum):
-        raise TypeError(
-            "Error bars calculation only implemented for histograms with storage type WeightedSum "
-            "either change the Histogram storage_type or set yerr manually",
-        )
-    if "yerr" not in defaults and (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+    if "yerr" not in defaults:
+        if h.storage_type.accumulator is not hist.accumulators.WeightedSum:
+            raise TypeError(
+                "Error bars calculation only implemented for histograms with storage type WeightedSum "
+                "either change the Histogram storage_type or set yerr manually",
+            )
         defaults["yerr"] = calculate_error(h, error_type)
     h.plot1d(**defaults)
 
@@ -271,7 +271,7 @@ def draw_errorbars(
     error_type: str = "variance",
     **kwargs,
 ) -> None:
-    assert error_type in ("variance", "poisson_unweighted", "poisson_weighted")
+    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
 
     values = h.values() / norm
 
@@ -285,12 +285,12 @@ def draw_errorbars(
     }
     defaults.update(kwargs)
 
-    if "yerr" not in defaults and not (h.storage_type.accumulator is hist.accumulators.WeightedSum):
-        raise TypeError(
-            "Error bars calculation only implemented for histograms with storage type WeightedSum "
-            "either change the Histogram storage_type or set yerr manually",
-        )
-    if "yerr" not in defaults and (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+    if "yerr" not in defaults:
+        if h.storage_type.accumulator is not hist.accumulators.WeightedSum:
+            raise TypeError(
+                "Error bars calculation only implemented for histograms with storage type WeightedSum "
+                "either change the Histogram storage_type or set yerr manually",
+            )
         yerr = calculate_error(h, error_type)
         # normalize yerr to the histogram = error propagation on standard deviation
         yerr = yerr / norm
