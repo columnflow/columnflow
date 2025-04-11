@@ -226,10 +226,6 @@ class egamma_scale_corrector(Calibrator):
             corr_set = corr_set.compound
         self.scale_corrector = corr_set[self.scale_config.correction_set]
 
-        if not self.scale_config.compound:
-            # check version, does not exist for compound
-            assert self.scale_corrector.version in [0, 1, 2]
-
 
 class egamma_resolution_corrector(Calibrator):
 
@@ -459,10 +455,6 @@ class egamma_resolution_corrector(Calibrator):
         if self.resolution_cfg.compound:
             corr_set = corr_set.compound
         self.resolution_corrector = corr_set[self.resolution_cfg.correction_set]
-
-        if not self.resolution_cfg.compound:
-            # check versions, does not exist for compound version
-            assert self.resolution_corrector.version in [0, 1, 2]
 
         # use deterministic seeds for random smearing if requested
         if self.deterministic_seed_index >= 0:
