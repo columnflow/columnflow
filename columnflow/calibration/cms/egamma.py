@@ -63,21 +63,26 @@ class egamma_scale_corrector(Calibrator):
         """
         Apply energy corrections to EGamma objects in the events array.
 
-        This implementation follows the recommendations from the EGamma POG:
-        https://twiki.cern.ch/twiki/bin/view/CMS/EgammSFandSSRun3#Scale_And_Smearings_Example
+        There are two types of implementations: standard and Et dependent. For Run2 the standard
+        implementation is used, while for Run3 the Et dependent is recommended by the EGammaPog:
+        https://twiki.cern.ch/twiki/bin/viewauth/CMS/EgammSFandSSRun3?rev=41 The Et dependendent
+        recipe follows the example given in:
+        https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/66f581d0549e8d67fc55420d8bba15c9369fff7c/examples/egmScaleAndSmearingExample.py
 
-        Derivatives of this base class require additional member variables and
-        functions:
+        Derivatives of this base class require additional member variables and functions:
 
-        - *source_field*: The field name of the EGamma objects in the events array (i.e. `Electron` or `Photon`).
-        - *get_correction_file*: Function to retrieve the correction file, e.g.from the list ,of external files in the current `config_inst`.
+        - *source_field*: The field name of the EGamma objects in the events array (i.e. `Electron`
+            or `Photon`).
+        - *get_correction_file*: Function to retrieve the correction file, e.g.from
+            the list, of external files in the current `config_inst`.
         - *get_scale_config*: Function to retrieve the configuration for the energy correction.
-            This config must be an instance of :py:class:`~columnflow.calibration.cms.egamma.EGammaCorrectionConfig`.
+            This config must be an instance of
+            :py:class:`~columnflow.calibration.cms.egamma.EGammaCorrectionConfig`.
 
-        If no raw pt (i.e., pt before any corrections) is available, use the nominal pt.
-        The correction tool only supports flat arrays, so inputs are converted to a flat numpy view first.
-        Corrections are always applied to the raw pt, which is important if more than one correction is applied in a
-        row. The final corrections must be applied to the current pt.
+        If no raw pt (i.e., pt before any corrections) is available, use the nominal pt. The
+        correction tool only supports flat arrays, so inputs are converted to a flat numpy view
+        first. Corrections are always applied to the raw pt, which is important if more than one
+        correction is applied in a row. The final corrections must be applied to the current pt.
 
         If :py:attr:`with_uncertainties` is set to `True`, the scale uncertainties are calculated.
         The scale uncertainties are only available for simulated data.
@@ -88,9 +93,9 @@ class egamma_scale_corrector(Calibrator):
         :notes:
             - Varied corrections are only applied to Monte Carlo (MC) data.
             - EGamma energy correction is only applied to real data.
-            - Changes are applied to the views and directly propagate to the original awkward arrays.
+            - Changes are applied to the views and directly propagate to the original awkward
+                arrays.
         """
-
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
         if "rawPt" not in events[self.source_field].fields:
             events = set_ak_column_f32(
@@ -265,11 +270,13 @@ class egamma_resolution_corrector(Calibrator):
         """
         Apply energy resolution corrections to EGamma objects in the events array.
 
-        This implementation follows the recommendations from the EGamma POG:
-        https://twiki.cern.ch/twiki/bin/view/CMS/EgammSFandSSRun3#Scale_And_Smearings_Example
+        There are two types of implementations: standard and Et dependent. For Run2 the standard
+        implementation is used, while for Run3 the Et dependent is recommended by the EGammaPog:
+        https://twiki.cern.ch/twiki/bin/viewauth/CMS/EgammSFandSSRun3?rev=41 The Et dependendent
+        recipe follows the example given in:
+        https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/66f581d0549e8d67fc55420d8bba15c9369fff7c/examples/egmScaleAndSmearingExample.py
 
-        Derivatives of this base class require additional member variables and
-        functions:
+        Derivatives of this base class require additional member variables and functions:
 
         - *source_field*: The field name of the EGamma objects in the events array (i.e. `Electron` or `Photon`).
         - *get_correction_file*: Function to retrieve the correction file, e.g.
