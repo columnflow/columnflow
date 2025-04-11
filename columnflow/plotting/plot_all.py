@@ -19,7 +19,7 @@ from columnflow.plotting.plot_util import (
     get_cms_label,
     remove_label_placeholders,
     apply_label_placeholders,
-    calculate_error,
+    calculate_stat_error,
 )
 
 hist = maybe_import("hist")
@@ -219,10 +219,10 @@ def draw_hist(
                 "Error bars calculation only implemented for histograms with storage type WeightedSum "
                 "either change the Histogram storage_type or set yerr manually",
             )
-        yerr = calculate_error(h, error_type)
+        yerr = calculate_stat_error(h, error_type)
         # normalize yerr to the histogram = error propagation on standard deviation
         yerr = yerr / norm
-        # replace inf with nan for any bin where norm = 0 and calculate_error returns a non zero value
+        # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
         if np.any(np.isinf(yerr)):
             yerr[np.isinf(yerr)] = np.nan
         defaults["yerr"] = yerr
@@ -260,7 +260,7 @@ def draw_profile(
                 "Error bars calculation only implemented for histograms with storage type WeightedSum "
                 "either change the Histogram storage_type or set yerr manually",
             )
-        defaults["yerr"] = calculate_error(h, error_type)
+        defaults["yerr"] = calculate_stat_error(h, error_type)
     h.plot1d(**defaults)
 
 
@@ -291,10 +291,10 @@ def draw_errorbars(
                 "Error bars calculation only implemented for histograms with storage type WeightedSum "
                 "either change the Histogram storage_type or set yerr manually",
             )
-        yerr = calculate_error(h, error_type)
+        yerr = calculate_stat_error(h, error_type)
         # normalize yerr to the histogram = error propagation on standard deviation
         yerr = yerr / norm
-        # replace inf with nan for any bin where norm = 0 and calculate_error returns a non zero value
+        # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
         if np.any(np.isinf(yerr)):
             yerr[np.isinf(yerr)] = np.nan
         defaults["yerr"] = yerr

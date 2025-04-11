@@ -1021,7 +1021,7 @@ def remove_label_placeholders(
     return re.sub(f"__{sel}__", "", label)
 
 
-def calculate_error(
+def calculate_stat_error(
     hist: hist.Hist,
     error_type: str,
 ) -> dict:
@@ -1032,7 +1032,6 @@ def calculate_error(
         - 'poisson_unweighted': the plotted error is the poisson error for each bin
         - 'poisson_weighted': the plotted error is the poisson error for each bin, weighted by the variance
     """
-    logger = law.logger.get_logger(__name__)
 
     # determine the error type
     if error_type == "variance":
