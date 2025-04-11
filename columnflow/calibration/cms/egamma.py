@@ -28,9 +28,10 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 @dataclass
 class EGammaCorrectionConfig:
-    correction_set: str = "Scale"
+    correction_set: str
+    value_type: str
+    uncertainty_type: str
     compound: bool = False
-    corrector_strings: dict[str] = field(default_factory=dict)
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
@@ -137,7 +138,7 @@ class egamma_scale_corrector(Calibrator):
 
         # varied corrections are only applied to MC
         if self.with_uncertainties and self.dataset_inst.is_mc:
-            scale_uncertainties = self.scale_corrector.evaluate(self.scale_config.corrector_strings["type"], *args)
+            scale_uncertainties = self.scale_corrector.evaluate(self.scale_config.uncertainty_type, *args)
             scales_up = (1 + scale_uncertainties)
             scales_down = (1 - scale_uncertainties)
 
@@ -160,7 +161,7 @@ class egamma_scale_corrector(Calibrator):
         # and do not need to be inserted into the events chunk again
         # EGamma energy correction is ONLY applied to DATA
         if self.dataset_inst.is_data:
-            scales_nom = self.scale_corrector("total_correction", *args)
+            scales_nom = self.scale_corrector(self.scale_config.value_type, *args)
             pt_application *= scales_nom
 
         return events
@@ -334,14 +335,14 @@ class egamma_resolution_corrector(Calibrator):
 
         # calculate the smearing scale
         # as mentioned in the example above, allows us to apply them directly to the MC simulation.
-        rho = self.resolution_corrector.evaluate(self.resolution_cfg.corrector_strings["type"], *args)
+        rho = self.resolution_corrector.evaluate(self.resolution_cfg.value_type, *args)
 
         # -- stochastic smearing
         # normally distributed random numbers according to EGamma resolution
 
         # varied corrections
         if self.with_uncertainties and self.dataset_inst.is_mc:
-            rho_unc = self.resolution_corrector(self.resolution_cfg.corrector_strings["unc_type"], *args)
+            rho_unc = self.resolution_corrector(self.resolution_cfg.uncertainty_type, *args)
             random_normal_number = functools.partial(ak_random, 0, 1)
             smearing_func = lambda rng_array, variation: rng_array * variation + 1
 
