@@ -11,7 +11,7 @@ import law
 from dataclasses import dataclass
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
@@ -194,7 +194,11 @@ def dy_weights_init(self: Producer) -> None:
 
 
 @dy_weights.requires
-def dy_weights_requires(self: Producer, reqs: dict) -> None:
+def dy_weights_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict,
+) -> None:
     """
     Adds the requirements needed the underlying task to derive the Drell-Yan weights into *reqs*.
     """
@@ -209,9 +213,10 @@ def dy_weights_requires(self: Producer, reqs: dict) -> None:
 @dy_weights.setup
 def dy_weights_setup(
     self: Producer,
+    task: law.Task,
     reqs: dict,
     inputs: dict,
-    reader_targets: InsertableDict,
+    reader_targets: law.util.InsertableDict,
 ) -> None:
     """
     Loads the Drell-Yan weight calculator from the external files bundle and saves them in the
