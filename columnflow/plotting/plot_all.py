@@ -19,6 +19,7 @@ from columnflow.plotting.plot_util import (
     get_cms_label,
     remove_label_placeholders,
     apply_label_placeholders,
+    calculate_error,
 )
 
 hist = maybe_import("hist")
@@ -183,6 +184,7 @@ def draw_stack(
             # solution: transform norm -> [norm]*len(h)
             h = hist.Stack(*[i / norm for i in h])
 
+    # draw only the stack, no error bars/bands with stack = True
     defaults = {
         "ax": ax,
         "stack": True,
@@ -196,19 +198,37 @@ def draw_hist(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
+    error_type: str = "variance",
     **kwargs,
 ) -> None:
+    assert error_type in ("variance", "poisson_unweighted", "poisson_weighted")
+
     if kwargs.get("color", "") is None:
         # when color is set to None, remove it such that matplotlib automatically chooses a color
         kwargs.pop("color")
 
-    h = h / norm
     defaults = {
         "ax": ax,
         "stack": False,
         "histtype": "step",
     }
     defaults.update(kwargs)
+    if "yerr" not in defaults and not (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+        raise TypeError(
+            "Error bars calculation only implemented for histograms with storage type WeightedSum "
+            "either change the Histogram storage_type or set yerr manually",
+        )
+    if "yerr" not in defaults and (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+        yerr = calculate_error(h, error_type)
+        # normalize yerr to the histogram = error propagation on standard deviation
+        yerr = yerr / norm
+        # replace inf with nan for any bin where norm = 0 and calculate_error returns a non zero value
+        if np.any(np.isinf(yerr)):
+            yerr[np.isinf(yerr)] = np.nan
+        defaults["yerr"] = yerr
+
+    h = h / norm
+
     h.plot1d(**defaults)
 
 
@@ -216,11 +236,14 @@ def draw_profile(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
+    error_type: str = "variance",
     **kwargs,
 ) -> None:
     """
     Profiled histograms contains the storage type "Mean" and can therefore not be normalized
     """
+    assert error_type in ("variance", "poisson_unweighted", "poisson_weighted")
+
     if kwargs.get("color", "") is None:
         # when color is set to None, remove it such that matplotlib automatically chooses a color
         kwargs.pop("color")
@@ -231,6 +254,13 @@ def draw_profile(
         "histtype": "step",
     }
     defaults.update(kwargs)
+    if "yerr" not in defaults and not (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+        raise TypeError(
+            "Error bars calculation only implemented for histograms with storage type WeightedSum "
+            "either change the Histogram storage_type or set yerr manually",
+        )
+    if "yerr" not in defaults and (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+        defaults["yerr"] = calculate_error(h, error_type)
     h.plot1d(**defaults)
 
 
@@ -238,31 +268,37 @@ def draw_errorbars(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
+    error_type: str = "variance",
     **kwargs,
 ) -> None:
+    assert error_type in ("variance", "poisson_unweighted", "poisson_weighted")
+
     values = h.values() / norm
-    variances = h.variances() / norm**2
-    # compute asymmetric poisson errors for data
-    # TODO: passing the output of poisson_interval as yerr to mpl.plothist leads to
-    #       buggy error bars and the documentation is clearly wrong (mplhep 0.3.12,
-    #       hist 2.4.0), so adjust the output to make up for that, but maybe update or
-    #       remove the next lines if this is fixed to not correct it "twice"
-    from hist.intervals import poisson_interval
-    yerr = poisson_interval(values, variances)
-    yerr[np.isnan(yerr)] = 0
-    yerr[0] = values - yerr[0]
-    yerr[1] -= values
-    yerr[yerr < 0] = 0
+
     defaults = {
         "x": h.axes[0].centers,
         "y": values,
-        "yerr": yerr,
         "color": "k",
         "linestyle": "none",
         "marker": "o",
         "elinewidth": 1,
     }
     defaults.update(kwargs)
+
+    if "yerr" not in defaults and not (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+        raise TypeError(
+            "Error bars calculation only implemented for histograms with storage type WeightedSum "
+            "either change the Histogram storage_type or set yerr manually",
+        )
+    if "yerr" not in defaults and (h.storage_type.accumulator is hist.accumulators.WeightedSum):
+        yerr = calculate_error(h, error_type)
+        # normalize yerr to the histogram = error propagation on standard deviation
+        yerr = yerr / norm
+        # replace inf with nan for any bin where norm = 0 and calculate_error returns a non zero value
+        if np.any(np.isinf(yerr)):
+            yerr[np.isinf(yerr)] = np.nan
+        defaults["yerr"] = yerr
+
     ax.errorbar(**defaults)
 
 

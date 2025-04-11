@@ -565,6 +565,7 @@ def prepare_stack_plot_config(
                 "norm": line_norm,
                 "label": line_labels[i],
                 "color": line_colors[i],
+                "error_type": "variance",
             },
             # "ratio_kwargs": {
             #     "norm": h.values(),
@@ -588,7 +589,7 @@ def prepare_stack_plot_config(
             "ratio_kwargs": {"norm": h_mc.values()},
         }
 
-    # draw systemetic error for stack
+    # draw systematic error for stack
     if h_mc_stack is not None and mc_syst_hists:
         mc_norm = sum(h_mc.values()) if shape_norm else 1
         plot_config["mc_syst_unc"] = {
@@ -616,12 +617,14 @@ def prepare_stack_plot_config(
             "kwargs": {
                 "norm": data_norm,
                 "label": data_label or "Data",
+                "error_type": "poisson_unweighted",
             },
         }
 
         if h_mc is not None:
             plot_config["data"]["ratio_kwargs"] = {
                 "norm": h_mc.values() * data_norm / mc_norm,
+                "error_type": "poisson_unweighted",
             }
 
         # suppress error bars by overriding `yerr`
@@ -1016,3 +1019,58 @@ def remove_label_placeholders(
         sel = "[A-Z0-9]+"
 
     return re.sub(f"__{sel}__", "", label)
+
+
+def calculate_error(
+    hist: hist.Hist,
+    error_type: str,
+) -> dict:
+    """
+    Calculate the error to be plotted for the given histogram *hist*.
+    Supported error types are:
+        - 'variance': the plotted error is the square root of the variance for each bin
+        - 'poisson_unweighted': the plotted error is the poisson error for each bin
+        - 'poisson_weighted': the plotted error is the poisson error for each bin, weighted by the variance
+    """
+    logger = law.logger.get_logger(__name__)
+
+    # determine the error type
+    if error_type == "variance":
+        yerr = hist.view().variance ** 0.5
+    elif error_type.startswith("poisson"):
+        # compute asymmetric poisson confidence interval
+        from hist.intervals import poisson_interval
+
+        if error_type == "poisson_unweighted":
+            variances = None
+        elif error_type == "poisson_weighted":
+            variances = hist.view().variance
+        else:
+            raise ValueError(f"unknown error type '{error_type}'")
+        values = hist.view().value
+        confidence_interval = poisson_interval(values, variances)
+
+        if error_type == "poisson_weighted":
+            # might happen if some bins are empty, see https://github.com/scikit-hep/hist/blob/5edbc25503f2cb8193cc5ff1eb71e1d8fa877e3e/src/hist/intervals.py#L74  # noqa: E501
+            confidence_interval[np.isnan(confidence_interval)] = 0
+        elif np.any(np.isnan(confidence_interval)):
+            raise ValueError("Unweighted Poisson interval calculation returned NaN values, check Hist package")
+
+        # calculate the error
+        # yerr is the size of the errorbars
+        yerr = np.zeros((2, len(values)), dtype=float)
+        # yerr[0] is the lower error
+        yerr[0] = values - confidence_interval[0]
+        # yerr[1] is the upper error
+        yerr[1] = confidence_interval[1] - values
+
+        if np.any(yerr < 0):
+            logger.warning(
+                "yerr < 0, setting to 0. "
+                "This should not happen, please check your histogram.",
+            )
+            yerr[yerr < 0] = 0
+    else:
+        raise ValueError(f"unknown error type '{error_type}'")
+
+    return yerr
