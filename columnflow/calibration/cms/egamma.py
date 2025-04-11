@@ -340,7 +340,7 @@ class egamma_resolution_corrector(Calibrator):
 
             smearing_up = (
                 smearing_func(
-                    random_normal_number(flat_seeds, rand_func=self.deterministic_normal),
+                    random_normal_number(flat_seeds, rand_func=self.deterministic_normal_up),
                     rho + rho_unc,
                 )
                 if self.deterministic_seed_index >= 0
@@ -352,7 +352,7 @@ class egamma_resolution_corrector(Calibrator):
 
             smearing_down = (
                 smearing_func(
-                    random_normal_number(flat_seeds, rand_func=self.deterministic_normal),
+                    random_normal_number(flat_seeds, rand_func=self.deterministic_normal_down),
                     rho - rho_unc,
                 )
                 if self.deterministic_seed_index >= 0
