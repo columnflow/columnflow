@@ -127,7 +127,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "dy_weight_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/external_files/DY_pTll_weights_v1.json.gz",  # noqa
+            "dy_weight_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/external_files/DY_pTll_weights_v2.json.gz",  # noqa
         })
 
     *get_dy_weight_file* can be adapted in a subclass in case it is stored differently in the external files.
@@ -137,7 +137,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.dy_weight_config = DrellYanConfig(
-            era="2022preEE_NLO",
+            era="2022preEE",
             order="NLO",
             correction="DY_pTll_reweighting",
             unc_correction="DY_pTll_reweighting_N_uncertainty",
@@ -259,17 +259,40 @@ def dy_weights_setup(
     # function to load the config
     get_dy_recoil_config=(lambda self: self.config_inst.x.dy_recoil_config),
 )
-def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+def recoil_corrected_met(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
     Producer for bosonic recoil corrections which are applied to PuppiMET to create a new ``RecoilCorrMET`` collection.
+    See https://cms-higgs-leprare.docs.cern.ch/htt-common/V_recoil for more info.
 
-    Steps:
-      1) Build transverse vectors for MET and the generator-level boson (full and visible).
-      2) Compute the recoil vector U = MET + vis - full in the transverse plane.
-      3) Project U along and perpendicular to the full boson direction.
-      4) Apply the nominal recoil correction and reassemble the corrected MET.
-      5) For each systematic variation, apply the uncertainty correction on H components and reconstruct MET.
+    Requires an external file in the config under ``dy_recoil_sf``:
+
+    .. code-block:: python
+
+        cfg.x.external_files = DotDict.wrap({
+            "dy_recoil_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/external_files/Recoil_corrections_v2.json.gz",
+        })
+
+    *get_dy_recoil_file* can be adapted in a subclass in case it is stored differently in the external files.
+
+    The campaign era and name of the correction set (see link above) should be given as an auxiliary entry in the config:
+
+    .. code-block:: python
+
+        cfg.x.dy_recoil_config = DrellYanConfig(
+            era="2022preEE",
+            order="NLO",
+            correction="Recoil_correction_Rescaling",
+            unc_correction="Recoil_correction_Uncertainty",
+        )
+
+    *get_dy_recoil_config* can be adapted in a subclass in case it is stored differently in the config.
     """
+    # steps:
+    # 1) Build transverse vectors for MET and the generator-level boson (full and visible).
+    # 2) Compute the recoil vector U = MET + vis - full in the transverse plane.
+    # 3) Project U along and perpendicular to the full boson direction.
+    # 4) Apply the nominal recoil correction and reassemble the corrected MET.
+    # 5) For each systematic variation, apply the uncertainty correction on H components and reconstruct MET.
     # Build MET vector (using dummy eta and mass, since only x and y matter)
     met = vector.array({
         "pt": events.PuppiMET.pt,
@@ -391,8 +414,8 @@ def recoil_corrections(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@recoil_corrections.requires
-def recoil_corrections_requires(self: Producer, task: law.Task, reqs: dict) -> None:
+@recoil_corrected_met.requires
+def recoil_corrected_met_requires(self: Producer, task: law.Task, reqs: dict) -> None:
     # Ensure that external files are bundled.
     if "external_files" in reqs:
         return
@@ -401,25 +424,17 @@ def recoil_corrections_requires(self: Producer, task: law.Task, reqs: dict) -> N
     reqs["external_files"] = BundleExternalFiles.req(task)
 
 
-@recoil_corrections.setup
-def recoil_corrections_setup(
+@recoil_corrected_met.setup
+def recoil_corrected_met_setup(
     self: Producer,
     task: law.Task,
     reqs: dict,
     inputs: dict,
     reader_targets: law.util.InsertableDict,
 ) -> None:
-    """
-    Setup the recoil corrections by loading the CorrectionSet via correctionlib.
-    The external recoil correction file should be provided as external_files.recoil.
-    """
+    # load the correction set
     bundle = reqs["external_files"]
-
     correction_set = load_correction_set(self.get_dy_recoil_file(bundle.files))
-
-    # check number of fetched correctors
-    if len(correction_set.keys()) != 4:
-        raise Exception("Expected exactly four types of bosonic recoil corrections")
 
     # Retrieve the corrections used for the nominal correction and for uncertainties.
     self.dy_recoil_config: DrellYanConfig = self.get_dy_recoil_config()
