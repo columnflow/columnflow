@@ -1057,12 +1057,12 @@ def calculate_error(
             raise ValueError("Unweighted Poisson interval calculation returned NaN values, check Hist package")
 
         # calculate the error
-        # yerr is the size of the errorbars
-        yerr = np.zeros((2, len(values)), dtype=float)
-        # yerr[0] is the lower error
-        yerr[0] = values - confidence_interval[0]
-        # yerr[1] is the upper error
-        yerr[1] = confidence_interval[1] - values
+        # yerr_lower is the lower error
+        yerr_lower = values - confidence_interval[0]
+        # yerr_upper is the upper error
+        yerr_upper = confidence_interval[1] - values
+        # yerr is the size of the errorbars to be plotted
+        yerr = np.array([yerr_lower, yerr_upper])
 
         if np.any(yerr < 0):
             logger.warning(
