@@ -70,8 +70,7 @@ class egamma_scale_corrector(Calibrator):
         functions:
 
         - *source_field*: The field name of the EGamma objects in the events array (i.e. `Electron` or `Photon`).
-        - *get_correction_file*: Function to retrieve the correction file, e.g.from the list ,
-        of external files in the current `config_inst`.
+        - *get_correction_file*: Function to retrieve the correction file, e.g.from the list ,of external files in the current `config_inst`.
         - *get_scale_config*: Function to retrieve the configuration for the energy correction.
             This config must be an instance of :py:class:`~columnflow.calibration.cms.egamma.EGammaCorrectionConfig`.
 
@@ -113,7 +112,6 @@ class egamma_scale_corrector(Calibrator):
         r9 = flat_np_view(events[self.source_field].r9, axis=1)
 
         # prepare arguments
-        # we use pt as et since there depends in linear (following the recoomendations)
         # (energy is part of the LorentzVector behavior)
         variable_map = {
             "et": pt_eval,
@@ -314,8 +312,6 @@ class egamma_resolution_corrector(Calibrator):
         r9 = flat_np_view(events[self.source_field].r9, axis=1)
         flat_seeds = flat_np_view(events[self.source_field].deterministic_seed, axis=1)
 
-        # we use pt as et since there depends in linear (following the recommendations)
-        # (energy is part of the LorentzVector behavior)
         pt = flat_np_view(events[self.source_field].rawPt, axis=1)
 
         # prepare arguments
@@ -334,10 +330,6 @@ class egamma_resolution_corrector(Calibrator):
         )
 
         # calculate the smearing scale
-        # available option are for Et: smear, esmear or escale, e = error
-
-        # TODO : ask Marcel/philip about this
-        # NOTE: the presence of the scale uncertainties ("escale") among the "EGMSmearAndSyst",
         # as mentioned in the example above, allows us to apply them directly to the MC simulation.
         rho = self.resolution_corrector.evaluate(self.resolution_cfg.corrector_strings["type"], *args)
 
