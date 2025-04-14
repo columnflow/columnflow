@@ -268,7 +268,7 @@ def draw_errorbars(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
-    error_type: str = "variance",
+    error_type: str = "poisson_unweighted",
     **kwargs,
 ) -> None:
     assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
