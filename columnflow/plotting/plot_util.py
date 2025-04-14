@@ -990,9 +990,12 @@ def apply_label_placeholders(
         label = label.replace("__BREAK__", "\n")
 
     # scale factor
-    if do_apply("SCALE") and "scale" in kwargs and "__SCALE__" in label:
+    if do_apply("SCALE") and "scale" in kwargs:
         scale_str = kwargs.get("scale_format", "$\\times${}").format(kwargs["scale"])
-        label = label.replace("__SCALE__", scale_str)
+        if "__SCALE__" in label:
+            label = label.replace("__SCALE__", scale_str)
+        else:
+            label += scale_str
 
     return label
 
