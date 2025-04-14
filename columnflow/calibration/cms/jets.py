@@ -885,7 +885,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         for junc_dir in ("up", "down"):
             # store pt and phi of the full jet system for each jec uncertainty to propagate met
             if self.propagate_met:
-                jets = events[jet_name]
+                jets = ak.copy(events[jet_name])
                 jets = set_ak_column_f32(jets, "pt", jets[f"pt_jec_{name}_{junc_dir}"])
                 jets = set_ak_column_f32(jets, "mass", jets[f"mass_jec_{name}_{junc_dir}"])
                 jetsum_before_jec_uncertainty[f"jec_{name}_{junc_dir}"] = jets.sum(axis=1)
@@ -950,12 +950,12 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         for name in self.jec_uncertainty_sources:
             for junc_dir in ("up", "down"):
 
-                jets = events[jet_name]
+                jets = ak.copy(events[jet_name])
                 jets = set_ak_column_f32(jets, "pt", jets[f"pt_jec_{name}_{junc_dir}"])
                 jets = set_ak_column_f32(jets, "mass", jets[f"mass_jec_{name}_{junc_dir}"])
                 jetsum = jets.sum(axis=1)
 
-                mets = events[self.met_name]
+                mets = ak.copy(events[self.met_name])
                 mets = set_ak_column_f32(mets, "pt", mets[f"pt_jec_{name}_{junc_dir}"])
                 mets = set_ak_column_f32(mets, "phi", mets[f"phi_jec_{name}_{junc_dir}"])
 
