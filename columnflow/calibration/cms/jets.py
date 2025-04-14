@@ -770,97 +770,101 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         events.Rho.fixedGridRhoFastjetAll
     )
 
-    # variable naming convention
-    variable_map = {
-        "JetEta": events[jet_name].eta,
-        "JetPt": events[jet_name].pt,
-        "Rho": rho,
-    }
+    def get_smearing_factor(events, pt_name):
+        # variable naming convention
+        variable_map = {
+            "JetEta": events[jet_name].eta,
+            "JetPt": events[jet_name][pt_name],
+            "Rho": rho,
+        }
 
-    # pt resolution
-    inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
-    jer = ak_evaluate(self.evaluators["jer"], *inputs)
+        # pt resolution
+        inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
+        jer = ak_evaluate(self.evaluators["jer"], *inputs)
 
-    # JER scale factors and systematic variations
-    jersf = {}
-    for syst in ("nom", "up", "down"):
-        variable_map_syst = dict(variable_map, systematic=syst)
-        inputs = [variable_map_syst[inp.name] for inp in self.evaluators["sf"].inputs]
-        jersf[syst] = ak_evaluate(self.evaluators["sf"], *inputs)
+        # JER scale factors and systematic variations
+        jersf = {}
+        for syst in ("nom", "up", "down"):
+            variable_map_syst = dict(variable_map, systematic=syst)
+            inputs = [variable_map_syst[inp.name] for inp in self.evaluators["sf"].inputs]
+            jersf[syst] = ak_evaluate(self.evaluators["sf"], *inputs)
 
-    # array with all JER scale factor variations as an additional axis
-    # (note: axis needs to be regular for broadcasting to work correctly)
-    jersf = ak.concatenate(
-        [jersf[syst][..., None] for syst in ("nom", "up", "down")],
-        axis=-1,
-    )
-
-    # -- stochastic smearing
-    # normally distributed random numbers according to JER
-    jer_random_normal = (
-        ak_random(0, jer, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
-        if self.deterministic_seed_index >= 0
-        else ak_random(0, jer, rand_func=np.random.Generator(
-            np.random.SFC64(events.event.to_list())).normal,
+        # array with all JER scale factor variations as an additional axis
+        # (note: axis needs to be regular for broadcasting to work correctly)
+        jersf = ak.concatenate(
+            [jersf[syst][..., None] for syst in ("nom", "up", "down")],
+            axis=-1,
         )
-    )
 
-    # scale random numbers according to JER SF
-    jersf2_m1 = jersf ** 2 - 1
-    add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
+        # -- stochastic smearing
+        # normally distributed random numbers according to JER
+        jer_random_normal = (
+            ak_random(0, jer, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
+            if self.deterministic_seed_index >= 0
+            else ak_random(0, jer, rand_func=np.random.Generator(
+                np.random.SFC64(events.event.to_list())).normal,
+            )
+        )
 
-    # broadcast over JER SF variations
-    jer_random_normal, jersf_z = ak.broadcast_arrays(jer_random_normal, add_smear)
+        # scale random numbers according to JER SF
+        jersf2_m1 = jersf ** 2 - 1
+        add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
 
-    # compute smearing factors (stochastic method)
-    smear_factors_stochastic = 1.0 + jer_random_normal * add_smear
+        # broadcast over JER SF variations
+        jer_random_normal, jersf_z = ak.broadcast_arrays(jer_random_normal, add_smear)
 
-    # -- scaling method (using gen match)
+        # compute smearing factors (stochastic method)
+        smear_factors_stochastic = 1.0 + jer_random_normal * add_smear
 
-    # mask negative gen jet indices (= no gen match)
-    gen_jet_idx = events[jet_name][self.gen_jet_idx_column]
-    valid_gen_jet_idxs = ak.mask(gen_jet_idx, gen_jet_idx >= 0)
+        # -- scaling method (using gen match)
 
-    # pad list of gen jets to prevent index error on match lookup
-    max_gen_jet_idx = ak.max(valid_gen_jet_idxs)
-    padded_gen_jets = ak.pad_none(
-        events[gen_jet_name],
-        0 if max_gen_jet_idx is None else (max_gen_jet_idx + 1),
-    )
+        # mask negative gen jet indices (= no gen match)
+        gen_jet_idx = events[jet_name][self.gen_jet_idx_column]
+        valid_gen_jet_idxs = ak.mask(gen_jet_idx, gen_jet_idx >= 0)
 
-    # gen jets that match the reconstructed jets
-    matched_gen_jets = padded_gen_jets[valid_gen_jet_idxs]
+        # pad list of gen jets to prevent index error on match lookup
+        max_gen_jet_idx = ak.max(valid_gen_jet_idxs)
+        padded_gen_jets = ak.pad_none(
+            events[gen_jet_name],
+            0 if max_gen_jet_idx is None else (max_gen_jet_idx + 1),
+        )
 
-    # compute the relative (reco - gen) pt difference
-    pt_relative_diff = (events[jet_name].pt - matched_gen_jets.pt) / events[jet_name].pt
+        # gen jets that match the reconstructed jets
+        matched_gen_jets = padded_gen_jets[valid_gen_jet_idxs]
 
-    # test if matched gen jets are within 3 * resolution
-    is_matched_pt = np.abs(pt_relative_diff) < 3 * jer
-    is_matched_pt = ak.fill_none(is_matched_pt, False)  # masked values = no gen match
+        # compute the relative (reco - gen) pt difference
+        pt_relative_diff = (events[jet_name][pt_name] - matched_gen_jets.pt) / events[jet_name][pt_name]
 
-    # (no check for Delta-R matching criterion; we assume this was done during
-    # nanoAOD production to get the `genJetIdx`)
+        # test if matched gen jets are within 3 * resolution
+        is_matched_pt = np.abs(pt_relative_diff) < 3 * jer
+        is_matched_pt = ak.fill_none(is_matched_pt, False)  # masked values = no gen match
 
-    # broadcast over JER SF variations
-    pt_relative_diff, jersf = ak.broadcast_arrays(pt_relative_diff, jersf)
+        # (no check for Delta-R matching criterion; we assume this was done during
+        # nanoAOD production to get the `genJetIdx`)
 
-    # compute smearing factors (scaling method)
-    smear_factors_scaling = 1.0 + (jersf - 1.0) * pt_relative_diff
+        # broadcast over JER SF variations
+        pt_relative_diff, jersf = ak.broadcast_arrays(pt_relative_diff, jersf)
 
-    # -- hybrid smearing: take smear factors from scaling if there was a match,
-    # otherwise take the stochastic ones
-    smear_factors = ak.where(
-        is_matched_pt[:, :, None],
-        smear_factors_scaling,
-        smear_factors_stochastic,
-    )
+        # compute smearing factors (scaling method)
+        smear_factors_scaling = 1.0 + (jersf - 1.0) * pt_relative_diff
 
-    # ensure array with correctionlib output 'Nan' are set to 0.0 in the next line
-    smear_factors = ak.nan_to_none(smear_factors)
+        # -- hybrid smearing: take smear factors from scaling if there was a match,
+        # otherwise take the stochastic ones
+        smear_factors = ak.where(
+            is_matched_pt[:, :, None],
+            smear_factors_scaling,
+            smear_factors_stochastic,
+        )
 
-    # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
-    smear_factors = ak.fill_none(smear_factors, 0.0)
+        # ensure array with correctionlib output 'Nan' are set to 0.0 in the next line
+        smear_factors = ak.nan_to_none(smear_factors)
 
+        # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
+        smear_factors = ak.fill_none(smear_factors, 0.0)
+
+        return smear_factors
+
+    smear_factors = get_smearing_factor(events, "pt")
     # store pt and phi of the full jet system
     if self.propagate_met:
         jetsum = events[jet_name].sum(axis=1)
@@ -885,6 +889,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
                 jets = set_ak_column_f32(jets, "pt", jets[f"pt_jec_{name}_{junc_dir}"])
                 jets = set_ak_column_f32(jets, "mass", jets[f"mass_jec_{name}_{junc_dir}"])
                 jetsum_before_jec_uncertainty[f"jec_{name}_{junc_dir}"] = jets.sum(axis=1)
+
+            smear_factors = get_smearing_factor(events, f"pt_jec_{name}_{junc_dir}")
 
             # apply the smearing factors to the pt and mass for each jec uncertainty
             events = set_ak_column_f32(events, f"{jet_name}.pt_jec_{name}_{junc_dir}", getattr(
