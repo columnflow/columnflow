@@ -1004,6 +1004,13 @@ def jer_init(self: Calibrator) -> None:
         sources = jec_cfg.uncertainty_sources
         self.jec_uncertainty_sources = sources
 
+    self.uses |= {
+        f"{self.jet_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
+        for shifted_var in ("pt", "mass")
+        for junc_name in sources
+        for junc_dir in ("up", "down")
+    }
+
     self.produces |= {
         f"{self.jet_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
         for shifted_var in ("pt", "mass")
@@ -1015,6 +1022,13 @@ def jer_init(self: Calibrator) -> None:
     if self.propagate_met:
 
         # add shifted MET variables
+        self.uses |= {
+            f"{self.met_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
+            for shifted_var in ("pt", "phi")
+            for junc_name in sources
+            for junc_dir in ("up", "down")
+        }
+
         self.produces |= {
             f"{self.met_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
             for shifted_var in ("pt", "phi")
