@@ -429,6 +429,11 @@ class MergeSelectionMasks(_MergeSelectionMasks):
         visibility=luigi.parameter.ParameterVisibility.PRIVATE,
     )
 
+    exclude_params_index = {"norm_weight_producer_inst"}
+    exclude_params_repr = {"norm_weight_producer_inst"}
+    exclude_params_sandbox = {"norm_weight_producer_inst"}
+    exclude_params_remote_workflow = {"norm_weight_producer_inst"}
+
     @classmethod
     def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
         return cls.get_array_function_dict(params)
