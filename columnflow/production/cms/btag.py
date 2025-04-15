@@ -67,7 +67,7 @@ class BTagSFConfig:
 
 
 @producer(
-    uses={"Jet.{pt,eta,hadronFlavour}"},
+    uses={"Jet.{pt,eta,phi,mass,hadronFlavour}"},
     # only run on mc
     mc_only=True,
     # configurable weight name
