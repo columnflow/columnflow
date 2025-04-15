@@ -480,8 +480,8 @@ class DatacardWriter(object):
 
                 # nominal shape
                 h_nom = sum_hists("nominal") * scale
-                fill_empty(cat_obj, h_nom)
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
+                fill_empty(cat_obj, h_nom)
                 handle_flow(cat_obj, h_nom, nom_name)
                 out_file[nom_name] = h_nom
                 _rates[proc_name] = h_nom.sum().value
@@ -590,6 +590,8 @@ class DatacardWriter(object):
                     raise Exception(f"none of requested processes '{proc_str}' found to create fake data")
                 h_data = sum(h_data[1:], h_data[0].copy())
                 data_name = data_pattern.format(category=cat_name)
+                fill_empty(cat_obj, h_data)
+                handle_flow(cat_obj, h_data, data_name)
                 out_file[data_name] = h_data
                 _rates["data"] = float(h_data.sum().value)
 
