@@ -246,8 +246,8 @@ def example_model(self: InferenceModel) -> None:
         # add config dependent settings
         config_data={
             config_inst.name: self.process_config_spec(
-                # names of processes in the config
-                process=["tt_sl", "tt_dl", "tt_fh"],
+                # name of the (parent) process in the config
+                process="tt",
                 # names of MC datasets in the config
                 mc_datasets=["tt_sl_powheg", "tt_dl_...", ...],
             ),
@@ -284,3 +284,8 @@ This behavior is now covered by a task called `cf.PlotShiftedVariablesPerShift1D
 
 1. If you are interested in creating plots showing the effect of one **or multiple** shifts in the same graph, use the `cf.PlotShiftedVariables1D` task.
 2. If you want to plot the effect of a single up or down variation of a single shift, use the `cf.PlotShiftedVariablesPerShift1D` task (formerly known as `cf.PlotShiftedVariables1D`)
+
+## Miscellaneous smaller updates
+
+- The `SelectorStepsMixin` was removed and its functionality was moved into the standard {py:class}`~columnflow.tasks.framework.mixins.SelectorClassMixin` and {py:class}`~columnflow.tasks.framework.mixins.SelectorMixin` classes.
+- `columnflow.util.InsertableDict` was removed in favor of `law.util.InsertableDict`.
