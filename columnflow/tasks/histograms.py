@@ -302,7 +302,10 @@ class CreateHistograms(_CreateHistograms):
             histograms[var_key] = self.hist_producer_inst.run_post_process_hist(histograms[var_key], task=self)
 
             # check the format after post-processing if no merged preprocessing will take place
-            if not callable(self.hist_producer_inst.post_process_merged_hist_func):
+            if (
+                not self.hist_producer_inst.skip_compatibility_check and
+                not callable(self.hist_producer_inst.post_process_merged_hist_func)
+            ):
                 self.check_histogram_compatibility(histograms[var_key])
 
         # teardown the hist producer
@@ -444,7 +447,8 @@ class MergeHistograms(_MergeHistograms):
             merged = self.hist_producer_inst.run_post_process_merged_hist(merged, task=self)
 
             # ensure the format is compatible
-            CreateHistograms.check_histogram_compatibility(merged)
+            if not self.hist_producer_inst.skip_compatibility_check:
+                CreateHistograms.check_histogram_compatibility(merged)
 
             # write the output
             outputs["hists"][variable_name].dump(merged, formatter="pickle")

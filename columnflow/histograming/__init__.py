@@ -55,6 +55,7 @@ class HistProducer(TaskArrayFunction):
     fill_hist_func = None
     post_process_hist_func = None
     post_process_merged_hist_func = None
+    skip_compatibility_check = False
     exposed = True
 
     @classmethod
@@ -149,6 +150,7 @@ class HistProducer(TaskArrayFunction):
             - *variables*, a list of :py:class:`order.Variable` instances (usually one).
             - *task*, the invoking task instance.
 
+        The return value of the function should be a histogram object or a container with histogram objects.
         The decorator does not return the wrapped function.
         """
         cls.create_hist_func = func
@@ -159,7 +161,7 @@ class HistProducer(TaskArrayFunction):
         Decorator to wrap a function *func* that should be registered as :py:meth:`fill_hist_func`. The function should
         accept three arguments:
 
-            - *h*, the histogram to fill.
+            - *h*, the histogram (or a container with histograms) to fill.
             - *data*, a dictionary with data to fill.
             - *task*, the invoking task instance.
 
@@ -173,7 +175,7 @@ class HistProducer(TaskArrayFunction):
         Decorator to wrap a function *func* that should be registered as :py:meth:`post_process_hist_func`. The function
         should accept two arguments:
 
-            - *h*, the histogram to post process.
+            - *h*, the histogram (or a container with histograms) to post process.
             - *task*, the invoking task instance.
 
         The decorator does not return the wrapped function.
@@ -186,9 +188,10 @@ class HistProducer(TaskArrayFunction):
         Decorator to wrap a function *func* that should be registered as :py:meth:`post_process_merged_hist_func`. The
         function should accept two arguments:
 
-            - *h*, the histogram to post process.
+            - *h*, the histogram (or a container with histograms) to post process.
             - *task*, the invoking task instance.
 
+        The return value of the function should be a histogram object.
         The decorator does not return the wrapped function.
         """
         cls.post_process_merged_hist_func = func
@@ -224,19 +227,19 @@ class HistProducer(TaskArrayFunction):
         if post_process_merged_hist_func:
             self.post_process_merged_hist_func = post_process_merged_hist_func.__get__(self, self.__class__)
 
-    def run_create_hist(self, variables: list[od.Variable], task: law.Task) -> hist.Histogram:
+    def run_create_hist(self, variables: list[od.Variable], task: law.Task) -> Any:
         """
         Invokes the :py:meth:`create_hist_func` of this instance and returns its result, forwarding all arguments.
         """
         return self.create_hist_func(variables, task=task)
 
-    def run_fill_hist(self, h: hist.Histogram, data: dict[str, Any], task: law.Task) -> None:
+    def run_fill_hist(self, h: Any, data: dict[str, Any], task: law.Task) -> None:
         """
         Invokes the :py:meth:`fill_hist_func` of this instance and returns its result, forwarding all arguments.
         """
         return self.fill_hist_func(h, data, task=task)
 
-    def run_post_process_hist(self, h: hist.Histogram, task: law.Task) -> hist.Histogram:
+    def run_post_process_hist(self, h: Any, task: law.Task) -> Any:
         """
         Invokes the :py:meth:`post_process_hist_func` of this instance and returns its result, forwarding all arguments.
         """
@@ -244,7 +247,7 @@ class HistProducer(TaskArrayFunction):
             return h
         return self.post_process_hist_func(h, task=task)
 
-    def run_post_process_merged_hist(self, h: hist.Histogram, task: law.Task) -> hist.Histogram:
+    def run_post_process_merged_hist(self, h: Any, task: law.Task) -> hist.Histogram:
         """
         Invokes the :py:meth:`post_process_merged_hist_func` of this instance and returns its result, forwarding all
         arguments.
