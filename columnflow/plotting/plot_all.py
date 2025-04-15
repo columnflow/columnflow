@@ -221,7 +221,7 @@ def draw_hist(
             )
         yerr = calculate_stat_error(h, error_type)
         # normalize yerr to the histogram = error propagation on standard deviation
-        yerr = yerr / norm
+        yerr = abs(yerr / norm)
         # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
         if np.any(np.isinf(yerr)):
             yerr[np.isinf(yerr)] = np.nan
@@ -293,7 +293,7 @@ def draw_errorbars(
             )
         yerr = calculate_stat_error(h, error_type)
         # normalize yerr to the histogram = error propagation on standard deviation
-        yerr = yerr / norm
+        yerr = abs(yerr / norm)
         # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
         if np.any(np.isinf(yerr)):
             yerr[np.isinf(yerr)] = np.nan

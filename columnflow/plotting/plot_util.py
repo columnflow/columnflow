@@ -481,9 +481,9 @@ def prepare_style_config(
     if variable_inst.discrete_x or "int" in axis_type:
         # remove the "xscale" attribute since it messes up the bin edges
         style_config["ax_cfg"].pop("xscale")
-        style_config["ax_cfg"]["minorxticks"] = []
+        style_config["ax_cfg"]["xminorticks"] = []
     if variable_inst.discrete_y:
-        style_config["ax_cfg"]["minoryticks"] = []
+        style_config["ax_cfg"]["yminorticks"] = []
 
     return style_config
 
