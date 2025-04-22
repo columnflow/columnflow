@@ -10,7 +10,7 @@ import law
 
 from columnflow.types import Any
 from columnflow.calibration import Calibrator, calibrator
-from columnflow.calibration.util import ak_random, propagate_met
+from columnflow.calibration.util import ak_random, propagate_met, sum_transverse
 from columnflow.production.util import attach_coffea_behavior
 from columnflow.util import maybe_import, InsertableDict, DotDict
 from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_column as optional
@@ -481,7 +481,8 @@ def jec_init(self: Calibrator) -> None:
 
     sources = self.uncertainty_sources
     if sources is None:
-        sources = jec_cfg.uncertainty_sources
+        sources = jec_cfg.uncertainty_sources or []
+        self.uncertainty_sources = sources
 
     # register used jet columns
     self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,area,rawFactor}}")
@@ -597,21 +598,15 @@ def jec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: Insert
             for name in names
         ]
 
-    # take sources from constructor or config
-    sources = self.uncertainty_sources
-    if sources is None:
-        sources = jec_cfg.uncertainty_sources
-        self.uncertainty_sources = sources
-
     jec_keys = make_jme_keys(jec_cfg.levels)
     jec_keys_subset_type1_met = make_jme_keys(jec_cfg.levels_for_type1_met)
-    junc_keys = make_jme_keys(sources, is_data=False)  # uncertainties only stored as MC keys
+    junc_keys = make_jme_keys(self.uncertainty_sources, is_data=False)  # uncertainties only stored as MC keys
 
     # store the evaluators
     self.evaluators = {
         "jec": get_evaluators(correction_set, jec_keys),
         "jec_subset_type1_met": get_evaluators(correction_set, jec_keys_subset_type1_met),
-        "junc": dict(zip(sources, get_evaluators(correction_set, junc_keys))),
+        "junc": dict(zip(self.uncertainty_sources, get_evaluators(correction_set, junc_keys))),
     }
 
 
@@ -703,6 +698,8 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     get_jec_config=get_jec_config_default,
     # jec uncertainty sources to propagate jer to, defaults to config when empty
     jec_uncertainty_sources=None,
+    # whether gen jet matching should be performed relative to the nominal jet pt, or the jec varied values
+    gen_jet_matching_nominal=False,
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -747,21 +744,43 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     *get_jer_config* can be adapted in a subclass in case it is stored differently in the config.
 
+    The nominal JER smearing is performed on nominal jets as well as those varied as a result of jet energy corrections.
+    For this purpose, *get_jec_config* and *jec_uncertainty_sources* can be defined to control the considered
+    variations. Consequently, the matching of jets to gen jets which depends on pt values of the former is subject to a
+    choice regarding which pt values to use. If *gen_jet_matching_nominal* is *True*, the nominal pt values are used,
+    and the jec varied pt values otherwise.
+
     Throws an error if running on data.
 
     :param events: awkward array containing events to process
-    """  # noqa
+    """ # noqa
     # use local variables for convenience
     jet_name = self.jet_name
     gen_jet_name = self.gen_jet_name
+    met_name = self.met_name
 
     # fail when running on data
     if self.dataset_inst.is_data:
         raise ValueError("attempt to apply jet energy resolution smearing in data")
 
+    # prepare variations
+    jer_nom, jer_up, jer_down = jer_variations = ["nom", "up", "down"]
+    jec_variations = sum(([f"{unc}_up", f"{unc}_down"] for unc in self.jec_uncertainty_sources), [])
+    assert not (set(jer_variations) & set(jec_variations))
+    postfixes = ["", "_jer_up", "_jer_down"] + [f"_jec_{jec_var}" for jec_var in jec_variations]
+
     # save the unsmeared properties in case they are needed later
     events = set_ak_column_f32(events, f"{jet_name}.pt_unsmeared", events[jet_name].pt)
     events = set_ak_column_f32(events, f"{jet_name}.mass_unsmeared", events[jet_name].mass)
+
+    # normally distributed random numbers per jet for use in stochastic smearing below
+    jer_random_normal = (
+        ak_random(0, 1, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
+        if self.deterministic_seed_index >= 0
+        else ak_random(0, 1, rand_func=np.random.Generator(
+            np.random.SFC64(events.event.to_list())).normal,
+        )
+    )
 
     # obtain rho, which might be located at different routes, depending on the nano version
     rho = (
@@ -770,271 +789,200 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         events.Rho.fixedGridRhoFastjetAll
     )
 
-    def get_smearing_factor(events, pt_name):
-        # variable naming convention
-        variable_map = {
-            "JetEta": events[jet_name].eta,
-            "JetPt": events[jet_name][pt_name],
-            "Rho": rho,
-        }
+    # prepare evaluator variables
+    variable_map = {
+        "JetEta": events[jet_name].eta,
+        "JetPt": events[jet_name].pt,
+        "Rho": rho,
+        "systematic": jer_nom,
+    }
 
-        # pt resolution
-        inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
-        jer = ak_evaluate(self.evaluators["jer"], *inputs)
+    # extract nominal pt resolution
+    inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
+    jerpt = {jer_nom: ak_evaluate(self.evaluators["jer"], *inputs)}
 
-        # JER scale factors and systematic variations
-        jersf = {}
-        for syst in ("nom", "up", "down"):
-            variable_map_syst = dict(variable_map, systematic=syst)
-            inputs = [variable_map_syst[inp.name] for inp in self.evaluators["sf"].inputs]
-            jersf[syst] = ak_evaluate(self.evaluators["sf"], *inputs)
+    # for simplifications below, use the same values for jer variations
+    jerpt[jer_up] = jerpt[jer_nom]
+    jerpt[jer_down] = jerpt[jer_nom]
 
-        # array with all JER scale factor variations as an additional axis
-        # (note: axis needs to be regular for broadcasting to work correctly)
-        jersf = ak.concatenate(
-            [jersf[syst][..., None] for syst in ("nom", "up", "down")],
-            axis=-1,
-        )
+    # extract pt resolutions evaluted for jec uncertainties
+    for jec_var in jec_variations:
+        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_jec_{jec_var}"]}
+        inputs = [_variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
+        jerpt[jec_var] = ak_evaluate(self.evaluators["jer"], *inputs)
 
-        # -- stochastic smearing
-        # normally distributed random numbers according to JER
-        jer_random_normal = (
-            ak_random(0, jer, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
-            if self.deterministic_seed_index >= 0
-            else ak_random(0, jer, rand_func=np.random.Generator(
-                np.random.SFC64(events.event.to_list())).normal,
-            )
-        )
+    # extract scale factors
+    jersf = {}
+    for jer_var in jer_variations:
+        _variable_map = variable_map | {"systematic": jer_var}
+        inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
+        jersf[jer_var] = ak_evaluate(self.evaluators["sf"], *inputs)
 
-        # scale random numbers according to JER SF
-        jersf2_m1 = jersf ** 2 - 1
-        add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
+    # extract scale factors for jec uncertainties
+    for jec_var in jec_variations:
+        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_jec_{jec_var}"]}
+        inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
+        jersf[jec_var] = ak_evaluate(self.evaluators["sf"], *inputs)
 
-        # broadcast over JER SF variations
-        jer_random_normal, jersf_z = ak.broadcast_arrays(jer_random_normal, add_smear)
+    # array with all JER scale factor variations as an additional axis
+    # (note: axis needs to be regular for broadcasting to work correctly)
+    jerpt = ak.concatenate(
+        [jerpt[v][..., None] for v in jer_variations + jec_variations],
+        axis=-1,
+    )
+    jersf = ak.concatenate(
+        [jersf[v][..., None] for v in jer_variations + jec_variations],
+        axis=-1,
+    )
 
-        # compute smearing factors (stochastic method)
-        smear_factors_stochastic = 1.0 + jer_random_normal * add_smear
+    # -- stochastic smearing
 
-        # -- scaling method (using gen match)
+    # scale random numbers according to JER SF
+    jersf2_m1 = jersf**2 - 1
+    add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
 
-        # mask negative gen jet indices (= no gen match)
-        gen_jet_idx = events[jet_name][self.gen_jet_idx_column]
-        valid_gen_jet_idxs = ak.mask(gen_jet_idx, gen_jet_idx >= 0)
+    # compute smearing factors (stochastic method)
+    smear_factors_stochastic = 1.0 + jer_random_normal * jerpt * add_smear
 
-        # pad list of gen jets to prevent index error on match lookup
-        max_gen_jet_idx = ak.max(valid_gen_jet_idxs)
-        padded_gen_jets = ak.pad_none(
-            events[gen_jet_name],
-            0 if max_gen_jet_idx is None else (max_gen_jet_idx + 1),
-        )
+    # -- scaling method (using gen match)
 
-        # gen jets that match the reconstructed jets
-        matched_gen_jets = padded_gen_jets[valid_gen_jet_idxs]
+    # mask negative gen jet indices (= no gen match)
+    gen_jet_idx = events[jet_name][self.gen_jet_idx_column]
+    valid_gen_jet_idxs = ak.mask(gen_jet_idx, gen_jet_idx >= 0)
 
-        # compute the relative (reco - gen) pt difference
-        pt_relative_diff = (events[jet_name][pt_name] - matched_gen_jets.pt) / events[jet_name][pt_name]
+    # pad list of gen jets to prevent index error on match lookup
+    max_gen_jet_idx = ak.max(valid_gen_jet_idxs)
+    padded_gen_jets = ak.pad_none(
+        events[gen_jet_name],
+        0 if max_gen_jet_idx is None else (max_gen_jet_idx + 1),
+    )
 
-        # test if matched gen jets are within 3 * resolution
-        is_matched_pt = np.abs(pt_relative_diff) < 3 * jer
-        is_matched_pt = ak.fill_none(is_matched_pt, False)  # masked values = no gen match
+    # gen jets that match the reconstructed jets
+    matched_gen_jet = padded_gen_jets[valid_gen_jet_idxs]
 
-        # (no check for Delta-R matching criterion; we assume this was done during
-        # nanoAOD production to get the `genJetIdx`)
+    # compute the relative (reco - gen) pt difference
+    if self.gen_jet_matching_nominal:
+        # use nominal pt for matching
+        match_pt = events[jet_name].pt
+    else:
+        # concatenate varied pt values for broadcasting
+        pt_names = ["pt" for _ in jer_variations] + [f"pt_jec_{jec_var}" for jec_var in jec_variations]
+        match_pt = ak.concatenate([events[jet_name][pt_name][..., None] for pt_name in pt_names], axis=-1)
+    pt_relative_diff = 1 - matched_gen_jet.pt / match_pt
 
-        # broadcast over JER SF variations
-        pt_relative_diff, jersf = ak.broadcast_arrays(pt_relative_diff, jersf)
+    # test if matched gen jets are within 3 * resolution
+    # (no check for Delta-R matching criterion; we assume this was done during nanoAOD production to get the genJetIdx)
+    is_matched_pt = np.abs(pt_relative_diff) < 3 * jerpt
+    is_matched_pt = ak.fill_none(is_matched_pt, False)  # masked values = no gen match
 
-        # compute smearing factors (scaling method)
-        smear_factors_scaling = 1.0 + (jersf - 1.0) * pt_relative_diff
+    # compute smearing factors (scaling method)
+    smear_factors_scaling = 1.0 + (jersf - 1.0) * pt_relative_diff
 
-        # -- hybrid smearing: take smear factors from scaling if there was a match,
-        # otherwise take the stochastic ones
-        smear_factors = ak.where(
-            is_matched_pt[:, :, None],
-            smear_factors_scaling,
-            smear_factors_stochastic,
-        )
+    # -- hybrid smearing: take smear factors from scaling if there was a match,
+    # otherwise take the stochastic ones
+    smear_factors = ak.where(is_matched_pt, smear_factors_scaling, smear_factors_stochastic)
 
-        # ensure array with correctionlib output 'Nan' are set to 0.0 in the next line
-        smear_factors = ak.nan_to_none(smear_factors)
+    # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
+    smear_factors = ak.fill_none(smear_factors, 0.0)
 
-        # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
-        smear_factors = ak.fill_none(smear_factors, 0.0)
+    # to allow for code simplifications below, store the reference pt and mass columns upon which the smearing is based
+    # into the events array for cases where it shouldn't already exist
+    for direction in ["up", "down"]:
+        events = set_ak_column_f32(events, f"{jet_name}.pt_jer_{direction}", events[jet_name].pt)
+        events = set_ak_column_f32(events, f"{jet_name}.mass_jer_{direction}", events[jet_name].mass)
+        # when propagating met, do the same for respective columns
+        if self.propagate_met:
+            events = set_ak_column_f32(events, f"{met_name}.pt_jer_{direction}", events[met_name].pt)
+            events = set_ak_column_f32(events, f"{met_name}.phi_jer_{direction}", events[met_name].phi)
 
-        return smear_factors
-
-    smear_factors = get_smearing_factor(events, "pt")
-    # store pt and phi of the full jet system
+    # when propagating met, before smearing is applied, store pt and phi of the full jet system for all variations using
+    # string postfixes as keys
     if self.propagate_met:
-        jetsum = events[jet_name].sum(axis=1)
-        jetsum_pt_before = jetsum.pt
-        jetsum_phi_before = jetsum.phi
+        jetsum_pt_before = {}
+        jetsum_phi_before = {}
+        for postfix in postfixes:
+            jetsum_pt_before[postfix], jetsum_phi_before[postfix] = sum_transverse(
+                events[jet_name][f"pt{postfix}"],
+                events[jet_name].phi,
+            )
 
-    # apply the smearing factors to the pt and mass
-    # (note: apply variations first since they refer to the original pt)
-    events = set_ak_column_f32(events, f"{jet_name}.pt_jer_up", events[jet_name].pt * smear_factors[:, :, 1])
-    events = set_ak_column_f32(events, f"{jet_name}.mass_jer_up", events[jet_name].mass * smear_factors[:, :, 1])
-    events = set_ak_column_f32(events, f"{jet_name}.pt_jer_down", events[jet_name].pt * smear_factors[:, :, 2])
-    events = set_ak_column_f32(events, f"{jet_name}.mass_jer_down", events[jet_name].mass * smear_factors[:, :, 2])
-    events = set_ak_column_f32(events, f"{jet_name}.pt", events[jet_name].pt * smear_factors[:, :, 0])
-    events = set_ak_column_f32(events, f"{jet_name}.mass", events[jet_name].mass * smear_factors[:, :, 0])
-
-    jetsum_before_jec_uncertainty = {}
-    for name in self.jec_uncertainty_sources:
-        for junc_dir in ("up", "down"):
-            # store pt and phi of the full jet system for each jec uncertainty to propagate met
-            if self.propagate_met:
-                jets = ak.copy(events[jet_name])
-                jets = set_ak_column_f32(jets, "pt", jets[f"pt_jec_{name}_{junc_dir}"])
-                jets = set_ak_column_f32(jets, "mass", jets[f"mass_jec_{name}_{junc_dir}"])
-                jetsum_before_jec_uncertainty[f"jec_{name}_{junc_dir}"] = jets.sum(axis=1)
-
-            smear_factors = get_smearing_factor(events, f"pt_jec_{name}_{junc_dir}")
-
-            # apply the smearing factors to the pt and mass for each jec uncertainty
-            events = set_ak_column_f32(events, f"{jet_name}.pt_jec_{name}_{junc_dir}", getattr(
-                events[jet_name], f"pt_jec_{name}_{junc_dir}") * smear_factors[:, :, 0])
-            events = set_ak_column_f32(events, f"{jet_name}.mass_jec_{name}_{junc_dir}", getattr(
-                events[jet_name], f"mass_jec_{name}_{junc_dir}") * smear_factors[:, :, 0])
+    # apply the smearing
+    # (note: this requires that postfixes and smear_factors have the same order, but this should be the case)
+    for i, postfix in enumerate(postfixes):
+        pt_name = f"pt{postfix}"
+        m_name = f"mass{postfix}"
+        events = set_ak_column_f32(events, f"{jet_name}.{pt_name}", events[jet_name][pt_name] * smear_factors[..., i])
+        events = set_ak_column_f32(events, f"{jet_name}.{m_name}", events[jet_name][m_name] * smear_factors[..., i])
 
     # recover coffea behavior
     events = self[attach_coffea_behavior](events, collections=[jet_name], **kwargs)
 
     # met propagation
     if self.propagate_met:
-
         # save unsmeared quantities
-        events = set_ak_column_f32(events, f"{self.met_name}.pt_unsmeared", events[self.met_name].pt)
-        events = set_ak_column_f32(events, f"{self.met_name}.phi_unsmeared", events[self.met_name].phi)
+        events = set_ak_column_f32(events, f"{met_name}.pt_unsmeared", events[met_name].pt)
+        events = set_ak_column_f32(events, f"{met_name}.phi_unsmeared", events[met_name].phi)
 
-        # get pt and phi of all jets after correcting
-        jetsum = events[jet_name].sum(axis=1)
-        jetsum_pt_after = jetsum.pt
-        jetsum_phi_after = jetsum.phi
+        # propagate per variation
+        for postfix in postfixes:
+            # get pt and phi of all jets after correcting
+            jetsum_pt_after, jetsum_phi_after = sum_transverse(
+                events[jet_name][f"pt{postfix}"],
+                events[jet_name].phi,
+            )
 
-        # propagate changes to MET
-        met_pt, met_phi = propagate_met(
-            jetsum_pt_before,
-            jetsum_phi_before,
-            jetsum_pt_after,
-            jetsum_phi_after,
-            events[self.met_name].pt,
-            events[self.met_name].phi,
-        )
-        events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
-        events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
-
-        # syst variations on top of corrected MET
-        met_pt_up, met_phi_up = propagate_met(
-            jetsum_pt_after,
-            jetsum_phi_after,
-            events[jet_name].pt_jer_up,
-            events[jet_name].phi,
-            met_pt,
-            met_phi,
-        )
-        met_pt_down, met_phi_down = propagate_met(
-            jetsum_pt_after,
-            jetsum_phi_after,
-            events[jet_name].pt_jer_down,
-            events[jet_name].phi,
-            met_pt,
-            met_phi,
-        )
-        events = set_ak_column_f32(events, f"{self.met_name}.pt_jer_up", met_pt_up)
-        events = set_ak_column_f32(events, f"{self.met_name}.pt_jer_down", met_pt_down)
-        events = set_ak_column_f32(events, f"{self.met_name}.phi_jer_up", met_phi_up)
-        events = set_ak_column_f32(events, f"{self.met_name}.phi_jer_down", met_phi_down)
-
-        for name in self.jec_uncertainty_sources:
-            for junc_dir in ("up", "down"):
-
-                jets = ak.copy(events[jet_name])
-                jets = set_ak_column_f32(jets, "pt", jets[f"pt_jec_{name}_{junc_dir}"])
-                jets = set_ak_column_f32(jets, "mass", jets[f"mass_jec_{name}_{junc_dir}"])
-                jetsum = jets.sum(axis=1)
-
-                mets = ak.copy(events[self.met_name])
-                mets = set_ak_column_f32(mets, "pt", mets[f"pt_jec_{name}_{junc_dir}"])
-                mets = set_ak_column_f32(mets, "phi", mets[f"phi_jec_{name}_{junc_dir}"])
-
-                met_pt, met_phi = propagate_met(
-                    jetsum_before_jec_uncertainty[f"jec_{name}_{junc_dir}"].pt,
-                    jetsum_before_jec_uncertainty[f"jec_{name}_{junc_dir}"].phi,
-                    jetsum.pt,
-                    jetsum.phi,
-                    mets.pt,
-                    mets.phi,
-                )
-
-                events = set_ak_column_f32(events, f"{self.met_name}.pt_jec_{name}_{junc_dir}", met_pt)
-                events = set_ak_column_f32(events, f"{self.met_name}.phi_jec_{name}_{junc_dir}", met_phi)
+            # propagate changes to MET
+            met_pt, met_phi = propagate_met(
+                jetsum_pt_before[postfix],
+                jetsum_phi_before[postfix],
+                jetsum_pt_after,
+                jetsum_phi_after,
+                events[met_name][f"pt{postfix}"],
+                events[met_name][f"phi{postfix}"],
+            )
+            events = set_ak_column_f32(events, f"{met_name}.pt{postfix}", met_pt)
+            events = set_ak_column_f32(events, f"{met_name}.phi{postfix}", met_phi)
 
     return events
 
 
 @jer.init
 def jer_init(self: Calibrator) -> None:
+    # add jec_cfg for applying nominal smearing to jec variations
+    jec_cfg = self.get_jec_config()
+    jec_sources = self.jec_uncertainty_sources
+    if jec_sources is None:
+        jec_sources = jec_cfg.uncertainty_sources or []
+        self.jec_uncertainty_sources = jec_sources
+        jet_jec_columns = {f"{self.jet_name}.{{pt,mass}}_jec_{jec_source}_{{up,down}}" for jec_source in jec_sources}
+        met_jec_columns = {f"{self.met_name}.{{pt,phi}}_jec_{jec_source}_{{up,down}}" for jec_source in jec_sources}
+
     # determine gen-level jet index column
     lower_first = lambda s: s[0].lower() + s[1:] if s else s
     self.gen_jet_idx_column = lower_first(self.gen_jet_name) + "Idx"
 
     # register used jet columns
     self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,{self.gen_jet_idx_column}}}")
-
-    # register used gen jet columns
     self.uses.add(f"{self.gen_jet_name}.{{pt,eta,phi}}")
+    if jec_sources:
+        self.uses |= jet_jec_columns
 
     # register produced jet columns
     self.produces.add(f"{self.jet_name}.{{pt,mass}}{{,_unsmeared,_jer_up,_jer_down}}")
+    if jec_sources:
+        self.produces |= jet_jec_columns
 
-    # register produced MET columns
+    # additional columns when propagating MET
     if self.propagate_met:
         # register used MET columns
         self.uses.add(f"{self.met_name}.{{pt,phi}}")
+        if jec_sources:
+            self.uses |= met_jec_columns
 
         # register produced MET columns
         self.produces.add(f"{self.met_name}.{{pt,phi}}{{,_jer_up,_jer_down,_unsmeared}}")
-
-    # add jec_cfg for applying smearing to jec variations
-    jec_cfg = self.get_jec_config()
-    sources = self.jec_uncertainty_sources
-    if sources is None:
-        sources = jec_cfg.uncertainty_sources
-        self.jec_uncertainty_sources = sources
-
-    self.uses |= {
-        f"{self.jet_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
-        for shifted_var in ("pt", "mass")
-        for junc_name in sources
-        for junc_dir in ("up", "down")
-    }
-
-    self.produces |= {
-        f"{self.jet_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
-        for shifted_var in ("pt", "mass")
-        for junc_name in sources
-        for junc_dir in ("up", "down")
-    }
-
-    # add MET variables
-    if self.propagate_met:
-
-        # add shifted MET variables
-        self.uses |= {
-            f"{self.met_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
-            for shifted_var in ("pt", "phi")
-            for junc_name in sources
-            for junc_dir in ("up", "down")
-        }
-
-        self.produces |= {
-            f"{self.met_name}.{shifted_var}_jec_{junc_name}_{junc_dir}"
-            for shifted_var in ("pt", "phi")
-            for junc_name in sources
-            for junc_dir in ("up", "down")
-        }
+        if jec_sources:
+            self.produces |= met_jec_columns
 
 
 @jer.requires
