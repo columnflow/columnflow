@@ -54,7 +54,7 @@ def pu_weight(
         "NumTrueInteractions": events.Pileup.nTrueInt,
     }
 
-    any_outlier_mask = ak.zeros_like(indices, dtype=np.bool)
+    any_outlier_mask = ak.zeros_like(events.Pileup.nTrueInt, dtype=np.bool)
     for column_name, syst in (
         ("pu_weight", "nominal"),
         ("pu_weight_minbias_xs_up", "up"),
