@@ -49,16 +49,12 @@ def pu_weight(
         - ``"raise"``: an exception is raised if any event has a pileup weight above the threshold
 
     """
-
-    # compute the indices for looking up weights
-    indices = events.Pileup.nTrueInt.to_numpy().astype("int32") - 1
-
     # map the variable names from the corrector to our columns
     variable_map = {
-        "NumTrueInteractions": indices,
+        "NumTrueInteractions": events.Pileup.nTrueInt,
     }
 
-    any_outlier_mask = ak.zeros_like(indices, dtype=np.bool)
+    any_outlier_mask = ak.zeros_like(events.Pileup.nTrueInt, dtype=np.bool)
     for column_name, syst in (
         ("pu_weight", "nominal"),
         ("pu_weight_minbias_xs_up", "up"),

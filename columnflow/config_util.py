@@ -421,8 +421,24 @@ def create_category_combinations(
             return {"id": "+"}
 
         create_category_combinations(cfg, categories, name_fn, kwargs_fn)
+
+    :param config: :py:class:`order.Config` object for which the categories are created.
+    :param categories: Dictionary that maps group names to sequences of categories.
+    :param name_fn: Callable that receives a dictionary mapping group names to categories and
+        returns the name of the newly created category.
+    :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and
+        returns a dictionary of keyword arguments that are forwarded to the category constructor.
+    :param skip_existing: If *True*, skip the creation of a category when it already exists in
+        *config*.
+    :param skip_fn: Callable that receives a dictionary mapping group names to categories and
+        returns *True* if the combination should be skipped.
+    :raises TypeError: If *name_fn* is not a callable.
+    :raises TypeError: If *kwargs_fn* is not a callable when set.
+    :raises ValueError: If a non-unique category id is detected.
+    :return: Number of newly created categories.
     """
     n_created_categories = 0
+    unique_ids_cache = {cat.id for cat, _, _ in config.walk_categories()}
     n_groups = len(categories)
     group_names = list(categories.keys())
 
@@ -467,6 +483,17 @@ def create_category_combinations(
                 # create the new category
                 cat = od.Category(name=cat_name, **kwargs)
                 n_created_categories += 1
+
+                # ID uniqueness check: raise an error when a non-unique id is detected for a new category
+                if isinstance(kwargs["id"], int):
+                    if kwargs["id"] in unique_ids_cache:
+                        matching_cat = config.get_category(kwargs["id"])
+                        if matching_cat.name != cat_name:
+                            raise ValueError(
+                                f"non-unique category id '{kwargs['id']}' for '{cat_name}' has already been used for "
+                                f"category '{matching_cat.name}'",
+                            )
+                    unique_ids_cache.add(kwargs["id"])
 
                 # find direct parents and connect them
                 for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
