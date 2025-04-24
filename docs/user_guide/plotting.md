@@ -31,7 +31,7 @@ This will run the full analysis chain for the given processes (data, tt, st) and
 :::{dropdown} Where do I find that plot?
 You can add ```--print-output 0``` to every task call, which will print the full filename of all outputs of the requested task.
 Alternatively, you can add ```--fetch-output 0,a``` to directly copy all outputs of this task into the directory you are currently in.
-Finally, there is the ```--view-cmd``` parameter you can add to directly display the plot during the runtime of the task, e.g. via ```--view-cmd evince-previewer``` or ```--view-cmd imgcat```.
+Finally, there is the ```--view-cmd``` parameter you can add to directly display the plot during the runtime of the task, e.g. via ```--view-cmd evince``` or ```--view-cmd imgcat```.
 :::
 
 The ```PlotVariables1D``` task is located at the bottom of our [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph), which means that all tasks leading to ```PlotVariables1D``` will be run for all datasets corresponding to the ```--processes``` we requested using the {py:class}`~columnflow.calibration.Calibrator`s, {py:class}`~columnflow.selection.Selector`, and {py:class}`~columnflow.production.Producer`s (often referred to as CSPs) as requested.
@@ -346,7 +346,7 @@ All plotting tasks also include a ```--view-cmd``` parameter that allows directl
 
 ```shell
 law run cf.PlotVariables1D --version v1 \
-    --processes tt,st --variables n_jet --view-cmd evince-previewer
+    --processes tt,st --variables n_jet --view-cmd evince
 ```
 
 (custom_plot_function)=
