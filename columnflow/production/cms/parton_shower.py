@@ -1,6 +1,14 @@
+# coding: utf-8
+
+"""
+Producers for storing parton shower weights.
+"""
+
+from __future__ import annotations
+
 from columnflow.production import producer, Producer
+from columnflow.columnar_util import set_ak_column
 from columnflow.util import maybe_import, DotDict
-from columnflow.production.cms.scale import set_ak_column_f32
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
