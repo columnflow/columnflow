@@ -15,15 +15,11 @@ np = maybe_import("numpy")
 
 
 @producer(
-    uses={
-        "PSWeight",
-    },
-    produces={
-        "fsr_weight", "fsr_weight_up", "fsr_weight_down",
-        "isr_weight", "isr_weight_up", "isr_weight_down",
-    },
+    uses={"PSWeight"},
+    produces={"{isr,fsr}_weight{,_up,_down}"},
     # only run on mc
     mc_only=True,
+    # indices where to find weight variations in PSWeight
     indices=DotDict(
         isr_weight_up=0,
         fsr_weight_up=1,
