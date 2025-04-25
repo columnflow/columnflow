@@ -38,13 +38,13 @@ def ps_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     Resources:
         - https://cms-nanoaod-integration.web.cern.ch/integration/master/mc94X_doc.html
     """
-
     # setup nominal weights
     ones = np.ones(len(events), dtype=np.float32)
-    events = set_ak_column_f32(events, "fsr_weight", ones)
-    events = set_ak_column_f32(events, "isr_weight", ones)
+    events = set_ak_column(events, "fsr_weight", ones)
+    events = set_ak_column(events, "isr_weight", ones)
 
     # now loop through the names and save the respective normalized PSWeights
     for column, index in self.indices.items():
-        events = set_ak_column_f32(events, column, events.PSWeight[:, index])
+        events = set_ak_column(events, column, events.PSWeight[:, index])
+
     return events
