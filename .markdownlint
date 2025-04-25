@@ -1,10 +1,12 @@
 plugins:
-  # disable max line length
-  md013:
-    enabled: False
-  md033:
-    allowed_elements: "!--,![CDATA[,!DOCTYPE,table,h1,p,img"
-  md026:
-    punctuation: ".,;!。，；！"
   md001:
     enabled: False
+  md013:
+    # disable max line length
+    enabled: False
+  md024:
+    siblings_only: True
+  md026:
+    punctuation: ".,;!。，；！"
+  md033:
+    allowed_elements: "!--,![CDATA[,!DOCTYPE,table,h1,a,p,img,div"

@@ -74,12 +74,19 @@ cf_sandbox() {
     local interactive="false"
     [ -z "${cmd}" ] && cmd="bash -l" && interactive="true"
 
+    # escape some characters
+    cmd="${cmd//\{/\\\{}"
+    cmd="${cmd//\}/\\\}}"
+
+    # create an unespaced representation
+    local cmd_repr="${cmd//\\/}"
+
     # load tools
     CF_SKIP_SETUP="1" source "${CF_BASE}/setup.sh" "" || return "$?"
 
     # run it
     echo "$( cf_color green "sandbox" ): ${sandbox_file_repr}"
-    echo "$( cf_color green "command" ): ${cmd}"
+    echo "$( cf_color green "command" ): ${cmd_repr}"
     cf_color magenta "--- entering sandbox -----------------------------"
     ${interactive} && echo "(ctrl+d or type 'exit' to leave)"
 

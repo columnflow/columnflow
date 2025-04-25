@@ -9,9 +9,9 @@ import functools
 import law
 
 from columnflow.production import Producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column
-from columnflow.columnar_util import DotDict
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -28,7 +28,14 @@ class _ScaleWeightBase(Producer):
     Common base class for the scale weight producers below that join a setup function.
     """
 
-    def setup_func(self, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+    def setup_func(
+        self,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]],
+        inputs: dict[str, Any],
+        reader_targets: law.util.InsertableDict,
+        **kwargs,
+    ) -> None:
         # named weight indices
         self.indices_9 = DotDict(
             mur_down_muf_down=0,
@@ -224,12 +231,19 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
 @murmuf_envelope_weights.setup
 def murmuf_envelope_weights_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
-    # call the super func
-    super(murmuf_envelope_weights, self).setup_func(reqs, inputs, reader_targets)
+    super(murmuf_envelope_weights, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
 
     # create a flat list if indices, skipping those for crossed variations
     self.envelope_indices_9 = [

@@ -10,13 +10,17 @@ from collections import defaultdict
 import luigi
 import law
 
-from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin
+from columnflow.types import Any
+
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin, ProducerMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
-from columnflow.production import Producer
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div, DotDict
+from columnflow.tasks.framework.parameters import DerivableInstParameter
+
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -31,14 +35,23 @@ default_create_selection_hists = law.config.get_expanded_bool(
 )
 
 
-class SelectEvents(
-    SelectorMixin,
+class _SelectEvents(
     CalibratorsMixin,
+    SelectorMixin,
     ChunkedIOMixin,
-    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`SelectEvents`.
+    """
+
+
+class SelectEvents(_SelectEvents):
+
+    # disable selector steps
+    selector_steps = None
+
     # default sandbox, might be overwritten by selector function
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -49,14 +62,8 @@ class SelectEvents(
         CalibrateEvents=CalibrateEvents,
     )
 
-    # register sandbox and shifts found in the chosen selector to this task
-    register_selector_sandbox = True
-    register_selector_shifts = True
-
-    # strategy for handling missing source columns when adding aliases on event chunks
+    invokes_selector = True
     missing_column_alias_strategy = "original"
-
-    # whether histogram outputs should be created
     create_selection_hists = default_create_selection_hists
 
     def workflow_requires(self):
@@ -66,7 +73,11 @@ class SelectEvents(
 
         if not self.pilot:
             reqs["calibrations"] = [
-                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                self.reqs.CalibrateEvents.req(
+                    self,
+                    calibrator=calibrator_inst.cls_name,
+                    calibrator_inst=calibrator_inst,
+                )
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ]
@@ -76,7 +87,9 @@ class SelectEvents(
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
-        reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires()))
+        reqs["selector"] = law.util.make_unique(law.util.flatten(
+            self.selector_inst.run_requires(task=self),
+        ))
 
         return reqs
 
@@ -84,14 +97,20 @@ class SelectEvents(
         reqs = {
             "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                self.reqs.CalibrateEvents.req(
+                    self,
+                    calibrator=calibrator_inst.cls_name,
+                    calibrator_inst=calibrator_inst,
+                )
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ],
         }
 
         # add selector dependent requirements
-        reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires()))
+        reqs["selector"] = law.util.make_unique(law.util.flatten(
+            self.selector_inst.run_requires(task=self),
+        ))
 
         return reqs
 
@@ -116,6 +135,7 @@ class SelectEvents(
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_selector_inst())
     def run(self):
         from columnflow.tasks.histograms import CreateHistograms
         from columnflow.columnar_util import (
@@ -133,8 +153,13 @@ class SelectEvents(
         hists = DotDict()
 
         # run the selector setup
-        selector_reqs = self.selector_inst.run_requires()
-        reader_targets = self.selector_inst.run_setup(selector_reqs, luigi.task.getpaths(selector_reqs))
+        self._array_function_post_init()
+        selector_reqs = self.selector_inst.run_requires(task=self)
+        reader_targets = self.selector_inst.run_setup(
+            task=self,
+            reqs=selector_reqs,
+            inputs=luigi.task.getpaths(selector_reqs),
+        )
         n_ext = len(reader_targets)
 
         # show an early warning in case the selector does not produce some mandatory columns
@@ -161,7 +186,7 @@ class SelectEvents(
         # define columns that will be written
         write_columns = set(map(Route, mandatory_coffea_columns))
         write_columns |= self.selector_inst.produced_columns
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
         # let the lfn_task prepare the nano file (basically determine a good pfn)
         [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
@@ -199,7 +224,7 @@ class SelectEvents(
                 )
 
                 # invoke the selection function
-                events, results = self.selector_inst(events, stats, hists=hists)
+                events, results = self.selector_inst(events, task=self, stats=stats, hists=hists)
 
                 # complain when there is no event mask
                 if results.event is None:
@@ -232,6 +257,9 @@ class SelectEvents(
                     chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
                     column_chunks[(lfn_index, pos.index)] = chunk
                     self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
+
+        # teardown the selector
+        self.teardown_selector_inst()
 
         # merge the result files
         sorted_chunks = [result_chunks[key] for key in sorted(result_chunks)]
@@ -286,13 +314,19 @@ SelectEventsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionStats(
-    SelectorMixin,
+class _MergeSelectionStats(
     CalibratorsMixin,
-    DatasetTask,
+    SelectorMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`MergeSelectionStats`.
+    """
+
+
+class MergeSelectionStats(_MergeSelectionStats):
+
     # default sandbox, might be overwritten by selector function (needed to load hist objects)
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -365,13 +399,19 @@ MergeSelectionStatsWrapper = wrapper_factory(
 )
 
 
-class MergeSelectionMasks(
-    SelectorMixin,
+class _MergeSelectionMasks(
     CalibratorsMixin,
-    DatasetTask,
+    SelectorMixin,
     law.tasks.ForestMerge,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`MergeSelectionMasks`.
+    """
+
+
+class MergeSelectionMasks(_MergeSelectionMasks):
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # recursively merge 8 files into one
@@ -383,15 +423,31 @@ class MergeSelectionMasks(
         SelectEvents=SelectEvents,
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    norm_weights_producer = "normalization_weights"
+    norm_weight_producer_inst = DerivableInstParameter(
+        default=None,
+        visibility=luigi.parameter.ParameterVisibility.PRIVATE,
+    )
 
-        # store the normalization weight producer for MC
-        self.norm_weight_producer = None
-        if self.dataset_inst.is_mc:
-            self.norm_weight_producer = Producer.get_cls("normalization_weights")(
-                inst_dict=self.get_producer_kwargs(self),
-            )
+    exclude_params_index = {"norm_weight_producer_inst"}
+    exclude_params_repr = {"norm_weight_producer_inst"}
+    exclude_params_sandbox = {"norm_weight_producer_inst"}
+    exclude_params_remote_workflow = {"norm_weight_producer_inst"}
+
+    @classmethod
+    def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
+        return cls.get_array_function_dict(params)
+
+    build_producer_inst = ProducerMixin.build_producer_inst
+
+    @classmethod
+    def resolve_instances(cls, params: dict[str, Any], shifts) -> dict[str, Any]:
+        if not params.get("norm_weight_producer_inst"):
+            params["norm_weight_producer_inst"] = cls.build_producer_inst(cls.norm_weights_producer, params)
+
+        params = super().resolve_instances(params, shifts)
+
+        return params
 
     def create_branch_map(self):
         # DatasetTask implements a custom branch map, but we want to use the one in ForestMerge
@@ -401,7 +457,7 @@ class MergeSelectionMasks(
         reqs = {"selection": self.reqs.SelectEvents.req_different_branching(self)}
 
         if self.dataset_inst.is_mc:
-            reqs["normalization"] = self.norm_weight_producer.run_requires()
+            reqs["normalization"] = self.norm_weight_producer_inst.run_requires(task=self)
 
         return reqs
 
@@ -414,7 +470,7 @@ class MergeSelectionMasks(
         }
 
         if self.dataset_inst.is_mc:
-            reqs["normalization"] = self.norm_weight_producer.run_requires()
+            reqs["normalization"] = self.norm_weight_producer_inst.run_requires(task=self)
 
         return reqs
 
@@ -446,13 +502,14 @@ class MergeSelectionMasks(
             Route, RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns,
         )
 
-        chunks = []
-
         # setup the normalization weights producer
         if self.dataset_inst.is_mc:
-            self.norm_weight_producer.run_setup(
-                self.requires()["forest_merge"]["normalization"],
-                self.input()["forest_merge"]["normalization"],
+            self._array_function_post_init()
+            self.norm_weight_producer_inst.run_post_init(task=self)
+            self.norm_weight_producer_inst.run_setup(
+                task=self,
+                reqs=self.requires()["forest_merge"]["normalization"],
+                inputs=self.input()["forest_merge"]["normalization"],
             )
 
         # define columns that will be written
@@ -471,15 +528,16 @@ class MergeSelectionMasks(
         # add some mandatory columns
         write_columns |= set(map(Route, mandatory_coffea_columns))
         write_columns |= set(map(Route, {"category_ids", "process_id", "normalization_weight"}))
-        route_filter = RouteFilter(write_columns)
+        route_filter = RouteFilter(keep=write_columns)
 
+        chunks = []
         for inp in inputs:
             events = inp["columns"].load(formatter="awkward", cache=False)
             steps = inp["results"].load(formatter="awkward", cache=False).steps
 
             # add normalization weight
             if self.dataset_inst.is_mc:
-                events = self.norm_weight_producer(events)
+                events = self.norm_weight_producer_inst(events, task=self)
 
             # remove columns
             events = route_filter(events)
@@ -490,6 +548,10 @@ class MergeSelectionMasks(
             chunk = tmp_dir.child(f"tmp_{inp['results'].basename}", type="f")
             chunks.append(chunk)
             sorted_ak_to_parquet(out, chunk.abspath)
+
+        # teardown the normalization weights producer
+        if self.dataset_inst.is_mc:
+            self.norm_weight_producer_inst.run_teardown(task=self)
 
         return chunks
 

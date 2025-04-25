@@ -1,12 +1,12 @@
-# version 10
+# version 11
 
 # last version to support python 3.9
 ipython~=8.18.1
-pytest~=8.3.3
+pytest~=8.3.5
 pytest-cov~=6.0.0
-flake8~=7.1.1
+flake8~=7.1.2
 flake8-commas~=4.0.0
 flake8-quotes~=3.4.0
-pipdeptree~=2.23.4
-pymarkdownlnt~=0.9.25
-uniplot~=0.15.1
+pipdeptree~=2.26.0
+pymarkdownlnt~=0.9.29
+uniplot~=0.17.1

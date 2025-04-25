@@ -1,32 +1,55 @@
 # coding: utf-8
 
 """
-Helpful utilities often used in selections.
+Helpful reduction utilities.
 """
 
 from __future__ import annotations
 
 __all__ = []
 
+import functools
+
 import law
 
 from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column, sorted_indices_from_mask as _sorted_indices_from_mask
+from columnflow.columnar_util import set_ak_column
 
 ak = maybe_import("awkward")
 
 
 logger = law.logger.get_logger(__name__)
 
+full_slice = slice(None, None)
 
-def sorted_indices_from_mask(*args, **kwargs) -> ak.Array:
-    # deprecated
-    logger.warning_once(
-        "sorted_indices_from_mask_deprecated",
-        "columnflow.selection.util.sorted_indices_from_mask() is deprecated and will be removed in "
-        "April 2025; use columnflow.columnar_util.sorted_indices_from_mask() instead",
-    )
-    return _sorted_indices_from_mask(*args, **kwargs)
+
+def create_event_mask(selection: ak.Array, requested_steps: tuple[str]) -> ak.Array | slice:
+    """
+    Creates and returns an event mask based on a *selection* results array and a tuple of *requested_steps* according to
+    the following checks (in that order):
+
+        - When not empty, *requested_steps* are considered fields of the *selection.steps* array and subsequently
+          concatenated with a logical AND operation.
+        - Otherwise, if the *event* field is present in the *selection* array, it is used instead.
+        - Otherwise, a empty slice object is returned.
+    """
+    # build the event mask from requested steps
+    if requested_steps:
+        # check if all steps are present
+        missing_steps = set(requested_steps) - set(selection.steps.fields)
+        if missing_steps:
+            raise Exception(f"selector steps {','.join(missing_steps)} requested but missing in {selection.steps}")
+        return functools.reduce(
+            (lambda a, b: a & b),
+            (selection["steps", step] for step in requested_steps),
+        )
+
+    # use the event field if present
+    if "event" in selection.fields:
+        return selection.event
+
+    # fallback to an empty slice
+    return full_slice
 
 
 def create_collections_from_masks(

@@ -20,7 +20,7 @@ logger = law.logger.get_logger(__name__)
 
 class CreatePileupWeights(ConfigTask):
 
-    sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
+    single_config = True
 
     data_mode = luigi.ChoiceParameter(
         default="hist",
@@ -29,6 +29,8 @@ class CreatePileupWeights(ConfigTask):
         "default: 'hist'",
     )
     version = None
+
+    sandbox = "bash::$CF_BASE/sandboxes/cmssw_default.sh"
 
     # upstream requirements
     reqs = Requirements(

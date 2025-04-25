@@ -17,8 +17,9 @@ import law
 import order as od
 import scinum as sn
 
-from columnflow.util import maybe_import, try_int, try_complex
-from columnflow.types import Iterable, Any, Callable
+from columnflow.util import maybe_import, try_int, try_complex, UNSET
+from columnflow.hist_util import copy_axis
+from columnflow.types import Iterable, Any, Callable, Sequence, Hashable
 
 math = maybe_import("math")
 hist = maybe_import("hist")
@@ -68,6 +69,14 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
     return cms_label_kwargs
 
 
+def get_attr_or_aux(proc: od.AuxDataMixin, attr: str, default: Any) -> Any:
+    if (value := getattr(proc, attr, UNSET)) != UNSET:
+        return value
+    if proc.has_aux(attr):
+        return proc.get_aux(attr)
+    return default
+
+
 def round_dynamic(value: int | float) -> int | float:
     """
     Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
@@ -91,49 +100,6 @@ def round_dynamic(value: int | float) -> int | float:
 
     # return with proper type
     return int(value) if value >= 1 else value
-
-
-def inject_label(
-    label: str,
-    inject: str | int | float,
-    *,
-    placeholder: str | None = None,
-    before_parentheses: bool = False,
-) -> str:
-    """
-    Injects a string *inject* into a *label* at a specific position, determined by different
-    strategies in the following order:
-
-        - If *placeholder* is defined, *label* should contain a substring ``"__PLACEHOLDER__"``
-        which is replaced.
-        - Otherwise, if *before_parentheses* is set to True, the string is inserted before the last
-        pair of parentheses.
-        - Otherwise, the string is appended to the label.
-
-    :param label: The label to inject the string *inject* into.
-    :param inject: The string to inject.
-    :param placeholder: The placeholder to replace in the label.
-    :param before_parentheses: Whether to insert the string before the parentheses in the label.
-    :return: The updated label.
-    """
-    # replace the placeholder
-    if placeholder and f"__{placeholder}__" in label:
-        return label.replace(f"__{placeholder}__", inject)
-
-    # when the label contains trailing parentheses, insert the string before them
-    if before_parentheses and label.endswith(")"):
-        in_parentheses = 1
-        for i in range(len(label) - 2, -1, -1):
-            c = label[i]
-            if c == ")":
-                in_parentheses += 1
-            elif c == "(":
-                in_parentheses -= 1
-            if not in_parentheses:
-                return f"{label[:i]} {inject} {label[i:]}"
-
-    # otherwise, just append
-    return f"{label} {inject}"
 
 
 def apply_settings(
@@ -219,13 +185,15 @@ def hists_merge_cutflow_steps(
 
 
 def apply_process_settings(
-    hists: dict,
+    hists: dict[Hashable, hist.Hist],
     process_settings: dict | None = None,
-) -> dict:
+) -> tuple[dict[Hashable, hist.Hist], dict[str, Any]]:
     """
-    applies settings from `process_settings` dictionary to the `process_insts`;
-    the `scale` setting is directly applied to the histograms
+    applies settings from `process_settings` dictionary to the `process_insts`
     """
+    # store info gathered along application of process settings that can be inserted to the style config
+    process_style_config = {}
+
     # apply all settings on process insts
     apply_settings(
         hists.keys(),
@@ -233,6 +201,10 @@ def apply_process_settings(
         parent_check=(lambda proc, parent_name: proc.has_parent_process(parent_name)),
     )
 
+    return hists, process_style_config
+
+
+def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hist.Hist]:
     # helper to compute the stack integral
     stack_integral = None
 
@@ -240,18 +212,19 @@ def apply_process_settings(
         nonlocal stack_integral
         if stack_integral is None:
             stack_integral = sum(
-                proc_h.sum().value
+                remove_residual_axis_single(proc_h, "shift", select_value="nominal").sum().value
                 for proc, proc_h in hists.items()
-                if not hasattr(proc, "unstack") and not proc.is_data
+                if proc.is_mc and not get_attr_or_aux(proc, "unstack", False)
             )
         return stack_integral
 
     for proc_inst, h in hists.items():
         # apply "scale" setting directly to the hists
-        scale_factor = getattr(proc_inst, "scale", None) or proc_inst.x("scale", None)
+        scale_factor = get_attr_or_aux(proc_inst, "scale", None)
         if scale_factor == "stack":
             # compute the scale factor and round
-            scale_factor = round_dynamic(get_stack_integral() / h.sum().value)
+            h_no_shift = remove_residual_axis_single(h, "shift", select_value="nominal")
+            scale_factor = round_dynamic(get_stack_integral() / h_no_shift.sum().value)
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
@@ -260,39 +233,39 @@ def apply_process_settings(
                 if scale_factor < 1e5
                 else re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
             )
-            proc_inst.label = inject_label(
+            proc_inst.label = apply_label_placeholders(
                 proc_inst.label,
-                rf"$\times${scale_factor_str}",
-                placeholder="SCALE",
-                before_parentheses=True,
+                apply="SCALE",
+                scale=scale_factor_str,
             )
 
-        # remove remaining placeholders
-        proc_inst.label = remove_label_placeholders(proc_inst.label)
+        # remove remaining scale placeholders
+        proc_inst.label = remove_label_placeholders(proc_inst.label, drop="SCALE")
 
     return hists
 
 
-def remove_label_placeholders(label: str) -> str:
-    return re.sub("__[A-Z0-9]+__", "", label)
-
-
 def apply_variable_settings(
-    hists: dict,
+    hists: dict[Hashable, hist.Hist],
     variable_insts: list[od.Variable],
     variable_settings: dict | None = None,
-) -> dict:
+) -> tuple[dict[Hashable, hist.Hist], dict[od.Variable, dict[str, Any]]]:
     """
     applies settings from *variable_settings* dictionary to the *variable_insts*;
     the *rebin*, *overflow*, *underflow*, and *slice* settings are directly applied to the histograms
     """
+    # store info gathered along application of variable settings that can be inserted to the style config
+    variable_style_config = {}
+
     # apply all settings on variable insts
     apply_settings(variable_insts, variable_settings)
 
     # apply certain  setting directly to histograms
     for var_inst in variable_insts:
+        variable_style_config[var_inst] = {}
+
         # rebinning
-        rebin_factor = getattr(var_inst, "rebin", None) or var_inst.x("rebin", None)
+        rebin_factor = get_attr_or_aux(var_inst, "rebin", None)
         if try_int(rebin_factor):
             for proc_inst, h in list(hists.items()):
                 rebin_factor = int(rebin_factor)
@@ -300,20 +273,15 @@ def apply_variable_settings(
                 hists[proc_inst] = h
 
         # overflow and underflow bins
-        overflow = getattr(var_inst, "overflow", None)
-        if overflow is None:
-            overflow = var_inst.x("overflow", False)
-        underflow = getattr(var_inst, "underflow", None)
-        if underflow is None:
-            underflow = var_inst.x("underflow", False)
-
+        overflow = get_attr_or_aux(var_inst, "overflow", False)
+        underflow = get_attr_or_aux(var_inst, "underflow", False)
         if overflow or underflow:
             for proc_inst, h in list(hists.items()):
                 h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
                 hists[proc_inst] = h
 
         # slicing
-        slices = getattr(var_inst, "slice", None) or var_inst.x("slice", None)
+        slices = get_attr_or_aux(var_inst, "slice", None)
         if (
             slices and isinstance(slices, Iterable) and len(slices) >= 2 and
             try_complex(slices[0]) and try_complex(slices[1])
@@ -324,7 +292,25 @@ def apply_variable_settings(
                 h = h[{var_inst.name: slice(slice_0, slice_1)}]
                 hists[proc_inst] = h
 
-    return hists
+        # additional x axis transformations
+        for trafo in law.util.make_list(get_attr_or_aux(var_inst, "x_transformations", None) or []):
+            # forced representation into equal bins
+            if trafo in {"equal_distance_with_edges", "equal_distance_with_indices"}:
+                hists, orig_edges = rebin_equal_width(hists, var_inst.name)
+                new_edges = list(hists.values())[0].axes[-1].edges
+                # store edge values as well as ticks if needed
+                ax_cfg = {"xlim": (new_edges[0], new_edges[-1])}
+                if trafo == "equal_distance_with_edges":
+                    # optionally round edges
+                    rnd = get_attr_or_aux(var_inst, "x_edge_rounding", (lambda e: e))
+                    edge_labels = [rnd(e) for e in orig_edges]
+                    ax_cfg |= {"xmajorticks": new_edges, "xmajorticklabels": edge_labels, "xminorticks": []}
+                variable_style_config[var_inst].setdefault("ax_cfg", {}).update(ax_cfg)
+                variable_style_config[var_inst].setdefault("rax_cfg", {}).update(ax_cfg)
+            else:
+                raise ValueError(f"unknown x transformation '{trafo}'")
+
+    return hists, variable_style_config
 
 
 def use_flow_bins(
@@ -379,7 +365,7 @@ def use_flow_bins(
     return h_out
 
 
-def apply_density_to_hists(hists: dict, density: bool | None = False) -> dict:
+def apply_density(hists: dict, density: bool = True) -> dict:
     """
     Scales number of histogram entries to bin widths.
     """
@@ -396,22 +382,49 @@ def apply_density_to_hists(hists: dict, density: bool | None = False) -> dict:
     return hists
 
 
-def remove_residual_axis(hists: dict, ax_name: str, max_bins: int = 1) -> dict:
+def remove_residual_axis_single(
+    h: hist.Hist,
+    ax_name: str,
+    max_bins: int = 1,
+    select_value: Any = None,
+) -> hist.Hist:
+    # force always returning a copy
+    h = h.copy()
+
+    # nothing to do if the axis is not present
+    if ax_name not in h.axes.name:
+        return h
+
+    # when a selection is given, select the corresponding value
+    if select_value is not None:
+        h = h[{ax_name: [hist.loc(select_value)]}]
+
+    # check remaining axis
+    n_bins = len(h.axes[ax_name])
+    if n_bins > max_bins:
+        raise Exception(
+            f"axis '{ax_name}' of histogram has {n_bins} bins whereas at most {max_bins} bins are "
+            f"accepted for removal of residual axis",
+        )
+
+    # accumulate remaining axis
+    return h[{ax_name: sum}]
+
+
+def remove_residual_axis(
+    hists: dict,
+    ax_name: str,
+    max_bins: int = 1,
+    select_value: Any = None,
+) -> dict:
     """
-    removes axis named 'ax_name' if existing and there is only a single bin in the axis;
+    Removes axis named 'ax_name' if existing and there is only a single bin in the axis;
     raises Exception otherwise
     """
-    for key, hist in list(hists.items()):
-        if ax_name in hist.axes.name:
-            n_bins = len(hist.axes[ax_name])
-            if n_bins > max_bins:
-                raise Exception(
-                    f"{ax_name} axis of histogram for key {key} has {n_bins} values whereas at most "
-                    f"{max_bins} is expected",
-                )
-            hists[key] = hist[{ax_name: sum}]
-
-    return hists
+    return {
+        key: remove_residual_axis_single(h, ax_name, max_bins=max_bins, select_value=select_value)
+        for key, h in hists.items()
+    }
 
 
 def prepare_style_config(
@@ -421,6 +434,7 @@ def prepare_style_config(
     density: bool | None = False,
     shape_norm: bool | None = False,
     yscale: str | None = "",
+    **kwargs: Any,
 ) -> dict:
     """
     small helper function that sets up a default style config based on the instances
@@ -443,15 +457,16 @@ def prepare_style_config(
     style_config = {
         "ax_cfg": {
             "xlim": xlim,
-            # TODO: need to make bin width and unit configurable in future
             "ylabel": variable_inst.get_full_y_title(bin_width=False, unit=False, unit_format=unit_format),
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
             "yscale": yscale,
             "xscale": "log" if variable_inst.log_x else "linear",
+            "xrotation": variable_inst.x("x_label_rotation", None),
         },
         "rax_cfg": {
             "ylabel": "Data / MC",
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
+            "xrotation": variable_inst.x("x_label_rotation", None),
         },
         "legend_cfg": {},
         "annotate_cfg": {"text": cat_label or ""},
@@ -466,9 +481,9 @@ def prepare_style_config(
     if variable_inst.discrete_x or "int" in axis_type:
         # remove the "xscale" attribute since it messes up the bin edges
         style_config["ax_cfg"].pop("xscale")
-        style_config["ax_cfg"]["minorxticks"] = []
+        style_config["ax_cfg"]["xminorticks"] = []
     if variable_inst.discrete_y:
-        style_config["ax_cfg"]["minoryticks"] = []
+        style_config["ax_cfg"]["yminorticks"] = []
 
     return style_config
 
@@ -476,7 +491,8 @@ def prepare_style_config(
 def prepare_stack_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
-    hide_errors: bool | None = None,
+    hide_stat_errors: bool | None = None,
+    shift_insts: Sequence[od.Shift] | None = None,
     **kwargs,
 ) -> OrderedDict:
     """
@@ -486,31 +502,33 @@ def prepare_stack_plot_config(
     """
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
-    line_hists, line_colors, line_labels, line_hide_errors = [], [], [], []
-    data_hists, data_hide_errors = [], []
+    mc_syst_hists = []
+    line_hists, line_colors, line_labels, line_hide_stat_errors = [], [], [], []
+    data_hists, data_hide_stat_errors = [], []
     data_label = None
+
+    default_shift = shift_insts[0].name if len(shift_insts) == 1 else "nominal"
 
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
-        proc_hide_errors = hide_errors
-        if getattr(process_inst, "hide_errors", None) is not None:
-            proc_hide_errors = process_inst.hide_errors
+        proc_hide_stat_errors = get_attr_or_aux(process_inst, "hide_stat_errors", hide_stat_errors)
         if process_inst.is_data:
-            data_hists.append(h)
-            data_hide_errors.append(proc_hide_errors)
+            data_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
+            data_hide_stat_errors.append(proc_hide_stat_errors)
             if data_label is None:
                 data_label = process_inst.label
-        elif process_inst.is_mc:
-            if getattr(process_inst, "unstack", False):
-                line_hists.append(h)
-                line_colors.append(process_inst.color1)
-                line_labels.append(process_inst.label)
-                line_hide_errors.append(proc_hide_errors)
-            else:
-                mc_hists.append(h)
-                mc_colors.append(process_inst.color1)
-                mc_edgecolors.append(process_inst.color2)
-                mc_labels.append(process_inst.label)
+        elif get_attr_or_aux(process_inst, "unstack", False):
+            line_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
+            line_colors.append(process_inst.color1)
+            line_labels.append(process_inst.label)
+            line_hide_stat_errors.append(proc_hide_stat_errors)
+        else:
+            mc_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
+            mc_colors.append(process_inst.color1)
+            mc_edgecolors.append(process_inst.color2)
+            mc_labels.append(process_inst.label)
+            if "shift" in h.axes.name and h.axes["shift"].size > 1:
+                mc_syst_hists.append(h)
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:
@@ -547,6 +565,7 @@ def prepare_stack_plot_config(
                 "norm": line_norm,
                 "label": line_labels[i],
                 "color": line_colors[i],
+                "error_type": "variance",
             },
             # "ratio_kwargs": {
             #     "norm": h.values(),
@@ -555,19 +574,38 @@ def prepare_stack_plot_config(
         }
 
         # suppress error bars by overriding `yerr`
-        if line_hide_errors[i]:
+        if line_hide_stat_errors[i]:
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = False
 
-    # draw stack error
-    if h_mc_stack is not None and not hide_errors:
+    # draw statistical error for stack
+    if h_mc_stack is not None and not hide_stat_errors:
         mc_norm = sum(h_mc.values()) if shape_norm else 1
-        plot_config["mc_uncert"] = {
-            "method": "draw_error_bands",
+        plot_config["mc_stat_unc"] = {
+            "method": "draw_stat_error_bands",
             "hist": h_mc,
             "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
             "ratio_kwargs": {"norm": h_mc.values()},
+        }
+
+    # draw systematic error for stack
+    if h_mc_stack is not None and mc_syst_hists:
+        mc_norm = sum(h_mc.values()) if shape_norm else 1
+        plot_config["mc_syst_unc"] = {
+            "method": "draw_syst_error_bands",
+            "hist": h_mc,
+            "kwargs": {
+                "syst_hists": mc_syst_hists,
+                "shift_insts": shift_insts,
+                "norm": mc_norm,
+                "label": "MC syst. unc.",
+            },
+            "ratio_kwargs": {
+                "syst_hists": mc_syst_hists,
+                "shift_insts": shift_insts,
+                "norm": h_mc.values(),
+            },
         }
 
     # draw data
@@ -579,21 +617,72 @@ def prepare_stack_plot_config(
             "kwargs": {
                 "norm": data_norm,
                 "label": data_label or "Data",
+                "error_type": "poisson_unweighted",
             },
         }
 
         if h_mc is not None:
             plot_config["data"]["ratio_kwargs"] = {
                 "norm": h_mc.values() * data_norm / mc_norm,
+                "error_type": "poisson_unweighted",
             }
 
         # suppress error bars by overriding `yerr`
-        if any(data_hide_errors):
+        if any(data_hide_stat_errors):
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = False
 
     return plot_config
+
+
+def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """
+    Split the given dictionary into two dictionaries based on the keys that are valid for matplotlib's ``ax.set()``
+    function, and all others, potentially accepted by :py:func:`apply_ax_kwargs`.
+    """
+    set_kwargs, other_kwargs = {}, {}
+    other_keys = {
+        "xmajorticks", "xminorticks", "xmajorticklabels", "xminorticklabels", "xloc", "xrotation",
+        "ymajorticks", "yminorticks", "yloc", "yrotation",
+    }
+    for key, value in kwargs.items():
+        (other_kwargs if key in other_keys else set_kwargs)[key] = value
+    return set_kwargs, other_kwargs
+
+
+def apply_ax_kwargs(ax: plt.Axes, kwargs: dict[str, Any]) -> None:
+    """
+    Apply the given keyword arguments to the given axis, splitting them into those that are valid for ``ax.set()`` and
+    those that are not, and applying them separately.
+    """
+    # split
+    set_kwargs, other_kwargs = split_ax_kwargs(kwargs)
+
+    # apply standard ones
+    ax.set(**set_kwargs)
+
+    # apply others
+    if other_kwargs.get("xmajorticks") is not None:
+        ax.set_xticks(other_kwargs.get("xmajorticks"), minor=False)
+    if other_kwargs.get("ymajorticks") is not None:
+        ax.set_yticks(other_kwargs.get("ymajorticks"), minor=False)
+    if other_kwargs.get("xminorticks") is not None:
+        ax.set_xticks(other_kwargs.get("xminorticks"), minor=True)
+    if other_kwargs.get("yminorticks") is not None:
+        ax.set_yticks(other_kwargs.get("yminorticks"), minor=True)
+    if other_kwargs.get("xmajorticklabels") is not None:
+        ax.set_xticklabels(other_kwargs.get("xmajorticklabels"), minor=False)
+    if other_kwargs.get("xminorticklabels") is not None:
+        ax.set_xticklabels(other_kwargs.get("xminorticklabels"), minor=True)
+    if other_kwargs.get("xloc") is not None:
+        ax.set_xlabel(ax.get_xlabel(), loc=other_kwargs.get("xloc"))
+    if other_kwargs.get("yloc") is not None:
+        ax.set_ylabel(ax.get_ylabel(), loc=other_kwargs.get("yloc"))
+    if other_kwargs.get("xrotation") is not None:
+        ax.tick_params(axis="x", labelrotation=other_kwargs.get("xrotation"))
+    if other_kwargs.get("yrotation") is not None:
+        ax.tick_params(axis="y", labelrotation=other_kwargs.get("yrotation"))
 
 
 def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: bool = False) -> float:
@@ -791,9 +880,9 @@ def blind_sensitive_bins(
     check_if_signal = lambda proc: any(signal == proc or signal.has_process(proc) for signal in signal_procs)
 
     # separate histograms into signals, backgrounds and data hists and calculate sums
-    signals = {proc: hist for proc, hist in hists.items() if proc.is_mc and check_if_signal(proc)}
-    data = {proc: hist.copy() for proc, hist in hists.items() if proc.is_data}
-    backgrounds = {proc: hist for proc, hist in hists.items() if proc.is_mc and proc not in signals}
+    signals = {proc: h for proc, h in hists.items() if proc.is_mc and check_if_signal(proc)}
+    data = {proc: h.copy() for proc, h in hists.items() if proc.is_data}
+    backgrounds = {proc: h for proc, h in hists.items() if proc.is_mc and proc not in signals}
 
     # Return hists unchanged in case any of the three dicts is empty.
     if not signals or not backgrounds or not data:
@@ -803,8 +892,9 @@ def blind_sensitive_bins(
         )
         return hists
 
-    signals_sum = sum(signals.values())
-    backgrounds_sum = sum(backgrounds.values())
+    # get nominal signal and background yield sums per bin
+    signals_sum = sum(remove_residual_axis(signals, "shift", select_value="nominal").values())
+    backgrounds_sum = sum(remove_residual_axis(backgrounds, "shift", select_value="nominal").values())
 
     # calculate sensitivity by S / sqrt(S + B)
     sensitivity = signals_sum.values() / np.sqrt(signals_sum.values() + backgrounds_sum.values())
@@ -816,11 +906,168 @@ def blind_sensitive_bins(
         mask[first_ind:last_ind] = True
 
     # set data points in masked region to zero
-    for proc, hist in data.items():
-        hist.values()[mask] = 0
-        hist.variances()[mask] = 0
+    for proc, h in data.items():
+        h.values()[..., mask] = 0
+        h.variances()[..., mask] = 0
 
     # merge all histograms
     hists = law.util.merge_dicts(signals, backgrounds, data)
 
     return hists
+
+
+def rebin_equal_width(
+    hists: dict[Hashable, hist.Hist],
+    axis_name: str,
+) -> tuple[dict[Hashable, hist.Hist], np.ndarray]:
+    """
+    In a dictionary, rebins an axis named *axis_name* of all histograms to have the same amount of bins but with equal
+    width. This is achieved by using integer edge values starting at 0. The original edge values are returned as well.
+    Bin contents are not changed but copied to the rebinned histograms.
+
+    :param hists: Dictionary of histograms to rebin.
+    :param axis_name: Name of the axis to rebin.
+    :return: Tuple of the rebinned histograms and the new bin edges.
+    """
+    # get the variable axis from the first histogram
+    assert hists
+    for var_index, var_axis in enumerate(list(hists.values())[0].axes):
+        if var_axis.name == axis_name:
+            break
+    else:
+        raise ValueError(f"axis '{axis_name}' not found in histograms")
+    assert isinstance(var_axis, (hist.axis.Variable, hist.axis.Regular))
+    orig_edges = var_axis.edges
+
+    # prepare arguments for the axis copy
+    if isinstance(var_axis, hist.axis.Variable):
+        axis_kwargs = {"edges": list(range(len(orig_edges)))}
+    else:  # hist.axis.Regular
+        axis_kwargs = {"start": orig_edges[0], "stop": orig_edges[-1]}
+
+    # rebin all histograms
+    new_hists = type(hists)()
+    for key, h in hists.items():
+        # create a new histogram
+        new_axes = h.axes[:var_index] + (copy_axis(var_axis, **axis_kwargs),) + h.axes[var_index + 1:]
+        new_h = hist.Hist(*new_axes, storage=h.storage_type())
+
+        # copy contents and save
+        new_h.view()[...] = h.view()
+        new_hists[key] = new_h
+
+    return new_hists, orig_edges
+
+
+def apply_label_placeholders(
+    label: str,
+    apply: str | Sequence[str] | None = None,
+    skip: str | Sequence[str] | None = None,
+    **kwargs: Any,
+) -> str:
+    """
+    Interprets placeholders in the format "__NAME__" in a label and returns an updated label.
+    Currently supported placeholders are:
+        - SHORT: removes everything (and including) the placeholder
+        - BREAK: inserts a line break
+        - SCALE: inserts a scale factor, passed as "scale" in kwargs; when "scale_format" is given
+                 as well, the scale factor is formatted accordingly
+    *apply* and *skip* can be used to de/select certain placeholders.
+    """
+    # handle apply/skip decisions
+    if apply:
+        _apply = set(p.upper() for p in law.util.make_list(apply))
+        do_apply = lambda p: p in _apply
+    elif skip:
+        _skip = set(p.upper() for p in law.util.make_list(skip))
+        do_apply = lambda p: p not in _skip
+    else:
+        do_apply = lambda p: True
+
+    # shortening
+    if do_apply("SHORT"):
+        label = re.sub(r"__SHORT__.*", "", label)
+
+    # lines breaks
+    if do_apply("BREAK"):
+        label = label.replace("__BREAK__", "\n")
+
+    # scale factor
+    if do_apply("SCALE") and "scale" in kwargs:
+        scale_str = kwargs.get("scale_format", "$\\times${}").format(kwargs["scale"])
+        if "__SCALE__" in label:
+            label = label.replace("__SCALE__", scale_str)
+        else:
+            label += scale_str
+
+    return label
+
+
+def remove_label_placeholders(
+    label: str,
+    keep: str | Sequence[str] | None = None,
+    drop: str | Sequence[str] | None = None,
+) -> str:
+    # when placeholders should be kept, determine all existing ones and identify remaining to drop
+    if keep:
+        keep = law.util.make_list(keep)
+        placeholders = re.findall("__([^_]+)__", label)
+        drop = list(set(placeholders) - set(keep))
+
+    # drop specific placeholders or all
+    if drop:
+        drop = law.util.make_list(drop)
+        sel = f"({'|'.join(d.upper() for d in drop)})"
+    else:
+        sel = "[A-Z0-9]+"
+
+    return re.sub(f"__{sel}__", "", label)
+
+
+def calculate_stat_error(
+    hist: hist.Hist,
+    error_type: str,
+) -> dict:
+    """
+    Calculate the error to be plotted for the given histogram *hist*.
+    Supported error types are:
+        - 'variance': the plotted error is the square root of the variance for each bin
+        - 'poisson_unweighted': the plotted error is the poisson error for each bin
+        - 'poisson_weighted': the plotted error is the poisson error for each bin, weighted by the variance
+    """
+
+    # determine the error type
+    if error_type == "variance":
+        yerr = hist.view().variance ** 0.5
+    elif error_type in {"poisson_unweighted", "poisson_weighted"}:
+        # compute asymmetric poisson confidence interval
+        from hist.intervals import poisson_interval
+
+        variances = hist.view().variance if error_type == "poisson_weighted" else None
+        values = hist.view().value
+        confidence_interval = poisson_interval(values, variances)
+
+        if error_type == "poisson_weighted":
+            # might happen if some bins are empty, see https://github.com/scikit-hep/hist/blob/5edbc25503f2cb8193cc5ff1eb71e1d8fa877e3e/src/hist/intervals.py#L74  # noqa: E501
+            confidence_interval[np.isnan(confidence_interval)] = 0
+        elif np.any(np.isnan(confidence_interval)):
+            raise ValueError("Unweighted Poisson interval calculation returned NaN values, check Hist package")
+
+        # calculate the error
+        # yerr_lower is the lower error
+        yerr_lower = values - confidence_interval[0]
+        # yerr_upper is the upper error
+        yerr_upper = confidence_interval[1] - values
+        # yerr is the size of the errorbars to be plotted
+        yerr = np.array([yerr_lower, yerr_upper])
+
+        if np.any(yerr < 0):
+            logger.warning(
+                "yerr < 0, setting to 0. "
+                "This should not happen, please check your histogram.",
+            )
+            yerr[yerr < 0] = 0
+    else:
+        raise ValueError(f"unknown error type '{error_type}'")
+
+    return yerr

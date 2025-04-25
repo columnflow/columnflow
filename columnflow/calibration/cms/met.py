@@ -4,9 +4,12 @@
 MET corrections.
 """
 
+import law
+
 from columnflow.calibration import Calibrator, calibrator
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, load_correction_set, DotDict
 from columnflow.columnar_util import set_ak_column
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -80,7 +83,7 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @met_phi.init
-def met_phi_init(self: Calibrator) -> None:
+def met_phi_init(self: Calibrator, **kwargs) -> None:
     """
     Initialize the :py:attr:`met_pt_corrector` and :py:attr:`met_phi_corrector` attributes.
     """
@@ -89,16 +92,28 @@ def met_phi_init(self: Calibrator) -> None:
 
 
 @met_phi.requires
-def met_phi_requires(self: Calibrator, reqs: dict) -> None:
+def met_phi_requires(
+    self: Calibrator,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @met_phi.setup
-def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: dict) -> None:
+def met_phi_setup(
+    self: Calibrator,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
+) -> None:
     """
     Load the correct met files using the :py:func:`from_string` method of the
     :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
@@ -109,13 +124,10 @@ def met_phi_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: di
     :param inputs: Additional inputs, currently not used.
     :param reader_targets: Additional targets, currently not used.
     """
-    bundle = reqs["external_files"]
-
     # create the pt and phi correctors
-    import correctionlib
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_met_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    met_file = self.get_met_file(reqs["external_files"].files)
+    correction_set = load_correction_set(met_file)
+
     name_tmpl = self.get_met_config()
     self.met_pt_corrector = correction_set[name_tmpl.format(
         variable="pt",

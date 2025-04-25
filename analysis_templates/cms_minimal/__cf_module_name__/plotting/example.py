@@ -47,7 +47,7 @@ def my_plot1d_func(
     """
     # we can add arbitrary parameters via the `general_settings` parameter to access them in the
     # plotting function. They are automatically parsed either to a bool, float, or string
-    print(f"The example_param has been set to '{example_param}' (type: {type(example_param)})")
+    print(f"the example_param has been set to '{example_param}' (type: {type(example_param)})")
 
     # call helper function to remove shift axis from histogram
     remove_residual_axis(hists, "shift")
