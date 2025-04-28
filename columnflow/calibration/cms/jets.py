@@ -753,7 +753,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     Throws an error if running on data.
 
     :param events: awkward array containing events to process
-    """ # noqa
+    """  # noqa
     # use local variables for convenience
     jet_name = self.jet_name
     gen_jet_name = self.gen_jet_name
@@ -764,10 +764,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         raise ValueError("attempt to apply jet energy resolution smearing in data")
 
     # prepare variations
-    jer_nom, jer_up, jer_down = jer_variations = ["nom", "up", "down"]
-    jec_variations = sum(([f"{unc}_up", f"{unc}_down"] for unc in self.jec_uncertainty_sources), [])
-    assert not (set(jer_variations) & set(jec_variations))
-    postfixes = ["", "_jer_up", "_jer_down"] + [f"_jec_{jec_var}" for jec_var in jec_variations]
+    jer_nom, jer_up, jer_down = self.jer_variations
 
     # save the unsmeared properties in case they are needed later
     events = set_ak_column_f32(events, f"{jet_name}.pt_unsmeared", events[jet_name].pt)
@@ -806,32 +803,32 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     jerpt[jer_down] = jerpt[jer_nom]
 
     # extract pt resolutions evaluted for jec uncertainties
-    for jec_var in jec_variations:
-        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_jec_{jec_var}"]}
+    for jec_var in self.jec_variations:
+        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
         inputs = [_variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
         jerpt[jec_var] = ak_evaluate(self.evaluators["jer"], *inputs)
 
     # extract scale factors
     jersf = {}
-    for jer_var in jer_variations:
+    for jer_var in self.jer_variations:
         _variable_map = variable_map | {"systematic": jer_var}
         inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
         jersf[jer_var] = ak_evaluate(self.evaluators["sf"], *inputs)
 
     # extract scale factors for jec uncertainties
-    for jec_var in jec_variations:
-        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_jec_{jec_var}"]}
+    for jec_var in self.jec_variations:
+        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
         inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
         jersf[jec_var] = ak_evaluate(self.evaluators["sf"], *inputs)
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)
     jerpt = ak.concatenate(
-        [jerpt[v][..., None] for v in jer_variations + jec_variations],
+        [jerpt[v][..., None] for v in self.jer_variations + self.jec_variations],
         axis=-1,
     )
     jersf = ak.concatenate(
-        [jersf[v][..., None] for v in jer_variations + jec_variations],
+        [jersf[v][..., None] for v in self.jer_variations + self.jec_variations],
         axis=-1,
     )
 
@@ -866,7 +863,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         match_pt = events[jet_name].pt
     else:
         # concatenate varied pt values for broadcasting
-        pt_names = ["pt" for _ in jer_variations] + [f"pt_jec_{jec_var}" for jec_var in jec_variations]
+        pt_names = ["pt" for _ in self.jer_variations] + [f"pt_{jec_var}" for jec_var in self.jec_variations]
         match_pt = ak.concatenate([events[jet_name][pt_name][..., None] for pt_name in pt_names], axis=-1)
     pt_relative_diff = 1 - matched_gen_jet.pt / match_pt
 
@@ -900,7 +897,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     if self.propagate_met:
         jetsum_pt_before = {}
         jetsum_phi_before = {}
-        for postfix in postfixes:
+        for postfix in self.postfixes:
             jetsum_pt_before[postfix], jetsum_phi_before[postfix] = sum_transverse(
                 events[jet_name][f"pt{postfix}"],
                 events[jet_name].phi,
@@ -908,7 +905,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # apply the smearing
     # (note: this requires that postfixes and smear_factors have the same order, but this should be the case)
-    for i, postfix in enumerate(postfixes):
+    for i, postfix in enumerate(self.postfixes):
         pt_name = f"pt{postfix}"
         m_name = f"mass{postfix}"
         events = set_ak_column_f32(events, f"{jet_name}.{pt_name}", events[jet_name][pt_name] * smear_factors[..., i])
@@ -924,7 +921,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         events = set_ak_column_f32(events, f"{met_name}.phi_unsmeared", events[met_name].phi)
 
         # propagate per variation
-        for postfix in postfixes:
+        for postfix in self.postfixes:
             # get pt and phi of all jets after correcting
             jetsum_pt_after, jetsum_phi_after = sum_transverse(
                 events[jet_name][f"pt{postfix}"],
@@ -954,12 +951,20 @@ def jer_init(self: Calibrator) -> None:
     if jec_sources is None:
         jec_sources = jec_cfg.uncertainty_sources or []
         self.jec_uncertainty_sources = jec_sources
-        jet_jec_columns = {f"{self.jet_name}.{{pt,mass}}_jec_{jec_source}_{{up,down}}" for jec_source in jec_sources}
-        met_jec_columns = {f"{self.met_name}.{{pt,phi}}_jec_{jec_source}_{{up,down}}" for jec_source in jec_sources}
+
+    # prepare jec variations
+    self.jec_variations = sum(([f"jec_{unc}_up", f"jec_{unc}_down"] for unc in self.jec_uncertainty_sources), [])
+
+    jet_jec_columns = {f"{self.jet_name}.{{pt,mass}}_{jec_source}" for jec_source in self.jec_variations}
+    met_jec_columns = {f"{self.met_name}.{{pt,phi}}_{jec_source}" for jec_source in self.jec_variations}
 
     # determine gen-level jet index column
     lower_first = lambda s: s[0].lower() + s[1:] if s else s
     self.gen_jet_idx_column = lower_first(self.gen_jet_name) + "Idx"
+
+    # prepare jer variations and postfixes
+    self.jer_variations = ["nom", "up", "down"]
+    self.postfixes = ["", "_jer_up", "_jer_down"] + [f"_{jec_var}" for jec_var in self.jec_variations]
 
     # register used jet columns
     self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,{self.gen_jet_idx_column}}}")
