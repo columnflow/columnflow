@@ -771,7 +771,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column_f32(events, f"{jet_name}.mass_unsmeared", events[jet_name].mass)
 
     # normally distributed random numbers per jet for use in stochastic smearing below
-    jer_random_normal = (
+    random_normal = (
         ak_random(0, 1, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
         if self.deterministic_seed_index >= 0
         else ak_random(0, 1, rand_func=np.random.Generator(
@@ -839,7 +839,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
 
     # compute smearing factors (stochastic method)
-    smear_factors_stochastic = 1.0 + jer_random_normal * jerpt * add_smear
+    smear_factors_stochastic = 1.0 + random_normal * jerpt * add_smear
 
     # -- scaling method (using gen match)
 
