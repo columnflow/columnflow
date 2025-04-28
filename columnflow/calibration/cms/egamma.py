@@ -118,9 +118,7 @@ class egamma_scale_corrector(Calibrator):
         """
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
         if "rawPt" not in events[self.source_field].fields:
-            events = set_ak_column_f32(
-                events, f"{self.source_field}.rawPt", events[self.source_field].pt,
-            )
+            events = set_ak_column_f32(events, f"{self.source_field}.rawPt", events[self.source_field].pt)
 
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
         # corrections are always applied to the raw pt - this is important if more than
@@ -171,9 +169,7 @@ class egamma_scale_corrector(Calibrator):
 
                 # save columns
                 postfix = f"scale_{direction}"
-                events = set_ak_column_f32(
-                    events, f"{self.source_field}.pt_{postfix}", pt_varied,
-                )
+                events = set_ak_column_f32(events, f"{self.source_field}.pt_{postfix}", pt_varied)
 
         # apply the nominal correction
         # note: changes are applied to the views and directly propagate to the original ak arrays
@@ -240,7 +236,6 @@ class egamma_scale_corrector(Calibrator):
         :param reqs: Dictionary with resolved requirements.
         :param inputs: Dictionary with inputs (not used).
         :param reader_targets: Dictionary for optional additional columns to load
-            (not used).
         """
         self.scale_config = self.get_scale_config()
         # create the egamma corrector
@@ -345,9 +340,7 @@ class egamma_resolution_corrector(Calibrator):
 
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
         if "rawPt" not in events[self.source_field].fields:
-            events = set_ak_column_f32(
-                events, f"{self.source_field}.rawPt", ak_copy(events[self.source_field].pt),
-            )
+            events = set_ak_column_f32(events, f"{self.source_field}.rawPt", ak_copy(events[self.source_field].pt))
 
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
         sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
@@ -373,9 +366,6 @@ class egamma_resolution_corrector(Calibrator):
         # calculate the smearing scale
         # as mentioned in the example above, allows us to apply them directly to the MC simulation.
         rho = self.resolution_corrector.evaluate(self.resolution_cfg.value_type, *args)
-
-        # -- stochastic smearing
-        # normally distributed random numbers according to EGamma resolution
 
         # varied corrections
         if self.with_uncertainties and self.dataset_inst.is_mc:
@@ -418,9 +408,7 @@ class egamma_resolution_corrector(Calibrator):
 
                 # save columns
                 postfix = f"res_{direction}"
-                events = set_ak_column_f32(
-                    events, f"{self.source_field}.pt_{postfix}", pt_varied,
-                )
+                events = set_ak_column_f32(events, f"{self.source_field}.pt_{postfix}", pt_varied)
 
         # apply the nominal correction
         # note: changes are applied to the views and directly propagate to the original ak arrays

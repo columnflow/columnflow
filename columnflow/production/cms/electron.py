@@ -192,3 +192,16 @@ electron_trigger_weights = electron_weights.derive(
         "weight_name": "electron_trigger_weight",
     },
 )
+
+
+@producer(
+    uses={"Electron.{pt,phi,eta,deltaEtaSC}"},
+    produces={"Electron.superclusterEta"},
+)
+def electron_sceta(self, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Returns the electron super cluster eta.
+    """
+    sc_eta = events.Electron.eta + events.Electron.deltaEtaSC
+    events = set_ak_column(events, "Electron.superclusterEta", sc_eta, value_type=np.float32)
+    return events
