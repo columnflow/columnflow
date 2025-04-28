@@ -45,8 +45,6 @@ class JetIdConfig:
 
 @producer(
     # names of used and produced columns are added dynamically in init depending on jet_name
-    # only run on mc
-    mc_only=True,
     # name of the jet collection
     jet_name="Jet",
     # function to determine the correction file
