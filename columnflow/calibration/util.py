@@ -39,6 +39,24 @@ def ak_random(*args, rand_func: Callable) -> ak.Array:
     return ak.from_numpy(np_randvals)
 
 
+def sum_transverse(pt: ak.Array, phi: ak.Array) -> tuple[ak.Array, ak.Array]:
+    """
+    Helper function to compute the sum of transverse vectors given their pt and phi values.
+
+    :param pt: Transverse momentum of the vector(s).
+    :param phi: Azimuthal angle of the vector(s).
+    :return: Tuple containing the transverse momentum and azimuthal angle of the sum of the vectors.
+    """
+    px_sum = ak.sum(pt * np.cos(phi), axis=-1)
+    py_sum = ak.sum(pt * np.sin(phi), axis=-1)
+
+    # compute new components
+    pt_sum = (px_sum**2.0 + py_sum**2.0)**0.5
+    phi_sum = np.arctan2(py_sum, px_sum)
+
+    return pt_sum, phi_sum
+
+
 def propagate_met(
     jet_pt1: (ak.Array),
     jet_phi1: ak.Array,
