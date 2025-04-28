@@ -176,7 +176,7 @@ class egamma_scale_corrector(Calibrator):
         # and do not need to be inserted into the events chunk again
         # EGamma energy correction is ONLY applied to DATA
         if self.dataset_inst.is_data:
-            scales_nom = self.scale_corrector(self.scale_config.value_type, *args)
+            scales_nom = self.scale_corrector.evaluate(self.scale_config.value_type, *args)
             pt_application *= scales_nom
 
         return events
@@ -369,7 +369,7 @@ class egamma_resolution_corrector(Calibrator):
 
         # varied corrections
         if self.with_uncertainties and self.dataset_inst.is_mc:
-            rho_unc = self.resolution_corrector(self.resolution_cfg.uncertainty_type, *args)
+            rho_unc = self.resolution_corrector.evaluate(self.resolution_cfg.uncertainty_type, *args)
             random_normal_number = functools.partial(ak_random, 0, 1)
             smearing_func = lambda rng_array, variation: rng_array * variation + 1
 
