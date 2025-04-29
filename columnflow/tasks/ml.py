@@ -246,7 +246,7 @@ class PrepareMLEvents(
                     self.chunked_io.queue(sorted_ak_to_parquet, (fold_events, chunk.abspath))
 
         # teardown the optional producer
-        self.teardown_preaparation_producer_inst()
+        self.teardown_preparation_producer_inst()
 
         # merge output files of all folds
         for _output_chunks, output in zip(output_chunks, outputs["mlevents"].targets):
