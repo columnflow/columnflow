@@ -241,8 +241,16 @@ class PlotVariablesBase(_PlotVariablesBase):
             # axis selections and reductions
             _hists = OrderedDict()
             for process_inst in hists.keys():
-                expected_shifts = plot_shift_names & process_shift_map[process_inst.name]
                 h = hists[process_inst]
+                # determine expected shifts from the intersection of requested shifts and those known for the process
+                process_shifts = (
+                    process_shift_map[process_inst.name]
+                    if process_inst.name in process_shift_map
+                    else {"nominal"}
+                )
+                expected_shifts = plot_shift_names & process_shifts
+                if not expected_shifts:
+                    raise Exception(f"no shifts to plot found for process {process_inst.name}")
                 # selections
                 h = h[{
                     "category": [
