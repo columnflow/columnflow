@@ -19,11 +19,11 @@ law run cf.PlotVariables1D --version v1 \
 This will run the full analysis chain for the given processes (data, tt, st) and should create plots looking like this:
 
 ::::{grid} 1 1 2 2
-:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__12dfac316a__plot__proc_3_7727a49dc2__cat_incl__var_n_jet.pdf
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__12dfac316a__plot__proc_3_7727a49dc2__cat_incl__var_n_jet.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__12dfac316a__plot__proc_3_7727a49dc2__cat_2j__var_n_jet.pdf
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__12dfac316a__plot__proc_3_7727a49dc2__cat_2j__var_n_jet.*
 :width: 100%
 :::
 ::::
@@ -31,7 +31,7 @@ This will run the full analysis chain for the given processes (data, tt, st) and
 :::{dropdown} Where do I find that plot?
 You can add ```--print-output 0``` to every task call, which will print the full filename of all outputs of the requested task.
 Alternatively, you can add ```--fetch-output 0,a``` to directly copy all outputs of this task into the directory you are currently in.
-Finally, there is the ```--view-cmd``` parameter you can add to directly display the plot during the runtime of the task, e.g. via ```--view-cmd evince-previewer``` or ```--view-cmd imgcat```.
+Finally, there is the ```--view-cmd``` parameter you can add to directly display the plot during the runtime of the task, e.g. via ```--view-cmd evince``` or ```--view-cmd imgcat```.
 :::
 
 The ```PlotVariables1D``` task is located at the bottom of our [task graph](https://github.com/columnflow/columnflow/wiki#default-task-graph), which means that all tasks leading to ```PlotVariables1D``` will be run for all datasets corresponding to the ```--processes``` we requested using the {py:class}`~columnflow.calibration.Calibrator`s, {py:class}`~columnflow.selection.Selector`, and {py:class}`~columnflow.production.Producer`s (often referred to as CSPs) as requested.
@@ -90,11 +90,11 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 to produce the following plot:
 
 ::::{grid} 1 1 2 2
-:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__0191de868f__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c1.pdf
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__0191de868f__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c1.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__0191de868f__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c1.pdf
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__0191de868f__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c1.*
 :width: 100%
 :::
 ::::
@@ -130,11 +130,11 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 ```
 
 ::::{grid} 1 1 2 2
-:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__c80529af83__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c2.pdf
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__c80529af83__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c2.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__c80529af83__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c2.pdf
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__c80529af83__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c2.*
 :width: 100%
 :::
 ::::
@@ -186,11 +186,11 @@ law run cf.PlotVariables1D --version v1 --processes tt,st --variables n_jet,jet1
 ```
 
 ::::{grid} 1 1 2 2
-:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__be60d3bca7__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c3.pdf
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__be60d3bca7__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt__c3.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__be60d3bca7__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c3.pdf
+:::{figure} ../plots/cf.PlotVariables1D_tpl_config_analy__1__be60d3bca7__plot__proc_2_a2211e799f__cat_incl__var_n_jet__c3.*
 :width: 100%
 :::
 ::::
@@ -206,11 +206,11 @@ law run cf.PlotVariables2D --version v1 \
 ```
 
 ::::{grid} 1 1 2 2
-:::{figure} ../plots/cf.PlotVariables2D_tpl_config_analy__1__b27b994979__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt-n_jet.pdf
+:::{figure} ../plots/cf.PlotVariables2D_tpl_config_analy__1__b27b994979__plot__proc_2_a2211e799f__cat_incl__var_jet1_pt-n_jet.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotVariables2D_tpl_config_analy__1__b27b994979__plot__proc_2_a2211e799f__cat_incl__var_n_jet-jet1_pt.pdf
+:::{figure} ../plots/cf.PlotVariables2D_tpl_config_analy__1__b27b994979__plot__proc_2_a2211e799f__cat_incl__var_n_jet-jet1_pt.*
 :width: 100%
 :::
 ::::
@@ -233,11 +233,11 @@ law run cf.PlotCutflow --version v1 \
 ```
 
 ::::{grid} 1 1 2 2
-:::{figure} ../plots/cf.PlotCutflow_tpl_config_analy__1__12a17bf79c__cutflow__cat_incl.pdf
+:::{figure} ../plots/cf.PlotCutflow_tpl_config_analy__1__12a17bf79c__cutflow__cat_incl.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotCutflow_tpl_config_analy__1__12a17bf79c__cutflow__cat_2j.pdf
+:::{figure} ../plots/cf.PlotCutflow_tpl_config_analy__1__12a17bf79c__cutflow__cat_2j.*
 :width: 100%
 :::
 ::::
@@ -269,15 +269,15 @@ law run cf.PlotCutflowVariables1D --version v1 \
 ```
 
 ::::{grid} 1 1 3 3
-:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step0_Initial__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.pdf
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step0_Initial__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step1_jet__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.pdf
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step1_jet__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step2_muon__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.pdf
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__d8a37d3da9__plot__step2_muon__proc_2_a2211e799f__cat_incl__var_cf_jet1_pt.*
 :width: 100%
 :::
 ::::
@@ -293,11 +293,11 @@ law run cf.PlotCutflowVariables1D --version v1 \
 ```
 
 ::::{grid} 1 1 2 2
-:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__c3947accbb__plot__proc_st__cat_incl__var_cf_jet1_pt.pdf
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__c3947accbb__plot__proc_st__cat_incl__var_cf_jet1_pt.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__c3947accbb__plot__proc_tt__cat_incl__var_cf_jet1_pt.pdf
+:::{figure} ../plots/cf.PlotCutflowVariables1D_tpl_config_analy__1__c3947accbb__plot__proc_tt__cat_incl__var_cf_jet1_pt.*
 :width: 100%
 :::
 ::::
@@ -328,11 +328,11 @@ law run cf.PlotShiftedVariables1D --version v1 \
 and produces the following plot:
 
 ::::{grid} 1 1 2 2
-:::{figure} ../plots/cf.PlotShiftedVariables1D_tpl_config_analy__1__42b45aba89__plot__proc_2_a2211e799f__unc_mu__cat_incl__var_jet1_pt.pdf
+:::{figure} ../plots/cf.PlotShiftedVariables1D_tpl_config_analy__1__42b45aba89__plot__proc_2_a2211e799f__unc_mu__cat_incl__var_jet1_pt.*
 :width: 100%
 :::
 
-:::{figure} ../plots/cf.PlotShiftedVariables1D_tpl_config_analy__1__42b45aba89__plot__proc_2_a2211e799f__unc_mu__cat_incl__var_n_jet.pdf
+:::{figure} ../plots/cf.PlotShiftedVariables1D_tpl_config_analy__1__42b45aba89__plot__proc_2_a2211e799f__unc_mu__cat_incl__var_n_jet.*
 :width: 100%
 :::
 ::::
@@ -346,7 +346,7 @@ All plotting tasks also include a ```--view-cmd``` parameter that allows directl
 
 ```shell
 law run cf.PlotVariables1D --version v1 \
-    --processes tt,st --variables n_jet --view-cmd evince-previewer
+    --processes tt,st --variables n_jet --view-cmd evince
 ```
 
 (custom_plot_function)=
