@@ -6,7 +6,7 @@ API Reference
 
    calibration/index
    categorization/index
-   histograming/index
+   histogramming/index
    inference/index
    ml/index
    plotting/index

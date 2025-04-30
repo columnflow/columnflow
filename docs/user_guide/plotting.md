@@ -367,7 +367,7 @@ An example on how to implement such a plotting function is shown in the followin
 ## Applying a selection to a variable
 
 In some cases, you might want to apply a selection to a variable before plotting it.
-Instead of creating a new column with the selection applied, columnflow provides the possibility to apply a selection to a variable directly when histograming it.
+Instead of creating a new column with the selection applied, columnflow provides the possibility to apply a selection to a variable directly when histogramming it.
 For this purpose, the `selection` parameter can be added in the variable definition in the config.
 This may look as follows:
 

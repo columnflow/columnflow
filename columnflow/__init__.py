@@ -106,7 +106,7 @@ if not env_is_rtd:
             logger.debug(f"loading production module '{m}'")
             maybe_import(m.strip())
 
-    import columnflow.histograming  # noqa
+    import columnflow.histogramming  # noqa
     if law.config.has_option("analysis", "hist_production_modules"):
         for m in law.config.get_expanded("analysis", "hist_production_modules", [], split_csv=True):
             logger.debug(f"loading hist production module '{m}'")
