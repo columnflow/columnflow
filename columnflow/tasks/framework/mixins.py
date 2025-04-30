@@ -1310,7 +1310,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
     This class provides parameters for configuring the training of machine learning models.
     """
 
-    configs = law.CSVParameter(
+    ml_configs = law.CSVParameter(
         default=(),
         description="comma-separated names of analysis config to use; should only contain a single "
         "name in case the ml model is bound to a single config; when empty, the ml model is "
@@ -1561,7 +1561,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
             params["ml_model_inst"] = ml_model_inst
 
             # resolve configs
-            _configs = params.get("configs", ())
+            _configs = params.get("ml_configs", ())
             params["configs"] = tuple(ml_model_inst.training_configs(list(_configs)))
             if not params["configs"]:
                 raise Exception(
@@ -1590,7 +1590,7 @@ class MLModelTrainingMixin(MLModelMixinBase):
         self.ml_model_inst = self.get_ml_model_inst(
             self.ml_model,
             self.analysis_inst,
-            configs=list(self.configs),
+            configs=list(self.ml_configs),
             parameters=self.ml_model_settings,
         )
 
@@ -1615,10 +1615,10 @@ class MLModelTrainingMixin(MLModelMixinBase):
         # since MLTraining is no CalibratorsMixin, SelectorMixin, ProducerMixin, ConfigTask,
         # all these parts are missing in the `store_parts`
 
-        configs_repr = "__".join(self.configs[:5])
+        configs_repr = "__".join(self.ml_configs[:5])
 
-        if len(self.configs) > 5:
-            configs_repr += f"_{law.util.create_hash(self.configs[5:])}"
+        if len(self.ml_configs) > 5:
+            configs_repr += f"_{law.util.create_hash(self.ml_configs[5:])}"
 
         parts.insert_after("task_family", "configs", configs_repr)
 
