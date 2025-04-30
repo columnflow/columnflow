@@ -21,7 +21,7 @@ from columnflow.calibration import Calibrator
 from columnflow.selection import Selector
 from columnflow.reduction import Reducer
 from columnflow.production import Producer
-from columnflow.histograming import HistProducer
+from columnflow.histogramming import HistProducer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler, TaskArrayFunction
@@ -1598,7 +1598,7 @@ class MLModelsMixin(ConfigTask):
 
 class HistProducerClassMixin(ArrayFunctionClassMixin):
     """
-    Mixin to include and access single :py:class:`~columnflow.histograming.HistProducer` class.
+    Mixin to include and access single :py:class:`~columnflow.histogramming.HistProducer` class.
     """
 
     hist_producer = luigi.Parameter(
@@ -1625,7 +1625,7 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
                 # fallback to cf's default and trigger a verbose warning
                 params["hist_producer"] = "cf_default"
                 docs_url = get_docs_url("user_guide", "02_03_transition.html")
-                code_url = get_code_url("columnflow", "histograming", "default.py")
+                code_url = get_code_url("columnflow", "histogramming", "default.py")
                 logger.warning_once(
                     "hist_producer_undefined",
                     "the resolution of the '--hist-producer' parameter resulted in an empty value, most likely caused "
@@ -1677,7 +1677,7 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
 
 class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
     """
-    Mixin to include and access a single :py:class:`~columnflow.histograming.HistProducer` instance.
+    Mixin to include and access a single :py:class:`~columnflow.histogramming.HistProducer` instance.
     """
 
     hist_producer_inst = DerivableInstParameter(
@@ -1704,12 +1704,12 @@ class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
         params: dict[str, Any] | None = None,
     ) -> Producer:
         """
-        Instantiate and return the :py:class:`~columnflow.histograming.HistProducer` instance.
+        Instantiate and return the :py:class:`~columnflow.histogramming.HistProducer` instance.
 
         :param producer: Name of the hist producer class to instantiate.
         :param params: Arguments forwarded to the hist producer constructor.
         :raises RuntimeError: If the hist producer class is not
-            :py:attr:`~columnflow.histograming.HistProducer.exposed`.
+            :py:attr:`~columnflow.histogramming.HistProducer.exposed`.
         :return: The hist producer instance.
         """
         hist_producer_cls = HistProducer.get_cls(hist_producer)

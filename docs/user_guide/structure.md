@@ -18,7 +18,7 @@ Therefore, in order to reduce the impact on the memory:
 - A chunking of the datasets is implemented using [dask](https://www.dask.org/):
 not all events from a dataset are inputed in a task at once, but only chunked in groups of events.
 (100 000 events max per group is default as of 05.2023, default is set in the law.cfg file).
-- The user needs to define for each {py:class}`~columnflow.calibration.Calibrator`, {py:class}`~columnflow.selection.Selector`, {py:class}`~columnflow.reduction.Reducer`, {py:class}`~columnflow.production.Producer`, and {py:class}`~columnflow.histograming.HistProducer` which columns are to be loaded (this happens by defining the `uses` set in the header of the decorator of the class) and which new columns/fields are to be saved in parquet files after the respective task (this happens by defining the `produces` set in the header of the decorator of the class).
+- The user needs to define for each {py:class}`~columnflow.calibration.Calibrator`, {py:class}`~columnflow.selection.Selector`, {py:class}`~columnflow.reduction.Reducer`, {py:class}`~columnflow.production.Producer`, and {py:class}`~columnflow.histogramming.HistProducer` which columns are to be loaded (this happens by defining the `uses` set in the header of the decorator of the class) and which new columns/fields are to be saved in parquet files after the respective task (this happens by defining the `produces` set in the header of the decorator of the class).
 The exact implementation for this feature is further detailed in {doc}`building_blocks/selectors` and {doc}`building_blocks/producers`.
 
 ## Tasks in columnflow

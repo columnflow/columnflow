@@ -150,7 +150,7 @@ As of v0.3, we generalized this concept and renamed it to **histogram producers*
 Use `--hist-producer` in the command line to specify the histogram producer you intend to use.
 See the full [histogram producer documentation](./building_blocks/hist_producers.md) for more info.
 
-In short, histogram producers [continue to be task array functions](./task_array_functions.md#histogram-producers), however, they provide additional hooks to control different aspects of the histograming process:
+In short, histogram producers [continue to be task array functions](./task_array_functions.md#histogram-producers), however, they provide additional hooks to control different aspects of the histogramming process:
 
 - `create_hist(self, variables: list[od.Variable], task: law.Task) -> hist.Histogram`: Given a list of variables, creates and returns a new histogram, with arbitrary axes, binning and weight storage.
 - `fill_hist(self, h: hist.Histogram, data: dict[str, Any], task: law.Task) -> None`: Provided columnar data to fill (with fields `"category"`, `"process"`, `"shift"` (a string) and `"weight"`), controls the way this data is filled into the histogram.
@@ -161,16 +161,16 @@ The only requirement that columnflow imposes on histograms for plotting and expo
 
 The main callable of a histogram producer continues to be responsible for returning (and potentially preprocessing) the event chunk to histogram, as well as a float array representing event weights in a 2-tuple, consistent with the previous behavior of weight producers.
 
-**Note** that, unlike for most other task array functions, columnflow provides a default histogram producer named {py:class}`~columnflow.histograming.default.cf_default`.
+**Note** that, unlike for most other task array functions, columnflow provides a default histogram producer named {py:class}`~columnflow.histogramming.default.cf_default`.
 It handles the histogram definition and filling in a backwards-compatible way, as well as a post-processing step that converts the category and shift axes from categorical integer to string types (for consistency across configuration objects when used in multi-config tasks).
-It is recommended to extend this default histogram producer in case you only need to change a single aspect of the histograming process with respect to the default behavior.
+It is recommended to extend this default histogram producer in case you only need to change a single aspect of the histogramming process with respect to the default behavior.
 See the example below for how to do this.
 
 ### Example
 
 ```python
-from columnflow.histograming import HistProducer
-from columnflow.histograming.default import cf_default
+from columnflow.histogramming import HistProducer
+from columnflow.histogramming.default import cf_default
 from columnflow.util import maybe_import
 
 ak = maybe_import("awkward")
@@ -191,10 +191,10 @@ def example(self: HistProducer, events: ak.Array, **kwargs) -> ak.Array:
 
 ### Update Instructions
 
-1. In case you used a weight producer before, convert it to a {py:meth}`~columnflow.histograming.HistProducer`. There should be no change necessary for the main event callable.
+1. In case you used a weight producer before, convert it to a {py:meth}`~columnflow.histogramming.HistProducer`. There should be no change necessary for the main event callable.
 2. On the command line, use `--hist-producer` instead of `--weight-producer`.
 3. Note that the `weight__` prefix in the weight producer related fragment of output paths of all tasks downstream of (and including) `cf.CreateHistograms` were changed to `hist__` accordingly.
-4. If you do not intend to alter the default histogram definition, filling and post-processing, make sure to inherit from {py:class}`~columnflow.histograming.default.cf_default` as shown in the example above.
+4. If you do not intend to alter the default histogram definition, filling and post-processing, make sure to inherit from {py:class}`~columnflow.histogramming.default.cf_default` as shown in the example above.
 
 ## Inference Model Updates
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import law
 import order as od
 
-from columnflow.histograming import HistProducer, hist_producer
+from columnflow.histogramming import HistProducer, hist_producer
 from columnflow.util import maybe_import
 from columnflow.hist_util import create_hist_from_variables, fill_hist, translate_hist_intcat_to_strcat
 from columnflow.columnar_util import has_ak_column, Route
