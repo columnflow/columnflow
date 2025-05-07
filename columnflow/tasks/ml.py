@@ -10,6 +10,7 @@ from collections import OrderedDict, defaultdict
 import law
 import luigi
 
+from columnflow.types import Any
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
     CalibratorsMixin,
@@ -593,6 +594,19 @@ class MLEvaluation(
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
         # TODO: potentially reset
+
+    @classmethod
+    def resolve_param_values_pre_init(
+        cls,
+        params: law.util.InsertableDict[str, Any],
+    ) -> law.util.InsertableDict[str, Any]:
+        # resolve producers used in MLEvaluation based on the MLModel instance
+        params = super().resolve_param_values_pre_init(params)
+        params["producers"] = law.util.make_tuple(params["ml_model_inst"].evaluation_producers(
+            params["analysis_inst"],
+            params["producers"],
+        ))
+        return params
 
     def workflow_requires(self):
         reqs = super().workflow_requires()

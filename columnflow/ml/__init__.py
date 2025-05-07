@@ -41,9 +41,10 @@ class MLModel(Derivable):
     assigned (:py:meth:`setup`), a fine-grained configuration of additional training requirements
     (:py:meth:`requires`), diverging training and evaluation phase spaces
     (:py:meth:`training_configs`, :py:meth:`training_calibrators`, :py:meth:`training_selector`,
-    :py:meth:`training_producers`), or how hyper-paramaters are string encoded for output
-    declarations (:py:meth:`parameter_pairs`). The optional py:meth:`preparation_producer` allows
-    setting a producer that is run during the initial preparation of ML columns.
+    :py:meth:`training_producers`, :py:meth:`evaluation_producers`), or how hyper-paramaters are
+    string encoded for output declarations (:py:meth:`parameter_pairs`). The optional
+    py:meth:`preparation_producer` allows setting a producer that is run during the initial
+    preparation of ML columns.
 
     .. py:classattribute:: single_config
 
@@ -405,6 +406,28 @@ class MLModel(Derivable):
         .. literalinclude:: ../../user_guide/examples/ml_code.py
             :language: python
             :pyobject: TestModel.training_producers
+
+        :param analysis_inst: Analysis instance to extract the *requested_producers* from
+        :returns: Set with str of the *requested_producers*
+        """
+        return list(requested_producers)
+
+    def evaluation_producers(
+        self: MLModel,
+        analysis_inst: od.Analysis,
+        requested_producers: Sequence[str],
+    ) -> list[str]:
+        """
+        Given a sequence of *requested_producers* for a *analysis_inst*, this method can alter and/or
+        replace them to define a different set of producers for the evaluation phase of the ML
+        pipeline. This can be helpful in cases where the producers in the evaluation phase
+        and subsequent tasks are intended to diverge.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.evaluation_producers
 
         :param analysis_inst: Analysis instance to extract the *requested_producers* from
         :returns: Set with str of the *requested_producers*
