@@ -606,6 +606,11 @@ class MLEvaluation(
             params["analysis_inst"],
             params["producers"],
         ))
+        if "producer_insts" in params:
+            params["producer_insts"] = law.util.make_tuple(
+                producer_inst for producer_inst in params["producer_insts"]
+                if producer_inst.cls_name in params["producers"]
+            )
         return params
 
     def workflow_requires(self):
