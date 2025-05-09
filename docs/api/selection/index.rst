@@ -11,7 +11,5 @@
     :maxdepth: 1
 
     empty
-    matching
     stats
-    util
     cms/index

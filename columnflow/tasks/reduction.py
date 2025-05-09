@@ -7,20 +7,19 @@ Tasks related to reducing events for use on further tasks.
 from __future__ import annotations
 
 import math
-import functools
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 
 import law
 import luigi
 
-from columnflow.tasks.framework.base import Requirements, AnalysisTask, DatasetTask, wrapper_factory
-from columnflow.tasks.framework.mixins import (
-    CalibratorsMixin, SelectorStepsMixin, ChunkedIOMixin,
-)
+from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
+from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ReducerMixin, ChunkedIOMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
+from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+from columnflow.types import Any
 
 ak = maybe_import("awkward")
 
@@ -29,14 +28,21 @@ ak = maybe_import("awkward")
 default_keep_reduced_events = law.config.get_expanded("analysis", "default_keep_reduced_events")
 
 
-class ReduceEvents(
-    SelectorStepsMixin,
+class _ReduceEvents(
     CalibratorsMixin,
+    SelectorMixin,
+    ReducerMixin,
     ChunkedIOMixin,
-    DatasetTask,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`ReduceEvents`.
+    """
+
+
+class ReduceEvents(_ReduceEvents):
+
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
@@ -50,8 +56,7 @@ class ReduceEvents(
     # strategy for handling missing source columns when adding aliases on event chunks
     missing_column_alias_strategy = "original"
 
-    # register shifts found in the chosen selector upstream
-    register_selector_shifts = True
+    invokes_reducer = True
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -60,11 +65,19 @@ class ReduceEvents(
 
         if not self.pilot:
             reqs["calibrations"] = [
-                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                self.reqs.CalibrateEvents.req(
+                    self,
+                    calibrator=calibrator_inst.cls_name,
+                    calibrator_inst=calibrator_inst,
+                )
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ]
             reqs["selection"] = self.reqs.SelectEvents.req(self)
+            # reducer dependent requirements
+            reqs["reducer"] = law.util.make_unique(law.util.flatten(
+                self.reducer_inst.run_requires(task=self),
+            ))
         else:
             # pass-through pilot workflow requirements of upstream task
             t = self.reqs.SelectEvents.req(self)
@@ -76,11 +89,18 @@ class ReduceEvents(
         return {
             "lfns": self.reqs.GetDatasetLFNs.req(self),
             "calibrations": [
-                self.reqs.CalibrateEvents.req(self, calibrator=calibrator_inst.cls_name)
+                self.reqs.CalibrateEvents.req(
+                    self,
+                    calibrator=calibrator_inst.cls_name,
+                    calibrator_inst=calibrator_inst,
+                )
                 for calibrator_inst in self.calibrator_insts
                 if calibrator_inst.produced_columns
             ],
             "selection": self.reqs.SelectEvents.req(self),
+            "reducer": law.util.make_unique(law.util.flatten(
+                self.reducer_inst.run_requires(task=self),
+            )),
         }
 
     def output(self):
@@ -91,18 +111,36 @@ class ReduceEvents(
     @ensure_proxy
     @law.decorator.localize(input=False)
     @law.decorator.safe_output
+    @on_failure(callback=lambda task: task.teardown_reducer_inst())
     def run(self):
         from columnflow.columnar_util import (
             Route, RouteFilter, mandatory_coffea_columns, update_ak_array, add_ak_aliases,
-            sorted_ak_to_parquet,
+            sorted_ak_to_parquet, attach_coffea_behavior,
         )
-        from columnflow.selection.util import create_collections_from_masks
 
         # prepare inputs and outputs
         inputs = self.input()
         lfn_task = self.requires()["lfns"]
         output = self.output()
         output_chunks = {}
+
+        # for evaluating new object collections to write based on the "objects" field of the selection result data,
+        # create a mapping of src_col to dst_col's using only file meta data
+        self.collection_map: dict[str, list[str]] = {}
+        sel_meta = inputs["selection"]["results"].load(formatter="dask_awkward")
+        if "objects" in sel_meta.fields:
+            for src_col in sel_meta.objects.fields:
+                self.collection_map[src_col] = list(sel_meta.objects[src_col].fields)
+        del sel_meta
+
+        # run the reducer setup
+        self._array_function_post_init()
+        reducer_reqs = self.reducer_inst.run_requires(task=self)
+        reader_targets = self.reducer_inst.run_setup(
+            task=self,
+            reqs=reducer_reqs,
+            inputs=luigi.task.getpaths(reducer_reqs),
+        )
 
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
@@ -111,54 +149,29 @@ class ReduceEvents(
         # get shift dependent aliases
         aliases = self.local_shift_inst.x("column_aliases", {})
 
-        # define columns that will be written
+        # define columns that will be written based on the reducer's produced columns,
+        # but taking into account those that should be skipped (e.g. if not all routes added by a collection are needed)
         write_columns: set[Route] = set()
-        skip_columns: set[str] = set()
-        for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
+        skip_columns: set[Route] = set()
+        for c in self.reducer_inst.produced_columns:
             for r in self._expand_keep_column(c):
                 if r.has_tag("skip"):
-                    skip_columns.add(r.column)
+                    skip_columns.add(r)
                 else:
                     write_columns.add(r)
-        write_columns = {
-            r for r in write_columns
-            if not law.util.multi_match(r.column, skip_columns, mode=any)
-        }
-        route_filter = RouteFilter(write_columns)
-
-        # map routes to write to their top level column
-        write_columns_groups = defaultdict(set)
-        for route in write_columns:
-            if len(route) > 1:
-                write_columns_groups[route[0]].add(route)
+        route_filter = RouteFilter(keep=write_columns, remove=skip_columns)
 
         # define columns that need to be read
-        read_columns = write_columns | set(mandatory_coffea_columns) | set(aliases.values())
-        read_columns = {Route(c) for c in read_columns}
+        read_columns = set(map(Route, mandatory_coffea_columns))
+        read_columns |= self.reducer_inst.used_columns
+        read_columns |= set(map(Route, set(aliases.values())))
 
-        # define columns to read for the differently structured selection masks
-        read_sel_columns = set()
-        # open either selector steps of the full event selection mask
-        read_sel_columns.add(Route("steps.*" if self.selector_steps else "event"))
-        # add object masks, depending on the columns to write
-        # (as object masks are dynamic and deeply nested, preload the meta info to access fields)
-        sel_results = inputs["selection"]["results"].load(formatter="dask_awkward")
-        if "objects" in sel_results.fields:
-            for src_field in sel_results.objects.fields:
-                for dst_field in sel_results.objects[src_field].fields:
-                    # nothing to do in case the top level column does not need to be loaded
-                    if not law.util.multi_match(dst_field, write_columns_groups.keys()):
-                        continue
-                    # register the object masks
-                    read_sel_columns.add(Route(f"objects.{src_field}.{dst_field}"))
-                    # in case new collections are created and configured to be written, make sure
-                    # that the corresponding columns of the source collection are loaded
-                    if src_field != dst_field:
-                        read_columns |= {
-                            src_field + route[1:]
-                            for route in write_columns_groups[dst_field]
-                        }
-        del sel_results
+        # columns starting with "steps." and "objects." are implicitly treated as pointing to the selection result data
+        read_sel_columns = {Route("event")}
+        for r in list(read_columns):
+            if r.column.startswith(("steps.", "objects.")):
+                read_sel_columns.add(r)
+                read_columns.remove(r)
 
         # event counters
         n_all = 0
@@ -173,6 +186,7 @@ class ReduceEvents(
         input_targets.extend([inp["columns"] for inp in inputs["calibrations"]])
         if self.selector_inst.produced_columns:
             input_targets.append(inputs["selection"]["columns"])
+        input_targets.extend(reader_targets.values())
 
         # prepare inputs for localization
         with law.localize_file_targets(input_targets, mode="r") as inps:
@@ -197,45 +211,30 @@ class ReduceEvents(
                     missing_strategy=self.missing_column_alias_strategy,
                 )
 
-                # build the event mask
-                if self.selector_steps:
-                    # check if all steps are present
-                    missing_steps = set(self.selector_steps) - set(sel.steps.fields)
-                    if missing_steps:
-                        raise Exception(
-                            f"selector steps {','.join(missing_steps)} are not produced by "
-                            f"selector '{self.selector}'",
-                        )
-                    event_mask = functools.reduce(
-                        (lambda a, b: a & b),
-                        (sel["steps", step] for step in self.selector_steps),
-                    )
-                else:
-                    event_mask = sel.event if "event" in sel.fields else Ellipsis
-
-                # apply the mask
-                n_all += len(events)
-                events = events[event_mask]
-                n_reduced += len(events)
-
-                # loop through all object selection, go through their masks
-                # and create new collections if required
-                if "objects" in sel.fields:
-                    # apply the event mask
-                    events = create_collections_from_masks(events, sel.objects[event_mask])
+                # invoke the reducer
+                if len(events):
+                    n_all += len(events)
+                    events = attach_coffea_behavior(events)
+                    events = self.reducer_inst(events, selection=sel, task=self)
+                    n_reduced += len(events)
 
                 # remove columns
                 events = route_filter(events)
+
+                # optional check for finite values
+                if self.check_finite_output:
+                    self.raise_if_not_finite(events)
 
                 # save as parquet via a thread in the same pool
                 chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
                 output_chunks[pos.index] = chunk
                 self.chunked_io.queue(sorted_ak_to_parquet, (ak.to_packed(events), chunk.abspath))
 
+        # teardown the reducer
+        self.teardown_reducer_inst()
+
         # some logs
-        self.publish_message(
-            f"reduced {n_all:_} to {n_reduced:_} events ({safe_div(n_reduced, n_all) * 100:.2f}%)",
-        )
+        self.publish_message(f"reduced {n_all:_} to {n_reduced:_} events ({safe_div(n_reduced, n_all) * 100:.2f}%)")
 
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
@@ -245,6 +244,12 @@ class ReduceEvents(
 
 
 # overwrite class defaults
+check_finite_tasks = law.config.get_expanded("analysis", "check_finite_output", [], split_csv=True)
+ReduceEvents.check_finite_output = ChunkedIOMixin.check_finite_output.copy(
+    default=ReduceEvents.task_family in check_finite_tasks,
+    add_default_to_description=True,
+)
+
 check_overlap_tasks = law.config.get_expanded("analysis", "check_overlapping_inputs", [], split_csv=True)
 ReduceEvents.check_overlapping_inputs = ChunkedIOMixin.check_overlapping_inputs.copy(
     default=ReduceEvents.task_family in check_overlap_tasks,
@@ -258,13 +263,19 @@ ReduceEventsWrapper = wrapper_factory(
 )
 
 
-class MergeReductionStats(
-    SelectorStepsMixin,
+class _MergeReductionStats(
     CalibratorsMixin,
-    DatasetTask,
+    SelectorMixin,
+    ReducerMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`MergeReductionStats`.
+    """
+
+
+class MergeReductionStats(_MergeReductionStats):
 
     n_inputs = luigi.IntParameter(
         default=10,
@@ -288,12 +299,12 @@ class MergeReductionStats(
     )
 
     @classmethod
-    def resolve_param_values(cls, params):
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
         # check for the default merged size
         if "merged_size" in params:
-            if params["merged_size"] in (None, law.NO_FLOAT):
+            if params["merged_size"] in {None, law.NO_FLOAT}:
                 merged_size = 512.0
                 if "config_inst" in params:
                     merged_size = params["config_inst"].x("reduced_file_size", merged_size)
@@ -412,13 +423,19 @@ MergeReductionStatsWrapper = wrapper_factory(
 )
 
 
-class MergeReducedEvents(
-    SelectorStepsMixin,
+class _MergeReducedEvents(
     CalibratorsMixin,
-    DatasetTask,
+    SelectorMixin,
+    ReducerMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`MergeReducedEvents`.
+    """
+
+
+class MergeReducedEvents(_MergeReducedEvents):
 
     keep_reduced_events = luigi.BoolParameter(
         default=default_keep_reduced_events,
@@ -499,13 +516,19 @@ MergeReducedEventsWrapper = wrapper_factory(
 )
 
 
-class ProvideReducedEvents(
-    SelectorStepsMixin,
+class _ProvideReducedEvents(
     CalibratorsMixin,
-    DatasetTask,
+    SelectorMixin,
+    ReducerMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    """
+    Base classes for :py:class:`ProvideReducedEvents`.
+    """
+
+
+class ProvideReducedEvents(_ProvideReducedEvents):
 
     skip_merging = luigi.BoolParameter(
         default=False,
@@ -638,9 +661,9 @@ ProvideReducedEventsWrapper = wrapper_factory(
 
 
 class ReducedEventsUser(
-    SelectorStepsMixin,
     CalibratorsMixin,
-    DatasetTask,
+    SelectorMixin,
+    ReducerMixin,
     law.BaseWorkflow,
 ):
     # upstream requirements

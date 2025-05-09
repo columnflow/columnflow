@@ -26,7 +26,7 @@ from typing import (  # noqa
     Type,
 )
 
-from typing_extensions import Annotated, _AnnotatedAlias as AnnotatedType  # noqa
+from typing_extensions import Annotated, _AnnotatedAlias as AnnotatedType, TypeAlias  # noqa
 
 
 #: Generic type variable, more stringent than Any.
