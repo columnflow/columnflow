@@ -12,7 +12,7 @@ from columnflow.production.normalization import normalization_weights
 from columnflow.production.cms.seeds import deterministic_seeds
 from columnflow.production.cms.mc_weight import mc_weight
 from columnflow.production.cms.muon import muon_weights
-from columnflow.selection.util import create_collections_from_masks
+from columnflow.reduction.util import create_collections_from_masks
 from columnflow.util import maybe_import
 from columnflow.columnar_util import EMPTY_FLOAT, Route, set_ak_column
 from columnflow.production.util import attach_coffea_behavior
