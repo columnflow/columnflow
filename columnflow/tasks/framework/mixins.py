@@ -1475,7 +1475,7 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
         ml_model_inst = params["ml_model_inst"]
         preparation_producer = ml_model_inst.preparation_producer(params["analysis_inst"])
         # add the producer instance
-        if not params.get("preparation_producer_inst"):
+        if preparation_producer and not params.get("preparation_producer_inst"):
             params["preparation_producer_inst"] = cls.build_producer_inst(preparation_producer, params)
 
         params = super().resolve_instances(params, shifts)
