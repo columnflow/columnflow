@@ -56,7 +56,7 @@ def plot_2d(
     **kwargs,
 ) -> plt.Figure:
     # remove shift axis from histograms
-    remove_residual_axis(hists, "shift")
+    hists = remove_residual_axis(hists, "shift")
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
