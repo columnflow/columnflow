@@ -50,7 +50,7 @@ def my_plot1d_func(
     print(f"the example_param has been set to '{example_param}' (type: {type(example_param)})")
 
     # call helper function to remove shift axis from histogram
-    remove_residual_axis(hists, "shift")
+    hists = remove_residual_axis(hists, "shift")
 
     # call helper functions to apply the variable_settings and process_settings
     variable_inst = variable_insts[0]

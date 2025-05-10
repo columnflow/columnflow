@@ -72,7 +72,7 @@ def plot_variable_stack(
 
     if len(shift_insts) == 1:
         # when there is exactly one shift bin, we can remove the shift axis
-        remove_residual_axis(hists, "shift", select_value=shift_insts[0].name)
+        hists = remove_residual_axis(hists, "shift", select_value=shift_insts[0].name)
     else:
         # remove shift axis of histograms that are not to be stacked
         unstacked_hists = {
@@ -130,7 +130,7 @@ def plot_variable_variants(
     """
     TODO.
     """
-    remove_residual_axis(hists, "shift")
+    hists = remove_residual_axis(hists, "shift")
 
     variable_inst = variable_insts[0]
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
@@ -301,7 +301,7 @@ def plot_cutflow(
     """
     TODO.
     """
-    remove_residual_axis(hists, "shift")
+    hists = remove_residual_axis(hists, "shift")
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists = apply_process_scaling(hists)
@@ -404,7 +404,7 @@ def plot_profile(
         raise Exception("The plot_profile function can only be used for 2-dimensional input histograms.")
 
     # remove shift axis from histograms
-    remove_residual_axis(hists, "shift")
+    hists = remove_residual_axis(hists, "shift")
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
