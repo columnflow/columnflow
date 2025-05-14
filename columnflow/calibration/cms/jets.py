@@ -958,7 +958,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 
 jer_horn_handling = jer.derive("jer_horn_handling", cls_dict={
-    "stochastic_smearing_mask": lambda self, jets: (abs(jets.eta) < 2.6) | (abs(jets.eta) > 3.1),
+    # source: https://cms-jerc.web.cern.ch/Recommendations/#note-25eta30
+    "stochastic_smearing_mask": lambda self, jets: (abs(jets.eta) < 2.5) | (abs(jets.eta) > 3.0),
 })
 
 
