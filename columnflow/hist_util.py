@@ -8,6 +8,7 @@ from __future__ import annotations
 
 __all__ = []
 
+import functools
 import law
 import order as od
 
@@ -31,11 +32,10 @@ def fill_hist(
     fill_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """
-    Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*.
-    The data is assumed to be structured in the same way as the histogram axes. If
-    *last_edge_inclusive* is *True*, values that would land exactly on the upper-most bin edge of an
-    axis are shifted into the last bin. If it is *None*, the behavior is determined automatically
-    and depends on the variable axis type. In this case, shifting is applied to all continuous,
+    Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*. The data is assumed
+    to be structured in the same way as the histogram axes. If *last_edge_inclusive* is *True*, values that would land
+    exactly on the upper-most bin edge of an axis are shifted into the last bin. If it is *None*, the behavior is
+    determined automatically and depends on the variable axis type. In this case, shifting is applied to all continuous,
     non-circular axes.
     """
     if fill_kwargs is None:
@@ -59,7 +59,7 @@ def fill_hist(
     # check data
     if not isinstance(data, dict):
         if len(axis_names) != 1:
-            raise ValueError("got multi-dimensional hist but only one dimensional data")
+            raise ValueError("got multi-dimensional hist but only one-dimensional data")
         data = {axis_names[0]: data}
     else:
         for name in axis_names:
@@ -73,15 +73,30 @@ def fill_hist(
             data[ax.name] = ak.copy(data[ax.name])
             flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
 
+    # check if conversion to records is needed
+    arr_types = (ak.Array, np.ndarray)
+    vals = list(data.values())
+    convert = (
+        # values is a mixture of singular and array types
+        (any(isinstance(v, arr_types) for v in vals) and not all(isinstance(v, arr_types) for v in vals)) or
+        # values contain at least one array with more than one dimension
+        any(isinstance(v, arr_types) and v.ndim != 1 for v in vals)
+    )
+
+    # actual conversion
+    if convert:
+        arrays = ak.flatten(ak.cartesian(data))
+        data = {field: arrays[field] for field in arrays.fields}
+        del arrays
+
     # fill
-    arrays = ak.flatten(ak.cartesian(data))
-    h.fill(**fill_kwargs, **{field: arrays[field] for field in arrays.fields})
+    h.fill(**fill_kwargs, **data)
 
 
 def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist:
     """
-    Add an axis to a histogram based on a variable instance. The axis_type is chosen
-    based on the variable instance's "axis_type" auxiliary.
+    Add an axis to a histogram based on a variable instance. The axis_type is chosen based on the variable instance's
+    "axis_type" auxiliary.
 
     :param histogram: The histogram to add the axis to.
     :param variable_inst: The variable instance to use for the axis.
@@ -102,20 +117,20 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
     default_axis_type = "integer" if variable_inst.discrete_x else "variable"
     axis_type = variable_inst.x("axis_type", default_axis_type).lower()
 
-    if axis_type in ("variable", "var"):
+    if axis_type in {"variable", "var"}:
         return histogram.Var(variable_inst.bin_edges, **axis_kwargs)
 
-    if axis_type in ("integer", "int"):
+    if axis_type in {"integer", "int"}:
         return histogram.Integer(
             int(variable_inst.bin_edges[0]),
             int(variable_inst.bin_edges[-1]),
             **axis_kwargs,
         )
 
-    if axis_type in ("boolean", "bool"):
+    if axis_type in {"boolean", "bool"}:
         return histogram.Boolean(**axis_kwargs)
 
-    if axis_type in ("intcategory", "intcat"):
+    if axis_type in {"intcategory", "intcat"}:
         binning = (
             [int(b) for b in variable_inst.binning]
             if isinstance(variable_inst.binning, list)
@@ -124,16 +139,13 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
         axis_kwargs.setdefault("growth", True)
         return histogram.IntCat(binning, **axis_kwargs)
 
-    if axis_type in ("strcategory", "strcat"):
+    if axis_type in {"strcategory", "strcat"}:
         axis_kwargs.setdefault("growth", True)
         return histogram.StrCat([], **axis_kwargs)
 
-    if axis_type in ("regular", "reg"):
+    if axis_type in {"regular", "reg"}:
         if not variable_inst.even_binning:
-            logger.warning(
-                "regular axis with uneven binning is not supported, using first and last bin edge "
-                "instead",
-            )
+            logger.warning("regular axis with uneven binning is not supported, using first and last bin edge instead")
         return histogram.Regular(
             variable_inst.n_bins,
             variable_inst.bin_edges[0],
@@ -144,24 +156,142 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
     raise ValueError(f"unknown axis type '{axis_type}'")
 
 
+def get_axis_kwargs(axis: hist.axis.AxesMixin) -> dict[str, Any]:
+    """
+    Extract information from an *axis* instance that would be needed to create a new one.
+
+    :param axis: The axis instance to extract information from.
+    :return: The extracted information in a dict.
+    """
+    axis_attrs = ["name", "label"]
+    traits_attrs = []
+    kwargs = {}
+
+    if isinstance(axis, hist.axis.Variable):
+        axis_attrs.append("edges")
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+    elif isinstance(axis, hist.axis.Regular):
+        axis_attrs = ["transform"]
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+        kwargs["bins"] = axis.size
+        kwargs["start"] = axis.edges[0]
+        kwargs["stop"] = axis.edges[-1]
+    elif isinstance(axis, hist.axis.Integer):
+        traits_attrs = ["underflow", "overflow", "growth", "circular"]
+        kwargs["start"] = axis.edges[0]
+        kwargs["stop"] = axis.edges[-1]
+    elif isinstance(axis, hist.axis.Boolean):
+        # nothing to add to common attributes
+        pass
+    elif isinstance(axis, (hist.axis.IntCategory, hist.axis.StrCategory)):
+        traits_attrs = ["overflow", "growth"]
+        kwargs["categories"] = list(axis)
+    else:
+        raise NotImplementedError(f"axis type '{type(axis).__name__}' not supported")
+
+    return (
+        {attr: getattr(axis, attr) for attr in axis_attrs} |
+        {attr: getattr(axis.traits, attr) for attr in traits_attrs} |
+        kwargs
+    )
+
+
+def copy_axis(axis: hist.axis.AxesMixin, **kwargs: dict[str, Any]) -> hist.axis.AxesMixin:
+    """
+    Copy an axis with the option to override its attributes.
+    """
+    # create arguments for new axis from overlay with current and requested ones
+    axis_kwargs = get_axis_kwargs(axis) | kwargs
+
+    # create new instance
+    return type(axis)(**axis_kwargs)
+
+
 def create_hist_from_variables(
     *variable_insts,
-    int_cat_axes: tuple[str] | None = None,
+    categorical_axes: tuple[tuple[str, str]] | None = None,
     weight: bool = True,
+    storage: str | None = None,
 ) -> hist.Hist:
     histogram = hist.Hist.new
 
-    # integer category axes
-    if int_cat_axes:
-        for name in int_cat_axes:
-            histogram = histogram.IntCat([], name=name, growth=True)
+    # additional category axes
+    if categorical_axes:
+        for name, axis_type in categorical_axes:
+            if axis_type in ("intcategory", "intcat"):
+                histogram = histogram.IntCat([], name=name, growth=True)
+            elif axis_type in ("strcategory", "strcat"):
+                histogram = histogram.StrCat([], name=name, growth=True)
+            else:
+                raise ValueError(f"unknown axis type '{axis_type}' in argument 'categorical_axes'")
 
-    # requested axes
+    # requested axes from variables
     for variable_inst in variable_insts:
         histogram = add_hist_axis(histogram, variable_inst)
 
-    # weight storage
-    if weight:
+    # add the storage
+    if storage is None:
+        # use weight value for backwards compatibility
+        storage = "weight" if weight else "double"
+    else:
+        storage = storage.lower()
+    if storage == "weight":
         histogram = histogram.Weight()
+    elif storage == "double":
+        histogram = histogram.Double()
+    else:
+        raise ValueError(f"unknown storage type '{storage}'")
 
     return histogram
+
+
+create_columnflow_hist = functools.partial(create_hist_from_variables, categorical_axes=(
+    # axes that are used in columnflow tasks per default
+    # (NOTE: "category" axis is filled as int, but transformed to str afterwards)
+    ("category", "intcat"),
+    ("process", "intcat"),
+    ("shift", "strcat"),
+))
+
+
+def translate_hist_intcat_to_strcat(
+    h: hist.Hist,
+    axis_name: str,
+    id_map: dict[int, str],
+) -> hist.Hist:
+    out_axes = [
+        ax if ax.name != axis_name else hist.axis.StrCategory(
+            [id_map[v] for v in list(ax)],
+            name=ax.name,
+            label=ax.label,
+            growth=ax.traits.growth,
+        )
+        for ax in h.axes
+    ]
+    return hist.Hist(*out_axes, storage=h.storage_type(), data=h.view(flow=True))
+
+
+def add_missing_shifts(
+    h: hist.Hist,
+    expected_shifts_bins: set[str],
+    str_axis: str = "shift",
+    nominal_bin: str = "nominal",
+) -> None:
+    """
+    Adds missing shift bins to a histogram *h*.
+    """
+    # get the set of bins that are missing in the histogram
+    shift_bins = set(h.axes[str_axis])
+    missing_shifts = set(expected_shifts_bins) - shift_bins
+    if missing_shifts:
+        nominal = h[{str_axis: hist.loc(nominal_bin)}]
+        for missing_shift in missing_shifts:
+            # for each missing shift, create the missing shift bin with an
+            # empty fill and then copy the nominal histogram into it
+            dummy_fill = [
+                ax[0] if ax.name != str_axis else missing_shift
+                for ax in h.axes
+            ]
+            h.fill(*dummy_fill, weight=0)
+            # TODO: this might skip overflow and underflow bins
+            h[{str_axis: hist.loc(missing_shift)}] = nominal.view()

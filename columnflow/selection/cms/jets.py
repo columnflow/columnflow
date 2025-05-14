@@ -10,8 +10,9 @@ import law
 import math
 
 from columnflow.selection import Selector, SelectionResult, selector
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, load_correction_set, DotDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, optional_column as optional
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -137,29 +138,31 @@ def jet_veto_map(
 
 
 @jet_veto_map.requires
-def jet_veto_map_requires(self: Selector, reqs: dict) -> None:
+def jet_veto_map_requires(
+    self: Selector,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @jet_veto_map.setup
 def jet_veto_map_setup(
     self: Selector,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
-    bundle = reqs["external_files"]
-
     # create the corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_veto_map_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
+    map_file = self.get_veto_map_file(reqs["external_files"].files)
+    correction_set = load_correction_set(map_file)
     keys = list(correction_set.keys())
     if len(keys) != 1:
         raise ValueError(f"Expected exactly one correction in the file, got {len(keys)}")

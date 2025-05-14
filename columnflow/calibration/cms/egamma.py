@@ -14,10 +14,8 @@ from dataclasses import dataclass, field
 
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random
-from columnflow.util import maybe_import, InsertableDict
-from columnflow.columnar_util import (
-    set_ak_column, flat_np_view, ak_copy, optional_column,
-)
+from columnflow.util import maybe_import, load_correction_set, DotDict
+from columnflow.columnar_util import set_ak_column, flat_np_view, ak_copy, optional_column
 from columnflow.types import Any
 
 ak = maybe_import("awkward")
@@ -30,7 +28,10 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 @dataclass
 class EGammaCorrectionConfig:
-    correction_set: str = "Scale"
+    correction_set: str
+    value_type: str
+    uncertainty_type: str
+    compound: bool = False
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
@@ -46,7 +47,7 @@ class egamma_scale_corrector(Calibrator):
         ...
 
     @abc.abstractmethod
-    def get_correction_file(self, external_files: law.FileTargetCollection) -> law.LocalFile:
+    def get_correction_file(self, external_files: law.FileTargetCollection) -> law.LocalFileTarget:
         """Function to retrieve the correction file from the external files.
 
         :param external_files: File target containing the files as requested
@@ -59,30 +60,49 @@ class egamma_scale_corrector(Calibrator):
         """Function to retrieve the configuration for the photon energy correction."""
         ...
 
-    def call_func(
-        self,
-        events: ak.Array,
-        **kwargs,
-    ) -> ak.Array:
+    def call_func(self, events: ak.Array, **kwargs) -> ak.Array:
         """
-        Apply energy corrections to EGamma objects in the events array.
+        Apply energy corrections to EGamma objects in the events array. There are two types of implementations: standard
+        and Et dependent.
+        For Run2 the standard implementation is used, while for Run3 the Et dependent is recommended by the EGammaPog:
+        https://twiki.cern.ch/twiki/bin/viewauth/CMS/EgammSFandSSRun3?rev=41
+        The Et dependendent recipe follows the example given in:
+        https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/66f581d0549e8d67fc55420d8bba15c9369fff7c/examples/egmScaleAndSmearingExample.py
 
-        This implementation follows the recommendations from the EGamma POG:
-        https://twiki.cern.ch/twiki/bin/view/CMS/EgammSFandSSRun3#Scale_And_Smearings_Example
+        Requires an external file in the config under ``electron_ss``. Example:
 
-        Derivatives of this base class require additional member variables and
-        functions:
+        .. code-block:: python
 
-        - *source_field*: The field name of the EGamma objects in the events array (i.e. `Electron` or `Photon`).
-        - *get_correction_file*: Function to retrieve the correction file, e.g.
-            from the list of external files in the current `config_inst`.
+            cfg.x.external_files = DotDict.wrap({
+                "electron_ss": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-120c4271/POG/EGM/2022_Summer22//electronSS_EtDependent.json.gz",  # noqa
+            })
+
+        The pairs of correction set, value and uncertainty type names,  and if a compound method is used should be configured using the :py:class:`EGammaCorrectionConfig` as an
+        auxiliary entry in the config:
+
+        .. code-block:: python
+
+            cfg.x.eec = EGammaCorrectionConfig(
+                correction_set="EGMScale_Compound_Ele_2022preEE",
+                value_type="scale",
+                uncertainty_type="escale",
+                compound=True,
+            )
+
+        Derivatives of this base class require additional member variables and functions:
+
+        - *source_field*: The field name of the EGamma objects in the events array (i.e. `Electron`
+            or `Photon`).
+        - *get_correction_file*: Function to retrieve the correction file, e.g.from
+            the list, of external files in the current `config_inst`.
         - *get_scale_config*: Function to retrieve the configuration for the energy correction.
-            This config must be an instance of :py:class:`~columnflow.calibration.cms.egamma.EGammaCorrectionConfig`.
+            This config must be an instance of
+            :py:class:`~columnflow.calibration.cms.egamma.EGammaCorrectionConfig`.
 
-        If no raw pt (i.e., pt before any corrections) is available, use the nominal pt.
-        The correction tool only supports flat arrays, so inputs are converted to a flat numpy view first.
-        Corrections are always applied to the raw pt, which is important if more than one correction is applied in a
-        row. The final corrections must be applied to the current pt.
+        If no raw pt (i.e., pt before any corrections) is available, use the nominal pt. The
+        correction tool only supports flat arrays, so inputs are converted to a flat numpy view
+        first. Corrections are always applied to the raw pt, which is important if more than one
+        correction is applied in a row. The final corrections must be applied to the current pt.
 
         If :py:attr:`with_uncertainties` is set to `True`, the scale uncertainties are calculated.
         The scale uncertainties are only available for simulated data.
@@ -93,15 +113,13 @@ class egamma_scale_corrector(Calibrator):
         :notes:
             - Varied corrections are only applied to Monte Carlo (MC) data.
             - EGamma energy correction is only applied to real data.
-            - Changes are applied to the views and directly propagate to the original awkward arrays.
+            - Changes are applied to the views and directly propagate to the original awkward
+                arrays.
         """
-
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
-
         if "rawPt" not in events[self.source_field].fields:
-            events = set_ak_column_f32(
-                events, f"{self.source_field}.rawPt", events[self.source_field].pt,
-            )
+            events = set_ak_column_f32(events, f"{self.source_field}.rawPt", events[self.source_field].pt)
+
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
         # corrections are always applied to the raw pt - this is important if more than
         # one correction is applied in a row
@@ -110,16 +128,13 @@ class egamma_scale_corrector(Calibrator):
         # the final corrections must be applied to the current pt though
         pt_application = flat_np_view(events[self.source_field].pt, axis=1)
 
-        broadcasted_run = ak.broadcast_arrays(
-            events[self.source_field].pt, events.run,
-        )
+        broadcasted_run = ak.broadcast_arrays(events[self.source_field].pt, events.run)
         run = flat_np_view(broadcasted_run[1], axis=1)
         gain = flat_np_view(events[self.source_field].seedGain, axis=1)
         sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
         r9 = flat_np_view(events[self.source_field].r9, axis=1)
 
         # prepare arguments
-        # we use pt as et since there depends in linear (following the recoomendations)
         # (energy is part of the LorentzVector behavior)
         variable_map = {
             "et": pt_eval,
@@ -127,6 +142,10 @@ class egamma_scale_corrector(Calibrator):
             "gain": gain,
             "r9": r9,
             "run": run,
+            "seedGain": gain,
+            "pt": pt_eval,
+            "AbsScEta": np.abs(sceta),
+            "ScEta": sceta,
             **self.scale_config.corrector_kwargs,
         }
         args = tuple(
@@ -136,7 +155,7 @@ class egamma_scale_corrector(Calibrator):
 
         # varied corrections are only applied to MC
         if self.with_uncertainties and self.dataset_inst.is_mc:
-            scale_uncertainties = self.scale_corrector("total_uncertainty", *args)
+            scale_uncertainties = self.scale_corrector.evaluate(self.scale_config.uncertainty_type, *args)
             scales_up = (1 + scale_uncertainties)
             scales_down = (1 - scale_uncertainties)
 
@@ -150,21 +169,19 @@ class egamma_scale_corrector(Calibrator):
 
                 # save columns
                 postfix = f"scale_{direction}"
-                events = set_ak_column_f32(
-                    events, f"{self.source_field}.pt_{postfix}", pt_varied,
-                )
+                events = set_ak_column_f32(events, f"{self.source_field}.pt_{postfix}", pt_varied)
 
         # apply the nominal correction
         # note: changes are applied to the views and directly propagate to the original ak arrays
         # and do not need to be inserted into the events chunk again
         # EGamma energy correction is ONLY applied to DATA
         if self.dataset_inst.is_data:
-            scales_nom = self.scale_corrector("total_correction", *args)
+            scales_nom = self.scale_corrector.evaluate(self.scale_config.value_type, *args)
             pt_application *= scales_nom
 
         return events
 
-    def init_func(self) -> None:
+    def init_func(self, **kwargs) -> None:
         """Function to initialize the calibrator.
 
         Sets the required and produced columns for the calibrator.
@@ -186,11 +203,10 @@ class egamma_scale_corrector(Calibrator):
 
         # add columns with unceratinties if requested
         # photon scale _uncertainties_ are only available for MC
-        if self.with_uncertainties and getattr(self, "dataset_inst", None):
-            if self.dataset_inst.is_mc:
-                self.produces |= {f"{self.source_field}.pt_scale_{{up,down}}"}
+        if self.with_uncertainties and self.dataset_inst.is_mc:
+            self.produces |= {f"{self.source_field}.pt_scale_{{up,down}}"}
 
-    def requires_func(self, reqs: dict) -> None:
+    def requires_func(self, task: law.Task, reqs: dict[str, DotDict[str, Any]], **kwargs) -> None:
         """Function to add necessary requirements.
 
         This function add the :py:class:`~columnflow.tasks.external.BundleExternalFiles`
@@ -198,14 +214,19 @@ class egamma_scale_corrector(Calibrator):
 
         :param reqs: Dictionary of requirements.
         """
+        if "external_files" in reqs:
+            return
+
         from columnflow.tasks.external import BundleExternalFiles
-        reqs["external_files"] = BundleExternalFiles.req(self.task)
+        reqs["external_files"] = BundleExternalFiles.req(task)
 
     def setup_func(
         self,
-        reqs: dict,
-        inputs: dict,
-        reader_targets: InsertableDict,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]],
+        inputs: dict[str, Any],
+        reader_targets: law.util.InsertableDict,
+        **kwargs,
     ) -> None:
         """Setup function before event chunk loop.
 
@@ -215,21 +236,15 @@ class egamma_scale_corrector(Calibrator):
         :param reqs: Dictionary with resolved requirements.
         :param inputs: Dictionary with inputs (not used).
         :param reader_targets: Dictionary for optional additional columns to load
-            (not used).
         """
-        bundle = reqs["external_files"]
         self.scale_config = self.get_scale_config()
-
         # create the egamma corrector
-        import correctionlib
-        correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-        correction_set = correctionlib.CorrectionSet.from_string(
-            self.get_correction_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-        )
-        self.scale_corrector = correction_set[self.scale_config.correction_set]
-
-        # check versions
-        assert self.scale_corrector.version in [0, 1, 2]
+        corr_file = self.get_correction_file(reqs["external_files"].files)
+        # init and extend the correction set
+        corr_set = load_correction_set(corr_file)
+        if self.scale_config.compound:
+            corr_set = corr_set.compound
+        self.scale_corrector = corr_set[self.scale_config.correction_set]
 
 
 class egamma_resolution_corrector(Calibrator):
@@ -266,19 +281,36 @@ class egamma_resolution_corrector(Calibrator):
         """Function to retrieve the configuration for the photon energy correction."""
         ...
 
-    def call_func(
-        self,
-        events: ak.Array,
-        **kwargs,
-    ) -> ak.Array:
+    def call_func(self, events: ak.Array, **kwargs) -> ak.Array:
         """
         Apply energy resolution corrections to EGamma objects in the events array.
 
-        This implementation follows the recommendations from the EGamma POG:
-        https://twiki.cern.ch/twiki/bin/view/CMS/EgammSFandSSRun3#Scale_And_Smearings_Example
+        There are two types of implementations: standard and Et dependent. For Run2 the standard
+        implementation is used, while for Run3 the Et dependent is recommended by the EGammaPog:
+        https://twiki.cern.ch/twiki/bin/viewauth/CMS/EgammSFandSSRun3?rev=41 The Et dependendent
+        recipe follows the example given in:
+        https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/66f581d0549e8d67fc55420d8bba15c9369fff7c/examples/egmScaleAndSmearingExample.py
 
-        Derivatives of this base class require additional member variables and
-        functions:
+        Requires an external file in the config under ``electron_ss``. Example:
+
+        .. code-block:: python
+
+            cfg.x.external_files = DotDict.wrap({
+                "electron_ss": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-120c4271/POG/EGM/2022_Summer22/electronSS_EtDependent.json.gz",  # noqa
+            })
+
+        The pairs of correction set, value and uncertainty type names, and if a compound method is used should be configured using the :py:class:`EGammaCorrectionConfig` as an
+        auxiliary entry in the config:
+
+        .. code-block:: python
+
+            cfg.x.eec = EGammaCorrectionConfig(
+                correction_set="EGMSmearAndSyst_ElePTsplit_2022preEE",
+                value_type="smear",
+                uncertainty_type="esmear",
+            )
+
+        Derivatives of this base class require additional member variables and functions:
 
         - *source_field*: The field name of the EGamma objects in the events array (i.e. `Electron` or `Photon`).
         - *get_correction_file*: Function to retrieve the correction file, e.g.
@@ -308,57 +340,60 @@ class egamma_resolution_corrector(Calibrator):
 
         # if no raw pt (i.e. pt for any corrections) is available, use the nominal pt
         if "rawPt" not in events[self.source_field].fields:
-            events = set_ak_column_f32(
-                events, f"{self.source_field}.rawPt", ak_copy(events[self.source_field].pt),
-            )
+            events = set_ak_column_f32(events, f"{self.source_field}.rawPt", ak_copy(events[self.source_field].pt))
 
         # the correction tool only supports flat arrays, so convert inputs to flat np view first
-
         sceta = flat_np_view(events[self.source_field].superclusterEta, axis=1)
         r9 = flat_np_view(events[self.source_field].r9, axis=1)
         flat_seeds = flat_np_view(events[self.source_field].deterministic_seed, axis=1)
+        pt = flat_np_view(events[self.source_field].rawPt, axis=1)
 
         # prepare arguments
-        # we use pt as et since there depends in linear (following the recoomendations)
-        # (energy is part of the LorentzVector behavior)
         variable_map = {
+            "AbsScEta": np.abs(sceta),
             "eta": sceta,
             "r9": r9,
-            **self.resolution_config.corrector_kwargs,
+            "pt": pt,
+            **self.resolution_cfg.corrector_kwargs,
         }
+
         args = tuple(
-            variable_map[inp.name] for inp in self.resolution_corrector.inputs
+            variable_map[inp.name]
+            for inp in self.resolution_corrector.inputs
             if inp.name in variable_map
         )
 
         # calculate the smearing scale
-        rho = self.resolution_corrector("rho", *args)
-
-        # -- stochastic smearing
-        # normally distributed random numbers according to EGamma resolution
+        # as mentioned in the example above, allows us to apply them directly to the MC simulation.
+        rho = self.resolution_corrector.evaluate(self.resolution_cfg.value_type, *args)
 
         # varied corrections
         if self.with_uncertainties and self.dataset_inst.is_mc:
-            rho_unc = self.resolution_corrector("err_rho", *args)
+            rho_unc = self.resolution_corrector.evaluate(self.resolution_cfg.uncertainty_type, *args)
+            random_normal_number = functools.partial(ak_random, 0, 1)
+            smearing_func = lambda rng_array, variation: rng_array * variation + 1
+
             smearing_up = (
-                ak_random(
-                    1, rho + rho_unc, flat_seeds,
-                    rand_func=self.deterministic_normal_up,
+                smearing_func(
+                    random_normal_number(flat_seeds, rand_func=self.deterministic_normal_up),
+                    rho + rho_unc,
                 )
                 if self.deterministic_seed_index >= 0
-                else ak_random(1, rho + rho_unc, rand_func=np.random.Generator(
-                    np.random.SFC64(events.event.to_list())).normal,
+                else smearing_func(
+                    random_normal_number(rand_func=np.random.Generator(np.random.SFC64(events.event.to_list())).normal),
+                    rho + rho_unc,
                 )
             )
 
             smearing_down = (
-                ak_random(
-                    1, rho - rho_unc, flat_seeds,
-                    rand_func=self.deterministic_normal_down,
+                smearing_func(
+                    random_normal_number(flat_seeds, rand_func=self.deterministic_normal_down),
+                    rho - rho_unc,
                 )
                 if self.deterministic_seed_index >= 0
-                else ak_random(1, rho - rho_unc, rand_func=np.random.Generator(
-                    np.random.SFC64(events.event.to_list())).normal,
+                else smearing_func(
+                    random_normal_number(rand_func=np.random.Generator(np.random.SFC64(events.event.to_list())).normal),
+                    rho - rho_unc,
                 )
             )
 
@@ -373,9 +408,7 @@ class egamma_resolution_corrector(Calibrator):
 
                 # save columns
                 postfix = f"res_{direction}"
-                events = set_ak_column_f32(
-                    events, f"{self.source_field}.pt_{postfix}", pt_varied,
-                )
+                events = set_ak_column_f32(events, f"{self.source_field}.pt_{postfix}", pt_varied)
 
         # apply the nominal correction
         # note: changes are applied to the views and directly propagate to the original ak arrays
@@ -395,7 +428,7 @@ class egamma_resolution_corrector(Calibrator):
 
         return events
 
-    def init_func(self) -> None:
+    def init_func(self, **kwargs) -> None:
         """Function to initialize the calibrator.
 
         Sets the required and produced columns for the calibrator.
@@ -411,11 +444,10 @@ class egamma_resolution_corrector(Calibrator):
         }
 
         # add columns with unceratinties if requested
-        if self.with_uncertainties and getattr(self, "dataset_inst", None):
-            if self.dataset_inst.is_mc:
-                self.produces |= {f"{self.source_field}.pt_res_{{up,down}}"}
+        if self.with_uncertainties and self.dataset_inst.is_mc:
+            self.produces |= {f"{self.source_field}.pt_res_{{up,down}}"}
 
-    def requires_func(self, reqs: dict) -> None:
+    def requires_func(self, task: law.Task, reqs: dict[str, DotDict[str, Any]], **kwargs) -> None:
         """Function to add necessary requirements.
 
         This function add the :py:class:`~columnflow.tasks.external.BundleExternalFiles`
@@ -423,10 +455,20 @@ class egamma_resolution_corrector(Calibrator):
 
         :param reqs: Dictionary of requirements.
         """
-        from columnflow.tasks.external import BundleExternalFiles
-        reqs["external_files"] = BundleExternalFiles.req(self.task)
+        if "external_files" in reqs:
+            return
 
-    def setup_func(self, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
+        from columnflow.tasks.external import BundleExternalFiles
+        reqs["external_files"] = BundleExternalFiles.req(task)
+
+    def setup_func(
+        self,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]],
+        inputs: dict[str, Any],
+        reader_targets: law.util.InsertableDict,
+        **kwargs,
+    ) -> None:
         """Setup function before event chunk loop.
 
         This function loads the correction file and sets up the correction tool.
@@ -439,24 +481,19 @@ class egamma_resolution_corrector(Calibrator):
         :param reader_targets: Dictionary for optional additional columns to load
             (not used).
         """
-        bundle = reqs["external_files"]
-        self.resolution_config = self.get_resolution_config()
-
+        self.resolution_cfg = self.get_resolution_config()
         # create the egamma corrector
-        import correctionlib
-        correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-        correction_set = correctionlib.CorrectionSet.from_string(
-            self.get_correction_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-        )
-        self.resolution_corrector = correction_set[self.resolution_config.correction_set]
-
-        # check versions
-        assert self.resolution_corrector.version in [0, 1, 2]
+        corr_file = self.get_correction_file(reqs["external_files"].files)
+        corr_set = load_correction_set(corr_file)
+        if self.resolution_cfg.compound:
+            corr_set = corr_set.compound
+        self.resolution_corrector = corr_set[self.resolution_cfg.correction_set]
 
         # use deterministic seeds for random smearing if requested
         if self.deterministic_seed_index >= 0:
             idx = self.deterministic_seed_index
             bit_generator = np.random.SFC64
+
             def deterministic_normal(loc, scale, seed, idx_offset=0):
                 return np.asarray([
                     np.random.Generator(bit_generator(_seed)).normal(_loc, _scale, size=idx + 1 + idx_offset)[-1]
@@ -513,10 +550,9 @@ def photons(self, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@photons.init
-def photons_init(self) -> None:
+@photons.pre_init
+def photons_pre_init(self, **kwargs) -> None:
     # forward argument to the producers
-
     if pec not in self.deps_kwargs:
         self.deps_kwargs[pec] = dict()
     if per not in self.deps_kwargs:
@@ -588,10 +624,9 @@ def electrons(self, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-@electrons.init
-def electrons_init(self) -> None:
+@electrons.pre_init
+def electrons_pre_init(self, **kwargs) -> None:
     # forward argument to the producers
-
     if eec not in self.deps_kwargs:
         self.deps_kwargs[eec] = dict()
     if eer not in self.deps_kwargs:

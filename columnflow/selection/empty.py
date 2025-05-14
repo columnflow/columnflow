@@ -91,7 +91,7 @@ def empty(
 
 
 @empty.init
-def empty_init(self: Selector) -> None:
+def empty_init(self: Selector, **kwargs) -> None:
     """
     Initializes the selector by finding the id of the inclusive category if no hard-coded category
     ids are given on class-level.

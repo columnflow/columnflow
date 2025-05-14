@@ -10,9 +10,11 @@ import functools
 import itertools
 from dataclasses import dataclass, field
 
+import law
+
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import propagate_met
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, load_correction_set, DotDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, ak_copy
 from columnflow.types import Any
 
@@ -31,10 +33,7 @@ class TECConfig:
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def new(
-        cls,
-        obj: TECConfig | tuple[str] | dict[str, str],
-    ) -> TECConfig:
+    def new(cls, obj: TECConfig | tuple[str] | dict[str, str]) -> TECConfig:
         # purely for backwards compatibility with the old tuple format that accepted the two
         # working point values
         if isinstance(obj, tuple) and len(obj) == 2:
@@ -119,8 +118,8 @@ def tec(
         "eta": eta[dm_mask],
         "dm": dm[dm_mask],
         "genmatch": match[dm_mask],
-        "id": self.tec_config.tagger,
-        **self.tec_config.corrector_kwargs,
+        "id": self.tec_cfg.tagger,
+        **self.tec_cfg.corrector_kwargs,
     }
     args = tuple(
         variable_map[inp.name] for inp in self.tec_corrector.inputs
@@ -210,8 +209,8 @@ def tec(
 
 
 @tec.init
-def tec_init(self: Calibrator) -> None:
-    self.tec_config: TECConfig = self.get_tec_config()
+def tec_init(self: Calibrator, **kwargs) -> None:
+    self.tec_cfg = self.get_tec_config()
 
     # add nominal met columns of propagating nominal tec
     if self.propagate_met:
@@ -226,33 +225,37 @@ def tec_init(self: Calibrator) -> None:
             src_fields += [f"{self.met_name}.{var}" for var in ["pt", "phi"]]
 
         self.produces |= {
-            f"{field}_tec_{match}_dm{dm}_{direction}"
-            for field, match, dm, direction in itertools.product(
-                src_fields,
-                ["jet", "e"],
-                [0, 1, 10, 11],
-                ["up", "down"],
-            )
+            f"{field}_tec_{{jet,e}}_dm{{0,1,10,11}}_{{up,down}}"
+            for field in src_fields
         }
 
 
 @tec.requires
-def tec_requires(self: Calibrator, reqs: dict) -> None:
+def tec_requires(
+    self: Calibrator,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
+    if "external_files" in reqs:
+        return
+
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @tec.setup
-def tec_setup(self: Calibrator, reqs: dict, inputs: dict, reader_targets: InsertableDict) -> None:
-    bundle = reqs["external_files"]
-
+def tec_setup(
+    self: Calibrator,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
+) -> None:
     # create the tec corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_tau_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
-    self.tec_corrector = correction_set[self.tec_config.correction_set]
+    tau_file = self.get_tau_file(reqs["external_files"].files)
+    self.tec_corrector = load_correction_set(tau_file)[self.tec_cfg.correction_set]
 
     # check versions
     assert self.tec_corrector.version in [0, 1]

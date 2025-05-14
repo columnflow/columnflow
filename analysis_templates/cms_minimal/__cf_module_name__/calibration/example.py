@@ -14,16 +14,8 @@ ak = maybe_import("awkward")
 
 
 @calibrator(
-    uses={
-        deterministic_seeds,
-        "Jet.{pt,eta,phi,mass}",
-    },
-    produces={
-        deterministic_seeds,
-        "Jet.pt", "Jet.mass",
-        "Jet.pt_jec_up", "Jet.mass_jec_up",
-        "Jet.pt_jec_down", "Jet.mass_jec_down",
-    },
+    uses={deterministic_seeds, "Jet.{pt,eta,phi,mass}"},
+    produces={deterministic_seeds, "Jet.{pt,mass}{,_jec_up,_jec_down}"},
 )
 def example(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # a) "correct" Jet.pt by scaling four momenta by 1.1 (pt<30) or 0.9 (pt<=30)
