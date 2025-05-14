@@ -708,6 +708,8 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     jec_uncertainty_sources=None,
     # whether gen jet matching should be performed relative to the nominal jet pt, or the jec varied values
     gen_jet_matching_nominal=False,
+    # regions where stochastic smearing is applied
+    stochastic_smearing_mask=lambda self, jets: ak.ones_like(jets.pt, dtype=np.bool),
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -847,7 +849,11 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
 
     # compute smearing factors (stochastic method)
-    smear_factors_stochastic = 1.0 + random_normal * jer * add_smear
+    smear_factors_stochastic = ak.where(
+        self.stochastic_smearing_mask(events[jet_name]),
+        1.0 + random_normal * jer * add_smear,
+        1.0,
+    )
 
     # -- scaling method (using gen match)
 
@@ -949,6 +955,12 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             events = set_ak_column_f32(events, f"{met_name}.phi{postfix}", met_phi)
 
     return events
+
+
+jer_horn_handling = jer.derive("jer_horn_handling", cls_dict={
+    # source: https://cms-jerc.web.cern.ch/Recommendations/#note-25eta30
+    "stochastic_smearing_mask": lambda self, jets: (abs(jets.eta) < 2.5) | (abs(jets.eta) > 3.0),
+})
 
 
 @jer.init

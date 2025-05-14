@@ -198,7 +198,11 @@ def msoftdrop(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         valid_subjet_idxs = ak.mask(subjet_idx, subjet_idx >= 0)
 
         # pad list of subjets to prevent index error on lookup
-        padded_subjet = ak.pad_none(subjet, ak.max(valid_subjet_idxs) + 1)
+        max_valid_subjets = ak.max(valid_subjet_idxs)
+        padded_subjet = ak.pad_none(
+            subjet,
+            0 if max_valid_subjets is None else (max_valid_subjets + 1),
+        )
 
         # retrieve subjets for each jet
         valid_subjet = padded_subjet[valid_subjet_idxs]
