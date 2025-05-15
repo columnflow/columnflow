@@ -11,6 +11,9 @@ from columnflow.util import maybe_import
 
 ak = maybe_import("awkward")
 
+# derive the nominal jer without jec variations
+jer_nominal = jer.derive("jer_nominal", cls_dict={"jec_uncertainty_sources": []})
+
 
 @calibrator(
     uses={deterministic_seeds},
@@ -57,7 +60,7 @@ def skip_jecunc(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         events = self[jec_nominal](events, **kwargs)
     else:
         events = self[jec_nominal](events, **kwargs)
-        events = self[jer](events, **kwargs)
+        events = self[jer_nominal](events, **kwargs)
 
     return events
 
@@ -71,7 +74,7 @@ def skip_jecunc_init(self: Calibrator) -> None:
     if self.dataset_inst.is_data:
         calibrators = {jec_nominal}
     else:
-        calibrators = {jec_nominal, jer}
+        calibrators = {jec_nominal, jer_nominal}
 
     self.uses |= calibrators
     self.produces |= calibrators
