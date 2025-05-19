@@ -161,7 +161,7 @@ def add_config(
             # extra columns
         } | four_vec(  # Jets
             {"Jet"},
-            {"btagDeepFlavB", "btagDeepFlavCvB"},
+            {"btagDeepFlavB", "btagDeepFlavCvB", "hadronFlavour"},
         ) | four_vec(  # Leptons
             {"Electron", "Muon", },
             {"deltaEtaSC"},
