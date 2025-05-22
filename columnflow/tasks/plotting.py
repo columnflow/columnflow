@@ -282,23 +282,20 @@ class PlotVariablesBase(_PlotVariablesBase):
             fake_root.processes.clear()
             hists = dict(zip(process_insts, hists.values()))
 
-            # correct luminosity label in case of multiple configs
-            if len(self.config_insts) == 1:
-                config_inst = self.config_inst
-            else:
-                config_inst = self.config_insts[0].copy(id=-1, name=f"{self.config_insts[0].name}_merged")
-                config_inst.x.luminosity = sum([_config_inst.x.luminosity for _config_inst in self.config_insts])
-
-            # call the plot function
-            fig, _ = self.call_plot_func(
-                self.plot_function,
-                hists=hists,
-                config_inst=config_inst,
-                category_inst=category_inst.copy_shallow(),
-                variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
-                shift_insts=plot_shifts,
-                **self.get_plot_parameters(),
-            )
+            # temporarily use a merged luminostiy value, assigned to the first config
+            config_inst = self.config_insts[0]
+            lumi = sum([_config_inst.x.luminosity for _config_inst in self.config_insts])
+            with law.util.patch_object(config_inst.x, "luminosity", lumi):
+                # call the plot function
+                fig, _ = self.call_plot_func(
+                    self.plot_function,
+                    hists=hists,
+                    config_inst=config_inst,
+                    category_inst=category_inst.copy_shallow(),
+                    variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                    shift_insts=plot_shifts,
+                    **self.get_plot_parameters(),
+                )
 
             # save the plot
             for outp in self.output()["plots"]:
