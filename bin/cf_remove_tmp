@@ -40,7 +40,7 @@ cf_remove_tmp() {
     # remove all files and directories in tmp_dir owned by the user
     local pattern="luigi-tmp-*"
     [ "${mode}" = "all" ] && pattern="*"
-    find "${tmp_dir}" -maxdepth 1 -name "${pattern}" -user "$( id -u )" -delete
+    find "${tmp_dir}" -maxdepth 1 -name "${pattern}" -user "$( id -u )" -exec rm -r "{}" \;
 }
 
 cf_remove_tmp "$@"
