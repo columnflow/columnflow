@@ -24,6 +24,7 @@ logger = law.logger.get_logger(__name__)
 @dataclass
 class BTagSFConfig:
     correction_set: str
+    sources: list[str]
     jec_sources: list[str]
     discriminator: str = ""  # when empty, set in post init based on correction set
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
@@ -35,6 +36,8 @@ class BTagSFConfig:
                 self.discriminator = "btagDeepFlavB"
             elif "particlenet" in cs:
                 self.discriminator = "btagPNetB"
+            elif "robustparticletransformer" in cs:
+                self.discriminator = "btagRobustParTAK4B"
             else:
                 raise NotImplementedError(
                     "cannot identify btag discriminator for correction set "
