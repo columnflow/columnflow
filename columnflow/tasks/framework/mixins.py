@@ -1466,6 +1466,11 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
 
     build_producer_inst = ProducerMixin.build_producer_inst
 
+    def _array_function_post_init(self, **kwargs) -> None:
+        if self.preparation_producer_inst:
+            self.preparation_producer_inst.run_post_init(task=self, **kwargs)
+        super()._array_function_post_init(**kwargs)
+
     def teardown_preparation_producer_inst(self) -> None:
         if self.preparation_producer_inst:
             self.preparation_producer_inst.run_teardown(task=self)
