@@ -246,6 +246,7 @@ class CreateHistograms(_CreateHistograms):
                 unique_category_ids = np.unique(ak.flatten(category_ids))
                 if any(cat_id not in category_map for cat_id in unique_category_ids):
                     undefined_category_ids = set(unique_category_ids) - set(category_map)
+                    undefined_category_ids = list(map(str, undefined_category_ids))
                     raise ValueError(
                         f"category ids {', '.join(undefined_category_ids)} in category id column are not defined as "
                         "leaf categories in the config_inst",
