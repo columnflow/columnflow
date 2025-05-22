@@ -310,7 +310,9 @@ def add_shift_aliases(
 
 def get_shift_from_configs(configs: list[od.Config], shift: str | od.Shift, silent: bool = False) -> od.Shift | None:
     """
-
+    Given a list of *configs* and a *shift* name or instance, returns the corresponding shift instance from the first
+    config that contains it. If *silent* is *True*, *None* is returned instead of raising an exception in case the shift
+    is not found.
     """
     if isinstance(shift, od.Shift):
         shift = shift.name

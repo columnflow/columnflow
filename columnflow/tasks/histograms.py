@@ -155,7 +155,7 @@ class CreateHistograms(_CreateHistograms):
         inputs = self.input()
 
         # get IDs and names of all leaf categories
-        category_map = {
+        leaf_category_map = {
             cat.id: cat.name
             for cat in self.config_inst.get_leaf_categories()
         }
@@ -244,12 +244,12 @@ class CreateHistograms(_CreateHistograms):
                     axis=-1,
                 )
                 unique_category_ids = np.unique(ak.flatten(category_ids))
-                if any(cat_id not in category_map for cat_id in unique_category_ids):
-                    undefined_category_ids = set(unique_category_ids) - set(category_map)
-                    undefined_category_ids = list(map(str, undefined_category_ids))
+                if any(cat_id not in leaf_category_map for cat_id in unique_category_ids):
+                    undefined_category_ids = list(map(str, set(unique_category_ids) - set(leaf_category_map)))
                     raise ValueError(
-                        f"category ids {', '.join(undefined_category_ids)} in category id column are not defined as "
-                        "leaf categories in the config_inst",
+                        f"category_ids column contains ids {','.join(undefined_category_ids)} that are either not "
+                        "known to the config at all, or not as leaf categories (i.e., they have child categories); "
+                        "please ensure that category_ids only contains ids of known leaf categories",
                     )
 
                 # define and fill histograms, taking into account multiple axes

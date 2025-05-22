@@ -6,8 +6,6 @@ Column production methods related defining categories.
 
 from __future__ import annotations
 
-from collections import defaultdict
-
 import law
 
 from columnflow.categorization import Categorizer
@@ -65,7 +63,7 @@ def category_ids(
 @category_ids.init
 def category_ids_init(self: Producer, **kwargs) -> None:
     # store a mapping from leaf category to categorizer classes for faster lookup
-    self.categorizer_map = defaultdict(list)
+    self.categorizer_map = {}
 
     # add all categorizers obtained from leaf category selection expressions to the used columns
     for cat_inst in self.config_inst.get_leaf_categories():
@@ -96,7 +94,4 @@ def category_ids_init(self: Producer, **kwargs) -> None:
             self.uses.add(categorizer)
             self.produces.add(categorizer)
 
-            self.categorizer_map[cat_inst].append(categorizer)
-
-    # cast to normal dict to prevent silent failures on KeyError
-    self.categorizer_map = dict(self.categorizer_map)
+            self.categorizer_map.setdefault(cat_inst, []).append(categorizer)

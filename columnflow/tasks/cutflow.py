@@ -113,7 +113,7 @@ class CreateCutflowHistograms(_CreateCutflowHistograms):
         inputs = self.input()
 
         # get IDs and names of all leaf categories
-        category_map = {
+        leaf_category_map = {
             cat.id: cat.name
             for cat in self.config_inst.get_leaf_categories()
         }
@@ -199,11 +199,12 @@ class CreateCutflowHistograms(_CreateCutflowHistograms):
             # pad the category_ids when the event is not categorized at all
             category_ids = ak.fill_none(ak.pad_none(events.category_ids, 1, axis=-1), -1)
             unique_category_ids = np.unique(ak.flatten(category_ids))
-            if any(cat_id not in category_map for cat_id in unique_category_ids):
-                undefined_category_ids = set(unique_category_ids) - set(category_map)
+            if any(cat_id not in leaf_category_map for cat_id in unique_category_ids):
+                undefined_category_ids = list(map(str, set(unique_category_ids) - set(leaf_category_map)))
                 raise ValueError(
-                    f"Category ids {', '.join(undefined_category_ids)} in category id column "
-                    "are not defined as leaf categories in the config_inst",
+                    f"category_ids column contains ids {','.join(undefined_category_ids)} that are either not known to "
+                    "the config at all, or not as leaf categories (i.e., they have child categories); please ensure "
+                    "that category_ids only contains ids of known leaf categories",
                 )
 
             for var_key, var_names in self.variable_tuples.items():
@@ -267,7 +268,7 @@ class CreateCutflowHistograms(_CreateCutflowHistograms):
         # change some axes from int to str
         for var_key in self.variable_tuples.keys():
             # category
-            histograms[var_key] = translate_hist_intcat_to_strcat(histograms[var_key], "category", category_map)
+            histograms[var_key] = translate_hist_intcat_to_strcat(histograms[var_key], "category", leaf_category_map)
             # process
             process_map = {
                 proc_id: self.config_inst.get_process(proc_id).name
