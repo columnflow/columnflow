@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+
+cf_remove_tmp() {
+    # Removes all files owned by the user in the directory referred to by `law config target.tmp_dir` (usually identical
+    # to $LAW_TARGET_TMP_DIR).
+    #
+    # Arguments:
+    #   1. mode: optional, when "all" files are removed rather than just files starting with luigi-tmp-*.
+
+    # zsh options
+    local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
+    if ${shell_is_zsh}; then
+        emulate -L bash
+        setopt globdots
+    fi
+
+    # get the mode
+    local mode="$1"
+    if [ ! -z "${mode}" ]; then
+        if [ "${mode}" != "all" ]; then
+            >&2 echo "invalid mode '${mode}', use 'all' or leave empty"
+            return "1"
+        fi
+    fi
+
+    # get the directory
+    local tmp_dir="$( law config target.tmp_dir )"
+    local ret="$?"
+    if [ "${ret}" != "0" ]; then
+        >&2 echo "'law config target.tmp_dir' failed with error code ${ret}"
+        return "${ret}"
+    elif [ -z "${tmp_dir}" ]; then
+        >&2 echo "'law config target.tmp_dir' must not be empty"
+        return "2"
+    elif [ ! -d "${tmp_dir}" ]; then
+        >&2 echo "'law config target.tmp_dir' is not a directory"
+        return "3"
+    fi
+
+    # remove all files and directories in tmp_dir owned by the user
+    local pattern="luigi-tmp-*"
+    [ "${mode}" = "all" ] && pattern="*"
+    find "${tmp_dir}" -maxdepth 1 -name "${pattern}" -user "$( id -u )" -exec rm -r "{}" \;
+}
+
+cf_remove_tmp "$@"

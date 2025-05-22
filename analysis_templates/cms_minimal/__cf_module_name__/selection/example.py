@@ -24,7 +24,6 @@ ak = maybe_import("awkward")
 # (not selectable from the command line but used by other, exposed selectors)
 #
 
-
 @selector(
     uses={"Muon.{pt,eta,phi,mass}"},
 )
@@ -91,6 +90,7 @@ def jet_selection_init(self: Selector) -> None:
         if shift_inst.has_tag(("jec", "jer"))
     }
 
+
 #
 # exposed selectors
 # (those that can be invoked from the command line)
@@ -100,8 +100,7 @@ def jet_selection_init(self: Selector) -> None:
 @selector(
     uses={
         # selectors / producers called within _this_ selector
-        mc_weight, cutflow_features, process_ids, muon_selection, jet_selection,
-        increment_stats,
+        mc_weight, cutflow_features, process_ids, muon_selection, jet_selection, increment_stats,
     },
     produces={
         # selectors / producers whose newly created columns should be kept
