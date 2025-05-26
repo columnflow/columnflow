@@ -224,7 +224,7 @@ def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hi
         if scale_factor == "stack":
             # compute the scale factor and round
             h_no_shift = remove_residual_axis_single(h, "shift", select_value="nominal")
-            scale_factor = round_dynamic(get_stack_integral() / h_no_shift.sum().value)
+            scale_factor = round_dynamic(get_stack_integral() / h_no_shift.sum().value) or 1
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
@@ -233,11 +233,12 @@ def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hi
                 if scale_factor < 1e5
                 else re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
             )
-            proc_inst.label = apply_label_placeholders(
-                proc_inst.label,
-                apply="SCALE",
-                scale=scale_factor_str,
-            )
+            if scale_factor != 1:
+                proc_inst.label = apply_label_placeholders(
+                    proc_inst.label,
+                    apply="SCALE",
+                    scale=scale_factor_str,
+                )
 
         # remove remaining scale placeholders
         proc_inst.label = remove_label_placeholders(proc_inst.label, drop="SCALE")
