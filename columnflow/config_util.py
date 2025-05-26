@@ -16,12 +16,15 @@ from collections import OrderedDict, defaultdict
 import law
 import order as od
 
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, get_docs_url
 from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.types import Callable, Any, Sequence
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
+
+
+logger = law.logger.get_logger(__name__)
 
 
 def get_events_from_categories(
@@ -556,11 +559,18 @@ def create_category_combinations(
     for name, _categories in categories.items():
         # ensure CategoryGroup is used
         if not isinstance(_categories, CategoryGroup):
+            docs_url = get_docs_url("api", "config_util.html", anchor="columnflow.config_util.CategoryGroup")
+            logger.warning_once(
+                "deprecated_category_group_lists",
+                f"using a list to define a sequence of categories for create_category_combinations() is depcreated "
+                f"and will be removed in a future version, please use a CategoryGroup instance instead: {docs_url}",
+            )
             _categories = CategoryGroup(
                 categories=law.util.make_list(_categories),
                 is_complete=True,
                 has_overlap=False,
             )
+            categories[name] = _categories
         # cast string category names to instances
         for i, cat in enumerate(_categories.categories):
             if isinstance(cat, str):
