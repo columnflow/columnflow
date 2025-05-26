@@ -1458,7 +1458,9 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
     exclude_params_sandbox = {"preparation_producer_inst"}
     exclude_params_remote_workflow = {"preparation_producer_inst"}
 
-    invokes_preparation_producer = False
+    @classmethod
+    def invokes_preparation_producer(cls, params) -> bool:
+        return False
 
     @classmethod
     def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -1478,10 +1480,12 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
         ml_model_inst = params["ml_model_inst"]
-        preparation_producer = ml_model_inst.preparation_producer(params["analysis_inst"])
-        # add the producer instance
-        if preparation_producer and not params.get("preparation_producer_inst"):
-            params["preparation_producer_inst"] = cls.build_producer_inst(preparation_producer, params)
+
+        if cls.invokes_preparation_producer(params):
+            preparation_producer = ml_model_inst.preparation_producer(params["analysis_inst"])
+            # add the producer instance
+            if preparation_producer and not params.get("preparation_producer_inst"):
+                params["preparation_producer_inst"] = cls.build_producer_inst(preparation_producer, params)
 
         params = super().resolve_instances(params, shifts)
 
