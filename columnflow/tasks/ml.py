@@ -50,7 +50,10 @@ class PrepareMLEvents(
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     allow_empty_ml_model = False
-    invokes_preparation_producer = True
+
+    @classmethod
+    def invokes_preparation_producer(cls, params) -> bool:
+        return True
 
     # upstream requirements
     reqs = Requirements(
@@ -570,8 +573,6 @@ class MLEvaluation(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    # TODO: Needs to be chosen based on ml_model_cls.preparation_producer_in_ml_evaluation
-    invokes_preparation_producer = True
 
     sandbox = None
 
@@ -594,6 +595,11 @@ class MLEvaluation(
         # set the sandbox
         self.sandbox = self.ml_model_inst.sandbox(self)
         # TODO: potentially reset
+
+    @classmethod
+    def invokes_preparation_producer(cls, params) -> bool:
+        # check if the preparation producer is used in the ML model
+        return bool(params["ml_model_inst"].preparation_producer_in_ml_evaluation)
 
     @classmethod
     def resolve_param_values_pre_init(
