@@ -40,7 +40,7 @@ class DrellYanConfig:
 
 @producer(
     uses={"GenPart.*"},
-    produces={"gen_dilepton_pt", "gen_dilepton_{vis,all}.{pt,eta,phi,mass}"},
+    produces={"gen_dilepton_{pdgid,pt}", "gen_dilepton_{vis,all}.{pt,eta,phi,mass}"},
 )
 def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -92,7 +92,11 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     lepton_pair_momenta_vis = lepton_pairs_vis.sum(axis=-1)
     lepton_pair_momenta_all = lepton_pairs_all.sum(axis=-1)
 
-    # finally, save the pt and phi of the lepton pair on generator level
+    # absolute pdg id of one parrticle of the lepton pair
+    lepton_pair_pdgid = ak.without_parameters(abs(events.GenPart[lepton_mask].pdgId[:, 0]))
+
+    # finally, save generator-level lepton pair variables
+    events = set_ak_column(events, "gen_dilepton_pdgid", lepton_pair_pdgid)
     events = set_ak_column(events, "gen_dilepton_pt", lepton_pair_momenta.pt)
     events = set_ak_column(events, "gen_dilepton_vis.pt", lepton_pair_momenta_vis.pt)
     events = set_ak_column(events, "gen_dilepton_vis.eta", lepton_pair_momenta_vis.eta)
