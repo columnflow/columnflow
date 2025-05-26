@@ -9,6 +9,7 @@ from __future__ import annotations
 __all__ = []
 
 import re
+import dataclasses
 import itertools
 from collections import OrderedDict, defaultdict
 
@@ -457,43 +458,72 @@ def add_category(
     return parent.add_category(**kwargs)
 
 
+@dataclasses.dataclass
+class CategoryGroup:
+    """
+    Container to store information about a group of categories, mostly used for creating of combinations in
+    :py:func:`create_category_combinations`.
+
+    :param categories: List of :py:class:`order.Category` objects or names that refer to the desired category.
+    :param is_complete: Should be *True* if the union of category selections covers the full phase space (no gaps).
+    :param has_overlap: Should be *False* if all categories are pairwise disjoint (no overlap).
+    """
+
+    categories: list[od.Category | str]
+    is_complete: bool
+    has_overlap: bool
+
+    @property
+    def is_partition(self) -> bool:
+        """
+        Returns *True* if the group of categories is a full partition of the phase space (no overlap, no gaps).
+        """
+        return self.is_complete and not self.has_overlap
+
+
 def create_category_combinations(
     config: od.Config,
-    categories: dict[str, list[od.Category]],
+    categories: dict[str, CategoryGroup | list[od.Category]],
     name_fn: Callable[[Any], str],
     kwargs_fn: Callable[[Any], dict] | None = None,
     skip_existing: bool = True,
     skip_fn: Callable[[dict[str, od.Category], str], bool] | None = None,
 ) -> int:
     """
-    Given a *config* object and sequences of *categories* in a dict, creates all combinations of
-    possible leaf categories at different depths, connects them with parent - child relations
-    (see :py:class:`order.Category`) and returns the number of newly created categories.
+    Given a *config* object and sequences of *categories* in a dict, creates all combinations of possible leaf
+    categories at different depths, connects them with parent - child relations (see :py:class:`order.Category`) and
+    returns the number of newly created categories.
 
-    *categories* should be a dictionary that maps string names to sequences of categories that
-    should be combined. The names are used as keyword arguments in a callable *name_fn* that is
-    supposed to return the name of newly created categories (see example below).
+    *categories* should be a dictionary that maps string names to :py:class:`CategoryGroup` objects which are thin
+    wrappers around sequences of categories (objects or names). Group names (dictionary keys) are used as keyword
+    arguments in a callable *name_fn* that is supposed to return the name of newly created categories (see example
+    below).
 
-    Each newly created category is instantiated with this name as well as arbitrary keyword
-    arguments as returned by *kwargs_fn*. This function is called with the categories (in a
-    dictionary, mapped to the sequence names as given in *categories*) that contribute to the newly
-    created category and should return a dictionary. If the fields ``"id"`` and ``"selection"`` are
-    missing, they are filled with reasonable defaults leading to a auto-generated, deterministic id
-    and a list of all parent selection statements.
+    .. note::
 
-    If the name of a new category is already known to *config* it is skipped unless *skip_existing*
-    is *False*. In addition, *skip_fn* can be a callable that receives a dictionary mapping group
-    names to categories that represents the combination of categories to be added. In case *skip_fn*
-    returns *True*, the combination is skipped.
+        The :py:attr:`CategoryGroup.is_complete` and :py:attr:`CategoryGroup.has_overlap` attributes are imperative for
+        columnflow to determine whether the summation over specific categories is valid or may result in under- or
+        over-counting when combining leaf categories. These checks may be performed by other functions and tools based
+        on information derived from groups and stored in auxiliary fields of the newly created categories.
+
+    Each newly created category is instantiated with this name as well as arbitrary keyword arguments as returned by
+    *kwargs_fn*. This function is called with the categories (in a dictionary, mapped to the sequence names as given in
+    *categories*) that contribute to the newly created category and should return a dictionary. If the fields ``"id"``
+    and ``"selection"`` are missing, they are filled with reasonable defaults leading to a auto-generated, deterministic
+    id and a list of all parent selection statements.
+
+    If the name of a new category is already known to *config* it is skipped unless *skip_existing* is *False*. In
+    addition, *skip_fn* can be a callable that receives a dictionary mapping group names to categories that represents
+    the combination of categories to be added. In case *skip_fn* returns *True*, the combination is skipped.
 
     Example:
 
     .. code-block:: python
 
         categories = {
-            "lepton": [cfg.get_category("e"), cfg.get_category("mu")],
-            "n_jets": [cfg.get_category("1j"), cfg.get_category("2j")],
-            "n_tags": [cfg.get_category("0t"), cfg.get_category("1t")],
+            "lepton": CategoryGroup(categories=["e", "mu"], is_complete=False, has_overlap=False),
+            "n_jets": CategoryGroup(categories=["eq0j", "eq1j", "ge2j"], is_complete=True, has_overlap=False),
+            "n_tags": CategoryGroup(categories=["0t", "1t"], is_complete=False, has_overlap=False),
         }
 
         def name_fn(categories):
@@ -509,20 +539,33 @@ def create_category_combinations(
         create_category_combinations(cfg, categories, name_fn, kwargs_fn)
 
     :param config: :py:class:`order.Config` object for which the categories are created.
-    :param categories: Dictionary that maps group names to sequences of categories.
-    :param name_fn: Callable that receives a dictionary mapping group names to categories and
-        returns the name of the newly created category.
-    :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and
-        returns a dictionary of keyword arguments that are forwarded to the category constructor.
-    :param skip_existing: If *True*, skip the creation of a category when it already exists in
-        *config*.
-    :param skip_fn: Callable that receives a dictionary mapping group names to categories and
-        returns *True* if the combination should be skipped.
+    :param categories: Dictionary that maps group names to :py:class:`CategoryGroup` containers.
+    :param name_fn: Callable that receives a dictionary mapping group names to categories and returns the name of the
+        newly created category.
+    :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and returns a dictionary of
+        keyword arguments that are forwarded to the category constructor.
+    :param skip_existing: If *True*, skip the creation of a category when it already exists in *config*.
+    :param skip_fn: Callable that receives a dictionary mapping group names to categories and returns *True* if the
+        combination should be skipped.
     :raises TypeError: If *name_fn* is not a callable.
     :raises TypeError: If *kwargs_fn* is not a callable when set.
     :raises ValueError: If a non-unique category id is detected.
     :return: Number of newly created categories.
     """
+    # cast categories
+    for name, _categories in categories.items():
+        # ensure CategoryGroup is used
+        if not isinstance(_categories, CategoryGroup):
+            _categories = CategoryGroup(
+                categories=law.util.make_list(_categories),
+                is_complete=True,
+                has_overlap=False,
+            )
+        # cast string category names to instances
+        for i, cat in enumerate(_categories.categories):
+            if isinstance(cat, str):
+                _categories.categories[i] = config.get_category(cat)
+
     n_created_categories = 0
     unique_ids_cache = {cat.id for cat, _, _ in config.walk_categories()}
     n_groups = len(categories)
@@ -545,7 +588,7 @@ def create_category_combinations(
         for _group_names in itertools.combinations(group_names, _n_groups):
 
             # build the product of all categories for the given groups
-            _categories = [categories[group_name] for group_name in _group_names]
+            _categories = [categories[group_name].categories for group_name in _group_names]
             for root_cats in itertools.product(*_categories):
                 # build the name
                 root_cats = dict(zip(_group_names, root_cats))
