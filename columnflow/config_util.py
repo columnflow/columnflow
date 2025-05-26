@@ -464,7 +464,7 @@ def add_category(
 @dataclasses.dataclass
 class CategoryGroup:
     """
-    Container to store information about a group of categories, mostly used for creating of combinations in
+    Container to store information about a group of categories, mostly used for creating combinations in
     :py:func:`create_category_combinations`.
 
     :param categories: List of :py:class:`order.Category` objects or names that refer to the desired category.
