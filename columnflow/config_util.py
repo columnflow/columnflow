@@ -470,11 +470,13 @@ class CategoryGroup:
     :param categories: List of :py:class:`order.Category` objects or names that refer to the desired category.
     :param is_complete: Should be *True* if the union of category selections covers the full phase space (no gaps).
     :param has_overlap: Should be *False* if all categories are pairwise disjoint (no overlap).
+    :param warn: If *True*, a warning is issued when summing over the group of categories.
     """
 
     categories: list[od.Category | str]
     is_complete: bool
     has_overlap: bool
+    warn: bool = True
 
     @property
     def is_partition(self) -> bool:
