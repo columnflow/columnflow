@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
 version = tuple(map(int, m.groups()[:3])) + (m.group(4),)
 
+#: Location of the documentation.
+docs_url = os.getenv("CF_DOCS_URL", "https://columnflow.readthedocs.io/en/latest")
+
+#: Location of the repository on github.
+github_url = os.getenv("CF_GITHUB_URL", "https://github.com/columnflow/columnflow")
+
 #: Boolean denoting whether the environment is in a local environment (based on ``CF_LOCAL_ENV``).
 env_is_local = law.util.flag_to_bool(os.getenv("CF_LOCAL_ENV", "false"))
 
@@ -76,18 +82,6 @@ if not env_is_rtd:
     # initialize producers, calibrators, selectors, categorizers, ml models and stat models
     from columnflow.util import maybe_import
 
-    import columnflow.production  # noqa
-    if law.config.has_option("analysis", "production_modules"):
-        for m in law.config.get_expanded("analysis", "production_modules", [], split_csv=True):
-            logger.debug(f"loading production module '{m}'")
-            maybe_import(m.strip())
-
-    import columnflow.weight  # noqa
-    if law.config.has_option("analysis", "weight_production_modules"):
-        for m in law.config.get_expanded("analysis", "weight_production_modules", [], split_csv=True):
-            logger.debug(f"loading weight production module '{m}'")
-            maybe_import(m.strip())
-
     import columnflow.calibration  # noqa
     if law.config.has_option("analysis", "calibration_modules"):
         for m in law.config.get_expanded("analysis", "calibration_modules", [], split_csv=True):
@@ -98,6 +92,24 @@ if not env_is_rtd:
     if law.config.has_option("analysis", "selection_modules"):
         for m in law.config.get_expanded("analysis", "selection_modules", [], split_csv=True):
             logger.debug(f"loading selection module '{m}'")
+            maybe_import(m.strip())
+
+    import columnflow.reduction  # noqa
+    if law.config.has_option("analysis", "reduction_modules"):
+        for m in law.config.get_expanded("analysis", "reduction_modules", [], split_csv=True):
+            logger.debug(f"loading reduction module '{m}'")
+            maybe_import(m.strip())
+
+    import columnflow.production  # noqa
+    if law.config.has_option("analysis", "production_modules"):
+        for m in law.config.get_expanded("analysis", "production_modules", [], split_csv=True):
+            logger.debug(f"loading production module '{m}'")
+            maybe_import(m.strip())
+
+    import columnflow.histogramming  # noqa
+    if law.config.has_option("analysis", "hist_production_modules"):
+        for m in law.config.get_expanded("analysis", "hist_production_modules", [], split_csv=True):
+            logger.debug(f"loading hist production module '{m}'")
             maybe_import(m.strip())
 
     import columnflow.categorization  # noqa

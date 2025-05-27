@@ -9,8 +9,9 @@ import functools
 import law
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict
+from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -56,7 +57,12 @@ def pu_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @pu_weight.requires
-def pu_weight_requires(self: Producer, reqs: dict) -> None:
+def pu_weight_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
@@ -64,15 +70,17 @@ def pu_weight_requires(self: Producer, reqs: dict) -> None:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @pu_weight.setup
 def pu_weight_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     """
     Loads the pileup calculator from the external files bundle and saves them in the
@@ -121,7 +129,12 @@ def pu_weights_from_columnflow(self: Producer, events: ak.Array, **kwargs) -> ak
 
 
 @pu_weights_from_columnflow.requires
-def pu_weights_from_columnflow_requires(self: Producer, reqs: dict) -> None:
+def pu_weights_from_columnflow_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
@@ -129,15 +142,17 @@ def pu_weights_from_columnflow_requires(self: Producer, reqs: dict) -> None:
         return
 
     from columnflow.tasks.cms.external import CreatePileupWeights
-    reqs["pu_weights"] = CreatePileupWeights.req(self.task)
+    reqs["pu_weights"] = CreatePileupWeights.req(task)
 
 
 @pu_weights_from_columnflow.setup
 def pu_weights_from_columnflow_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     """
     Loads the pileup weights added through the requirements and saves them in the

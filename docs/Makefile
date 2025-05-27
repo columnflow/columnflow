@@ -1,6 +1,6 @@
 # Makefile for Sphinx documentation
 
-SPHINXOPTS  =
+SPHINXOPTS  = -v
 SPHINXBUILD = sphinx-build
 BUILDDIR    = _build
 

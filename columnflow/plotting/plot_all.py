@@ -8,12 +8,18 @@ from __future__ import annotations
 
 __all__ = []
 
+import order as od
+
 from columnflow.types import Sequence
 from columnflow.util import maybe_import, try_float
+from columnflow.config_util import group_shifts
 from columnflow.plotting.plot_util import (
     get_position,
+    apply_ax_kwargs,
     get_cms_label,
     remove_label_placeholders,
+    apply_label_placeholders,
+    calculate_stat_error,
 )
 
 hist = maybe_import("hist")
@@ -21,18 +27,19 @@ np = maybe_import("numpy")
 mpl = maybe_import("matplotlib")
 plt = maybe_import("matplotlib.pyplot")
 mplhep = maybe_import("mplhep")
-od = maybe_import("order")
 
 
-def draw_error_bands(
+def draw_stat_error_bands(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
     **kwargs,
 ) -> None:
-    # compute relative errors
-    rel_error = h.variances()**0.5 / h.values()
-    rel_error[np.isnan(rel_error)] = 0.0
+    assert len(h.axes) == 1
+
+    # compute relative statistical errors
+    rel_stat_error = h.variances()**0.5 / h.values()
+    rel_stat_error[np.isnan(rel_stat_error)] = 0.0
 
     # compute the baseline
     # fill 1 in places where both numerator and denominator are 0, and 0 for remaining nan's
@@ -40,19 +47,119 @@ def draw_error_bands(
     baseline[(h.values() == 0) & (norm == 0)] = 1.0
     baseline[np.isnan(baseline)] = 0.0
 
-    defaults = {
+    bar_kwargs = {
         "x": h.axes[0].centers,
+        "bottom": baseline * (1 - rel_stat_error),
+        "height": baseline * 2 * rel_stat_error,
         "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
-        "height": baseline * 2 * rel_error,
-        "bottom": baseline * (1 - rel_error),
         "hatch": "///",
-        "facecolor": "none",
         "linewidth": 0,
-        "color": "black",
+        "color": "none",
+        "edgecolor": "black",
         "alpha": 1.0,
+        **kwargs,
     }
-    defaults.update(kwargs)
-    ax.bar(**defaults)
+    ax.bar(**bar_kwargs)
+
+
+def draw_syst_error_bands(
+    ax: plt.Axes,
+    h: hist.Hist,
+    syst_hists: Sequence[hist.Hist],
+    shift_insts: Sequence[od.Shift],
+    norm: float | Sequence | np.ndarray = 1.0,
+    method: str = "quadratic_sum",
+    **kwargs,
+) -> None:
+    assert len(h.axes) == 1
+    assert method in ("quadratic_sum", "envelope")
+
+    nominal_shift, shift_groups = group_shifts(shift_insts)
+    if nominal_shift is None:
+        raise ValueError("no nominal shift found in the list of shift instances")
+
+    # create pairs of shifts mapping from up -> down and vice versa
+    shift_pairs = {}
+    for up_shift, down_shift in shift_groups.values():
+        shift_pairs[up_shift] = down_shift
+        shift_pairs[down_shift] = up_shift
+
+    # stack histograms separately per shift, falling back to the nominal one when missing
+    shift_stacks: dict[od.Shift, hist.Hist] = {}
+    for shift_inst in sum(shift_groups.values(), []):
+        for _h in syst_hists:
+            # when the shift is present, the flipped shift must exist as well
+            shift_ax = _h.axes["shift"]
+            if shift_inst.name in shift_ax:
+                if shift_pairs[shift_inst].name not in shift_ax:
+                    raise RuntimeError(
+                        f"shift {shift_inst} found in histogram but {shift_pairs[shift_inst]} is missing; "
+                        f"existing shifts: {','.join(map(str, list(shift_ax)))}",
+                    )
+                shift_name = shift_inst.name
+            else:
+                shift_name = nominal_shift.name
+            # store the slice
+            _h = _h[{"shift": hist.loc(shift_name)}]
+            if shift_inst not in shift_stacks:
+                shift_stacks[shift_inst] = _h
+            else:
+                shift_stacks[shift_inst] += _h
+
+    # loop over bins, subtract nominal yields from stacked yields and merge differences into
+    # a systematic error per bin using the given method (quadratic sum vs. evelope)
+    # note 1: if the up/down variations of the same shift source point in the same direction, a
+    #         statistical combination is pointless and their minimum/maximum is selected instead
+    # note 2: relative signs are consumed into the meaning of "up" and "down" here as they already
+    #         are combinations evaluated for a specific direction
+    syst_error_up = []
+    syst_error_down = []
+    for b in range(h.axes[0].size):
+        up_diffs = []
+        down_diffs = []
+        for source, (up_shift, down_shift) in shift_groups.items():
+            # get actual differences resulting from this shift
+            shift_up_diff = shift_stacks[up_shift].values()[b] - h.values()[b]
+            shift_down_diff = shift_stacks[down_shift].values()[b] - h.values()[b]
+            # store them depending on whether they really increase or decrease the yield
+            up_diffs.append(max(shift_up_diff, shift_down_diff, 0))
+            down_diffs.append(min(shift_up_diff, shift_down_diff, 0))
+        # combination based on the method
+        if method == "quadratic_sum":
+            up_diff = sum(d**2 for d in up_diffs)**0.5
+            down_diff = sum(d**2 for d in down_diffs)**0.5
+        else:  # envelope
+            up_diff = max(up_diffs)
+            down_diff = min(down_diffs)
+        # save values
+        syst_error_up.append(up_diff)
+        syst_error_down.append(down_diff)
+
+    # compute relative systematic errors
+    rel_syst_error_up = np.array(syst_error_up) / h.values()
+    rel_syst_error_up[np.isnan(rel_syst_error_up)] = 0.0
+    rel_syst_error_down = np.array(syst_error_down) / h.values()
+    rel_syst_error_down[np.isnan(rel_syst_error_down)] = 0.0
+
+    # compute the baseline
+    # fill 1 in places where both numerator and denominator are 0, and 0 for remaining nan's
+    baseline = h.values() / norm
+    baseline[(h.values() == 0) & (norm == 0)] = 1.0
+    baseline[np.isnan(baseline)] = 0.0
+
+    bar_kwargs = {
+        "x": h.axes[0].centers,
+        "bottom": baseline * (1 - rel_syst_error_down),
+        "height": baseline * (rel_syst_error_up + rel_syst_error_down),
+        "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
+        "hatch": "\\\\\\",
+        "linewidth": 0,
+        "color": "none",
+        "edgecolor": "#30c300",
+        "alpha": 1.0,
+        **kwargs,
+    }
+    ax.bar(**bar_kwargs)
 
 
 def draw_stack(
@@ -77,6 +184,7 @@ def draw_stack(
             # solution: transform norm -> [norm]*len(h)
             h = hist.Stack(*[i / norm for i in h])
 
+    # draw only the stack, no error bars/bands with stack = True
     defaults = {
         "ax": ax,
         "stack": True,
@@ -90,19 +198,37 @@ def draw_hist(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
+    error_type: str = "variance",
     **kwargs,
 ) -> None:
+    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
+
     if kwargs.get("color", "") is None:
         # when color is set to None, remove it such that matplotlib automatically chooses a color
         kwargs.pop("color")
 
-    h = h / norm
     defaults = {
         "ax": ax,
         "stack": False,
         "histtype": "step",
     }
     defaults.update(kwargs)
+    if "yerr" not in defaults:
+        if h.storage_type.accumulator is not hist.accumulators.WeightedSum:
+            raise TypeError(
+                "Error bars calculation only implemented for histograms with storage type WeightedSum "
+                "either change the Histogram storage_type or set yerr manually",
+            )
+        yerr = calculate_stat_error(h, error_type)
+        # normalize yerr to the histogram = error propagation on standard deviation
+        yerr = abs(yerr / norm)
+        # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
+        if np.any(np.isinf(yerr)):
+            yerr[np.isinf(yerr)] = np.nan
+        defaults["yerr"] = yerr
+
+    h = h / norm
+
     h.plot1d(**defaults)
 
 
@@ -110,11 +236,14 @@ def draw_profile(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
+    error_type: str = "variance",
     **kwargs,
 ) -> None:
     """
     Profiled histograms contains the storage type "Mean" and can therefore not be normalized
     """
+    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
+
     if kwargs.get("color", "") is None:
         # when color is set to None, remove it such that matplotlib automatically chooses a color
         kwargs.pop("color")
@@ -125,6 +254,13 @@ def draw_profile(
         "histtype": "step",
     }
     defaults.update(kwargs)
+    if "yerr" not in defaults:
+        if h.storage_type.accumulator is not hist.accumulators.WeightedSum:
+            raise TypeError(
+                "Error bars calculation only implemented for histograms with storage type WeightedSum "
+                "either change the Histogram storage_type or set yerr manually",
+            )
+        defaults["yerr"] = calculate_stat_error(h, error_type)
     h.plot1d(**defaults)
 
 
@@ -132,31 +268,37 @@ def draw_errorbars(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
+    error_type: str = "poisson_unweighted",
     **kwargs,
 ) -> None:
+    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
+
     values = h.values() / norm
-    variances = h.variances() / norm**2
-    # compute asymmetric poisson errors for data
-    # TODO: passing the output of poisson_interval as yerr to mpl.plothist leads to
-    #       buggy error bars and the documentation is clearly wrong (mplhep 0.3.12,
-    #       hist 2.4.0), so adjust the output to make up for that, but maybe update or
-    #       remove the next lines if this is fixed to not correct it "twice"
-    from hist.intervals import poisson_interval
-    yerr = poisson_interval(values, variances)
-    yerr[np.isnan(yerr)] = 0
-    yerr[0] = values - yerr[0]
-    yerr[1] -= values
-    yerr[yerr < 0] = 0
+
     defaults = {
         "x": h.axes[0].centers,
         "y": values,
-        "yerr": yerr,
         "color": "k",
         "linestyle": "none",
         "marker": "o",
         "elinewidth": 1,
     }
     defaults.update(kwargs)
+
+    if "yerr" not in defaults:
+        if h.storage_type.accumulator is not hist.accumulators.WeightedSum:
+            raise TypeError(
+                "Error bars calculation only implemented for histograms with storage type WeightedSum "
+                "either change the Histogram storage_type or set yerr manually",
+            )
+        yerr = calculate_stat_error(h, error_type)
+        # normalize yerr to the histogram = error propagation on standard deviation
+        yerr = abs(yerr / norm)
+        # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
+        if np.any(np.isinf(yerr)):
+            yerr[np.isinf(yerr)] = np.nan
+        defaults["yerr"] = yerr
+
     ax.errorbar(**defaults)
 
 
@@ -169,34 +311,34 @@ def plot_all(
     whitespace_fraction: float = 0.3,
     magnitudes: float = 4,
     **kwargs,
-) -> tuple(plt.Figure, tuple(plt.Axes)):
+) -> tuple[plt.Figure, tuple[plt.Axes, ...]]:
     """
-    Function that calls multiple plotting methods based on two configuration dictionaries,
-    *plot_config* and *style_config*.
+    Function that calls multiple plotting methods based on two configuration dictionaries, *plot_config* and
+    *style_config*.
 
     The *plot_config* expects dictionaries with fields:
-    "method": str, identical to the name of a function defined above,
-    "hist": hist.Hist or hist.Stack,
-    "kwargs": dict (optional),
-    "ratio_kwargs": dict (optional),
+
+        - "method": str, identical to the name of a function defined above
+        - "hist": hist.Hist or hist.Stack
+        - "kwargs": dict (optional)
+        - "ratio_kwargs": dict (optional)
 
     The *style_config* expects fields (all optional):
-    "gridspec_cfg": dict,
-    "ax_cfg": dict,
-    "rax_cfg": dict,
-    "legend_cfg": dict,
-    "cms_label_cfg": dict,
 
-    :param plot_config: Dictionary that defines which plot methods will be called with which
-        key word arguments.
+        - "gridspec_cfg": dict
+        - "ax_cfg": dict
+        - "rax_cfg": dict
+        - "legend_cfg": dict
+        - "cms_label_cfg": dict
+
+    :param plot_config: Dictionary that defines which plot methods will be called with which key word arguments.
     :param style_config: Dictionary that defines arguments on how to style the overall plot.
     :param skip_ratio: Optional bool parameter to not display the ratio plot.
     :param skip_legend: Optional bool parameter to not display the legend.
     :param cms_label: Optional string parameter to set the CMS label text.
-    :param whitespace_fraction: Optional float parameter that defines the ratio of which
-        the plot will consist of whitespace for the legend and labels
-    :param magnitudes: Optional float parameter that defines the displayed ymin when plotting
-        with a logarithmic scale.
+    :param whitespace_fraction: Optional float parameter that defines the ratio of which the plot will consist of
+        whitespace for the legend and labels
+    :param magnitudes: Optional float parameter that defines the displayed ymin when plotting with a logarithmic scale.
     :return: tuple of plot figure and axes
     """
     # general mplhep style
@@ -207,17 +349,21 @@ def plot_all(
     grid_spec = {"left": 0.15, "right": 0.95, "top": 0.95, "bottom": 0.1}
     grid_spec |= style_config.get("gridspec_cfg", {})
     if not skip_ratio:
-        grid_spec |= {"height_ratios": [3, 1], "hspace": 0}
+        grid_spec = {"height_ratios": [3, 1], "hspace": 0, **grid_spec}
         fig, axs = plt.subplots(2, 1, gridspec_kw=grid_spec, sharex=True)
         (ax, rax) = axs
     else:
+        grid_spec.pop("height_ratios", None)
         fig, ax = plt.subplots(gridspec_kw=grid_spec)
         axs = (ax,)
 
     # invoke all plots methods
     plot_methods = {
         func.__name__: func
-        for func in [draw_error_bands, draw_stack, draw_hist, draw_profile, draw_errorbars]
+        for func in [
+            draw_stat_error_bands, draw_syst_error_bands, draw_stack, draw_hist, draw_profile,
+            draw_errorbars,
+        ]
     }
     for key, cfg in plot_config.items():
         # check if required fields are present
@@ -254,24 +400,8 @@ def plot_all(
     # prioritize style_config ax settings
     ax_kwargs.update(style_config.get("ax_cfg", {}))
 
-    # some settings cannot be handled by ax.set
-    xminorticks = ax_kwargs.pop("xminorticks", ax_kwargs.pop("minorxticks", None))
-    yminorticks = ax_kwargs.pop("yminorticks", ax_kwargs.pop("minoryticks", None))
-    xloc = ax_kwargs.pop("xloc", None)
-    yloc = ax_kwargs.pop("yloc", None)
-
-    # set all values
-    ax.set(**ax_kwargs)
-
-    # set manual configs
-    if xminorticks is not None:
-        ax.set_xticks(xminorticks, minor=True)
-    if yminorticks is not None:
-        ax.set_xticks(yminorticks, minor=True)
-    if xloc is not None:
-        ax.set_xlabel(ax.get_xlabel(), loc=xloc)
-    if yloc is not None:
-        ax.set_ylabel(ax.get_ylabel(), loc=yloc)
+    # apply axis kwargs
+    apply_ax_kwargs(ax, ax_kwargs)
 
     # ratio plot
     if not skip_ratio:
@@ -285,18 +415,8 @@ def plot_all(
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
 
-        # some settings cannot be handled by ax.set
-        xloc = rax_kwargs.pop("xloc", None)
-        yloc = rax_kwargs.pop("yloc", None)
-
-        # set all values
-        rax.set(**rax_kwargs)
-
-        # set manual configs
-        if xloc is not None:
-            rax.set_xlabel(rax.get_xlabel(), loc=xloc)
-        if yloc is not None:
-            rax.set_ylabel(rax.get_ylabel(), loc=yloc)
+        # apply axis kwargs
+        apply_ax_kwargs(rax, rax_kwargs)
 
         # remove x-label from main axis
         if "xlabel" in rax_kwargs:
@@ -322,7 +442,7 @@ def plot_all(
 
         # custom argument: entries_per_column
         n_cols = legend_kwargs.get("ncols", 1)
-        entries_per_col = legend_kwargs.pop("entries_per_column", None)
+        entries_per_col = legend_kwargs.pop("cf_entries_per_column", None)
         if callable(entries_per_col):
             entries_per_col = entries_per_col(ax, handles, labels, n_cols)
         if entries_per_col and n_cols > 1:
@@ -339,9 +459,20 @@ def plot_all(
                     labels.insert(i * max_entries + n, "")
 
         # custom hook to adjust handles and labels
-        update_handles_labels = legend_kwargs.pop("update_handles_labels", None)
+        update_handles_labels = legend_kwargs.pop("cf_update_handles_labels", None)
         if callable(update_handles_labels):
             update_handles_labels(ax, handles, labels, n_cols)
+
+        # interpret placeholders
+        apply = []
+        if legend_kwargs.pop("cf_short_labels", False):
+            apply.append("SHORT")
+        if legend_kwargs.pop("cf_line_breaks", False):
+            apply.append("BREAK")
+        labels = [apply_label_placeholders(label, apply=apply) for label in labels]
+
+        # drop remaining placeholders
+        labels = list(map(remove_label_placeholders, labels))
 
         # make legend using ordered handles/labels
         ax.legend(handles, labels, **legend_kwargs)

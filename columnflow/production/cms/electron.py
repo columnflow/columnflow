@@ -8,9 +8,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import law
+
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, InsertableDict, load_correction_set
+from columnflow.util import maybe_import, load_correction_set, DotDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -30,10 +33,7 @@ class ElectronSFConfig:
             raise ValueError("only one of working_point or hlt_path must be set")
 
     @classmethod
-    def new(
-        cls,
-        obj: ElectronSFConfig | tuple[str, str, str],
-    ) -> ElectronSFConfig:
+    def new(cls, obj: ElectronSFConfig | tuple[str, str, str]) -> ElectronSFConfig:
         # purely for backwards compatibility with the old tuple format
         if isinstance(obj, cls):
             return obj
@@ -143,28 +143,33 @@ def electron_weights_init(self: Producer, **kwargs) -> None:
 
 
 @electron_weights.requires
-def electron_weights_requires(self: Producer, reqs: dict) -> None:
+def electron_weights_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
     if "external_files" in reqs:
         return
 
     from columnflow.tasks.external import BundleExternalFiles
-    reqs["external_files"] = BundleExternalFiles.req(self.task)
+    reqs["external_files"] = BundleExternalFiles.req(task)
 
 
 @electron_weights.setup
 def electron_weights_setup(
     self: Producer,
-    reqs: dict,
-    inputs: dict,
-    reader_targets: InsertableDict,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
-    bundle = reqs["external_files"]
+    self.electron_config = self.get_electron_config()
 
     # load the corrector
-    correction_set = load_correction_set(self.get_electron_file(bundle.files))
-
-    self.electron_config: ElectronSFConfig = self.get_electron_config()
-    self.electron_sf_corrector = correction_set[self.electron_config.correction]
+    e_file = self.get_electron_file(reqs["external_files"].files)
+    self.electron_sf_corrector = load_correction_set(e_file)[self.electron_config.correction]
 
     # the ValType key accepts different arguments for efficiencies and scale factors
     if self.electron_config.correction.endswith("Eff"):
@@ -187,3 +192,16 @@ electron_trigger_weights = electron_weights.derive(
         "weight_name": "electron_trigger_weight",
     },
 )
+
+
+@producer(
+    uses={"Electron.{pt,phi,eta,deltaEtaSC}"},
+    produces={"Electron.superclusterEta"},
+)
+def electron_sceta(self, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Returns the electron super cluster eta.
+    """
+    sc_eta = events.Electron.eta + events.Electron.deltaEtaSC
+    events = set_ak_column(events, "Electron.superclusterEta", sc_eta, value_type=np.float32)
+    return events

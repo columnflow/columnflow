@@ -17,7 +17,9 @@ import law
 from columnflow import flavor as cf_flavor
 from columnflow.tasks.framework.base import Requirements, AnalysisTask
 from columnflow.tasks.framework.parameters import user_parameter_inst
+from columnflow.tasks.framework.decorators import only_local_env
 from columnflow.util import UNSET, real_path
+from columnflow.types import Any
 
 
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
@@ -61,6 +63,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     def output(self):
         return law.tasks.TransferLocalFile.output(self)
 
+    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
@@ -92,6 +95,7 @@ class BundleSoftware(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
@@ -171,6 +175,7 @@ class BuildBashSandbox(SandboxFileTask):
         # note: invoking self.env will already trigger installing the sandbox
         return law.LocalFileTarget(self.env["CF_SANDBOX_FLAG_FILE"])
 
+    @only_local_env
     def run(self):
         # no need to run anything as the sandboxing mechanism handles the installation
         return
@@ -232,6 +237,7 @@ class BundleBashSandbox(AnalysisTask, law.tasks.TransferLocalFile):
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
@@ -308,6 +314,7 @@ class BundleCMSSWSandbox(SandboxFileTask, law.cms.BundleCMSSW, law.tasks.Transfe
         path = os.path.expandvars(os.path.expanduser(self.single_output().path))
         return self.get_replicated_path(path, i=None if self.replicas <= 0 else r"[^\.]+")
 
+    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     def run(self):
@@ -363,6 +370,24 @@ class RemoteWorkflowMixin(AnalysisTask):
 
         # container to store scheduler message handlers
         self._scheduler_message_handlers: dict[str, SchedulerMessageHandler] = {}
+
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: RemoteWorkflowMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the pilot flag
+        pilot = (
+            inst_or_params.get("pilot")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "pilot", None)
+        )
+        if pilot not in (law.NO_STR, None, ""):
+            keys["pilot"] = f"pilot_{pilot}"
+
+        return keys
 
     def add_bundle_requirements(
         self,

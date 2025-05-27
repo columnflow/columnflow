@@ -9,17 +9,22 @@ from __future__ import annotations
 __all__ = []
 
 import re
+import dataclasses
 import itertools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import order as od
 
-from columnflow.util import maybe_import
+from columnflow.util import maybe_import, get_docs_url
+from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.types import Callable, Any, Sequence
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
+
+
+logger = law.logger.get_logger(__name__)
 
 
 def get_events_from_categories(
@@ -58,6 +63,39 @@ def get_events_from_categories(
         mask = cat_mask | mask
 
     return events[mask]
+
+
+def get_category_name_columns(
+    category_ids: ak.Array,
+    config_inst: od.Config,
+) -> ak.Array:
+    """
+    Function that transforms column of category ids to column of category names.
+
+    :param category_ids: Awkward array of category ids.
+    :param config_inst: Config instance from which to load category instances.
+    :raises ValueError: If any of the category ids is not defined in the *config_inst*.
+    :return: Awkward array of category names with the same shape as *category_ids*
+    """
+    flat_ids = flat_np_view(category_ids)
+
+    # map all category ids present in *category_ids* to category instances
+    category_map = {
+        _id: config_inst.get_category(_id, default=None)
+        for _id in set(flat_ids)
+    }
+    if any(cat is None for cat in category_map.values()):
+        undefined_ids = {cat_id for cat_id, cat_inst in category_map.items() if cat_inst is None}
+        raise ValueError(f"undefined category ids: {', '.join(map(str, undefined_ids))}")
+
+    # Create a vectorized function for the mapping
+    map_to_name = np.vectorize(lambda _id: category_map[_id].name)
+
+    # Apply the mapping and layout to the original shape
+    flat_names = map_to_name(flat_ids)
+    category_names = layout_ak_array(flat_names, category_ids)
+
+    return category_names
 
 
 def get_root_processes_from_campaign(campaign: od.config.Campaign) -> od.unique.UniqueObjectIndex:
@@ -274,6 +312,25 @@ def add_shift_aliases(
         shift.x.column_aliases = _aliases
 
 
+def get_shift_from_configs(configs: list[od.Config], shift: str | od.Shift, silent: bool = False) -> od.Shift | None:
+    """
+    Given a list of *configs* and a *shift* name or instance, returns the corresponding shift instance from the first
+    config that contains it. If *silent* is *True*, *None* is returned instead of raising an exception in case the shift
+    is not found.
+    """
+    if isinstance(shift, od.Shift):
+        shift = shift.name
+
+    for config in configs:
+        if config.has_shift(shift):
+            return config.get_shift(shift)
+
+    if silent:
+        return None
+
+    raise ValueError(f"shift '{shift}' not found in any of the given configs: {configs}")
+
+
 def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) -> list[od.Shift]:
     """
     Takes a *config* object and returns a list of shift instances for both directions given a
@@ -286,6 +343,39 @@ def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) ->
         ),
         [],
     )
+
+
+def group_shifts(
+    shifts: od.Shift | Sequence[od.Shift],
+) -> tuple[od.Shift | None, dict[str, tuple[od.Shift, od.Shift]]]:
+    """
+    Takes several :py:class:`order.Shift` instances *shifts* and groups them according to their
+    shift source. The nominal shift, if present, is returned separately. The remaining shifts are
+    grouped by their source and the corresponding up and down shifts are stored in a dictionary.
+    Example:
+    .. code-block:: python
+        # assuming the following shifts exist
+        group_shifts([nominal, x_up, y_up, y_down, x_down])
+        # -> (nominal, {"x": (x_up, x_down), "y": (y_up, y_down)})
+    An exception is raised in case a shift source is represented only by its up or down shift.
+    """
+    nominal = None
+    grouped = defaultdict(lambda: [None, None])
+
+    up_sources = set()
+    down_sources = set()
+    for shift in law.util.make_list(shifts):
+        if shift.name == "nominal":
+            nominal = shift
+        else:
+            grouped[shift.source][shift.is_up] = shift
+            (up_sources if shift.is_up else down_sources).add(shift.source)
+
+    # check completeness of shifts
+    if (diff := up_sources.symmetric_difference(down_sources)):
+        raise ValueError(f"shift sources {diff} are not complete and cannot be grouped")
+
+    return nominal, dict(grouped)
 
 
 def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
@@ -371,43 +461,74 @@ def add_category(
     return parent.add_category(**kwargs)
 
 
+@dataclasses.dataclass
+class CategoryGroup:
+    """
+    Container to store information about a group of categories, mostly used for creating combinations in
+    :py:func:`create_category_combinations`.
+
+    :param categories: List of :py:class:`order.Category` objects or names that refer to the desired category.
+    :param is_complete: Should be *True* if the union of category selections covers the full phase space (no gaps).
+    :param has_overlap: Should be *False* if all categories are pairwise disjoint (no overlap).
+    :param warn: If *True*, a warning is issued when summing over the group of categories.
+    """
+
+    categories: list[od.Category | str]
+    is_complete: bool
+    has_overlap: bool
+    warn: bool = True
+
+    @property
+    def is_partition(self) -> bool:
+        """
+        Returns *True* if the group of categories is a full partition of the phase space (no overlap, no gaps).
+        """
+        return self.is_complete and not self.has_overlap
+
+
 def create_category_combinations(
     config: od.Config,
-    categories: dict[str, list[od.Category]],
+    categories: dict[str, CategoryGroup | list[od.Category]],
     name_fn: Callable[[Any], str],
     kwargs_fn: Callable[[Any], dict] | None = None,
     skip_existing: bool = True,
     skip_fn: Callable[[dict[str, od.Category], str], bool] | None = None,
 ) -> int:
     """
-    Given a *config* object and sequences of *categories* in a dict, creates all combinations of
-    possible leaf categories at different depths, connects them with parent - child relations
-    (see :py:class:`order.Category`) and returns the number of newly created categories.
+    Given a *config* object and sequences of *categories* in a dict, creates all combinations of possible leaf
+    categories at different depths, connects them with parent - child relations (see :py:class:`order.Category`) and
+    returns the number of newly created categories.
 
-    *categories* should be a dictionary that maps string names to sequences of categories that
-    should be combined. The names are used as keyword arguments in a callable *name_fn* that is
-    supposed to return the name of newly created categories (see example below).
+    *categories* should be a dictionary that maps string names to :py:class:`CategoryGroup` objects which are thin
+    wrappers around sequences of categories (objects or names). Group names (dictionary keys) are used as keyword
+    arguments in a callable *name_fn* that is supposed to return the name of newly created categories (see example
+    below).
 
-    Each newly created category is instantiated with this name as well as arbitrary keyword
-    arguments as returned by *kwargs_fn*. This function is called with the categories (in a
-    dictionary, mapped to the sequence names as given in *categories*) that contribute to the newly
-    created category and should return a dictionary. If the fields ``"id"`` and ``"selection"`` are
-    missing, they are filled with reasonable defaults leading to a auto-generated, deterministic id
-    and a list of all parent selection statements.
+    .. note::
 
-    If the name of a new category is already known to *config* it is skipped unless *skip_existing*
-    is *False*. In addition, *skip_fn* can be a callable that receives a dictionary mapping group
-    names to categories that represents the combination of categories to be added. In case *skip_fn*
-    returns *True*, the combination is skipped.
+        The :py:attr:`CategoryGroup.is_complete` and :py:attr:`CategoryGroup.has_overlap` attributes are imperative for
+        columnflow to determine whether the summation over specific categories is valid or may result in under- or
+        over-counting when combining leaf categories. These checks may be performed by other functions and tools based
+        on information derived from groups and stored in auxiliary fields of the newly created categories.
+
+    Each newly created category is instantiated with this name as well as arbitrary keyword arguments as returned by
+    *kwargs_fn*. This function is called with the categories (in a dictionary, mapped to the sequence names as given in
+    *categories*) that contribute to the newly created category and should return a dictionary. If the fields ``"id"``
+    and ``"selection"`` are missing, they are filled with reasonable defaults leading to a auto-generated, deterministic
+    id and a list of all parent selection statements.
+
+    If the name of a new category is already known to *config* it is skipped unless *skip_existing* is *False*. In
+    addition, *skip_fn* can be a callable that receives a dictionary mapping group names to categories that represents
+    the combination of categories to be added. In case *skip_fn* returns *True*, the combination is skipped.
 
     Example:
 
     .. code-block:: python
 
         categories = {
-            "lepton": [cfg.get_category("e"), cfg.get_category("mu")],
-            "n_jets": [cfg.get_category("1j"), cfg.get_category("2j")],
-            "n_tags": [cfg.get_category("0t"), cfg.get_category("1t")],
+            "lepton": CategoryGroup(categories=["e", "mu"], is_complete=False, has_overlap=False),
+            "n_jets": CategoryGroup(categories=["eq0j", "eq1j", "ge2j"], is_complete=True, has_overlap=False),
+            "n_tags": CategoryGroup(categories=["0t", "1t"], is_complete=False, has_overlap=False),
         }
 
         def name_fn(categories):
@@ -423,20 +544,40 @@ def create_category_combinations(
         create_category_combinations(cfg, categories, name_fn, kwargs_fn)
 
     :param config: :py:class:`order.Config` object for which the categories are created.
-    :param categories: Dictionary that maps group names to sequences of categories.
-    :param name_fn: Callable that receives a dictionary mapping group names to categories and
-        returns the name of the newly created category.
-    :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and
-        returns a dictionary of keyword arguments that are forwarded to the category constructor.
-    :param skip_existing: If *True*, skip the creation of a category when it already exists in
-        *config*.
-    :param skip_fn: Callable that receives a dictionary mapping group names to categories and
-        returns *True* if the combination should be skipped.
+    :param categories: Dictionary that maps group names to :py:class:`CategoryGroup` containers.
+    :param name_fn: Callable that receives a dictionary mapping group names to categories and returns the name of the
+        newly created category.
+    :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and returns a dictionary of
+        keyword arguments that are forwarded to the category constructor.
+    :param skip_existing: If *True*, skip the creation of a category when it already exists in *config*.
+    :param skip_fn: Callable that receives a dictionary mapping group names to categories and returns *True* if the
+        combination should be skipped.
     :raises TypeError: If *name_fn* is not a callable.
     :raises TypeError: If *kwargs_fn* is not a callable when set.
     :raises ValueError: If a non-unique category id is detected.
     :return: Number of newly created categories.
     """
+    # cast categories
+    for name, _categories in categories.items():
+        # ensure CategoryGroup is used
+        if not isinstance(_categories, CategoryGroup):
+            docs_url = get_docs_url("api", "config_util.html", anchor="columnflow.config_util.CategoryGroup")
+            logger.warning_once(
+                "deprecated_category_group_lists",
+                f"using a list to define a sequence of categories for create_category_combinations() is depcreated "
+                f"and will be removed in a future version, please use a CategoryGroup instance instead: {docs_url}",
+            )
+            _categories = CategoryGroup(
+                categories=law.util.make_list(_categories),
+                is_complete=True,
+                has_overlap=False,
+            )
+            categories[name] = _categories
+        # cast string category names to instances
+        for i, cat in enumerate(_categories.categories):
+            if isinstance(cat, str):
+                _categories.categories[i] = config.get_category(cat)
+
     n_created_categories = 0
     unique_ids_cache = {cat.id for cat, _, _ in config.walk_categories()}
     n_groups = len(categories)
@@ -459,7 +600,7 @@ def create_category_combinations(
         for _group_names in itertools.combinations(group_names, _n_groups):
 
             # build the product of all categories for the given groups
-            _categories = [categories[group_name] for group_name in _group_names]
+            _categories = [categories[group_name].categories for group_name in _group_names]
             for root_cats in itertools.product(*_categories):
                 # build the name
                 root_cats = dict(zip(_group_names, root_cats))

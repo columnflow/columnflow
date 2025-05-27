@@ -6,16 +6,15 @@ API Reference
 
    calibration/index
    categorization/index
-   categorization/index
+   histogramming/index
    inference/index
    ml/index
    plotting/index
    production/index
+   reduction/index
    selection/index
    tasks/index
-   weights/index
    columnar_util
    config_util
-   types
    util
-
+   types
