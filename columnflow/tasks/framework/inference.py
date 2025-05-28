@@ -109,11 +109,26 @@ class SerializeInferenceModelBase(
     def create_branch_map(self):
         return list(self.inference_model_inst.categories)
 
-    def _requires_cat_obj(self, cat_obj: DotDict, **req_kwargs):
+    def _requires_cat_obj(self, cat_obj: DotDict, merge_variables: bool = False, **req_kwargs):
+        """
+        Helper to create the requirements for a single category object.
+
+        :param cat_obj: category object from an InferenceModel
+        :param merge_variables: whether to merge the variables from all requested category objects
+        :return: requirements for the category object
+        """
         reqs = {}
         for config_inst in self.config_insts:
             if not (config_data := cat_obj.config_data.get(config_inst.name)):
                 continue
+
+            if merge_variables:
+                variables = tuple(
+                    _cat_obj.config_data.get(config_inst.name).variable
+                    for _cat_obj in self.branch_map.values()
+                )
+            else:
+                variables = (config_data.variable,)
 
             # add merged shifted histograms for mc
             reqs[config_inst.name] = {
@@ -130,7 +145,7 @@ class SerializeInferenceModelBase(
                                 self.inference_model_inst.require_shapes_for_parameter(param_obj)
                             )
                         ),
-                        variables=(config_data.variable,),
+                        variables=variables,
                         **req_kwargs,
                     )
                     for dataset in self.get_mc_datasets(config_inst, proc_obj)
@@ -150,7 +165,7 @@ class SerializeInferenceModelBase(
                         self,
                         config=config_inst.name,
                         dataset=dataset,
-                        variables=(config_data.variable,),
+                        variables=variables,
                         **req_kwargs,
                     )
                     for dataset in data_datasets
@@ -163,14 +178,13 @@ class SerializeInferenceModelBase(
 
         reqs["merged_hists"] = hist_reqs = {}
         for cat_obj in self.branch_map.values():
-            cat_reqs = self._requires_cat_obj(cat_obj)
+            cat_reqs = self._requires_cat_obj(cat_obj, merge_variables=True)
             for config_name, proc_reqs in cat_reqs.items():
                 hist_reqs.setdefault(config_name, {})
                 for proc_name, dataset_reqs in proc_reqs.items():
                     hist_reqs[config_name].setdefault(proc_name, {})
                     for dataset_name, task in dataset_reqs.items():
                         hist_reqs[config_name][proc_name].setdefault(dataset_name, set()).add(task)
-
         return reqs
 
     def requires(self):
