@@ -134,7 +134,7 @@ class PrepareMLEvents(
                 self.target(f"mlevents_fold{f}of{k}_{self.branch}.parquet")
                 for f in range(k)
             ]),
-            "stats": self.target(f"stats_{self.branch}.parquet"),
+            "stats": self.target(f"stats_{self.branch}.json"),
         }
         return outputs
 
