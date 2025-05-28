@@ -104,7 +104,6 @@ setup___cf_short_name_lc__() {
 
     cf_setup_common_variables || return "$?"
 
-
     #
     # minimal local software setup
     #
@@ -124,32 +123,15 @@ setup___cf_short_name_lc__() {
     fi
 
     #
-    # git hooks
+    # additional common cf setup steps
     #
 
-    if ! ${CF_REMOTE_ENV}; then
-        cf_setup_git_hooks || return "$?"
-    fi
+    cf_setup_post_install || return "$?"
 
     #
-    # law setup
-    #
-
-    export LAW_HOME="${LAW_HOME:-${__cf_short_name_uc___BASE}/.law}"
-    export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${__cf_short_name_uc___BASE}/law.cfg}"
-
-    if ! ${CF_REMOTE_ENV} && which law &> /dev/null; then
-        # source law's bash completion scipt
-        source "$( law completion )" ""
-
-        # add completion to the claw command
-        complete -o bashdefault -o default -F _law_complete claw
-
-        # silently index
-        law index -q
-    fi
-
     # finalize
+    #
+
     export __cf_short_name_uc___SETUP="true"
 }
 

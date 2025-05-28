@@ -161,7 +161,6 @@ setup_columnflow() {
         return "1"
     fi
 
-
     #
     # prepare local variables
     #
@@ -179,7 +178,6 @@ setup_columnflow() {
         emulate -L bash
         setopt globdots
     fi
-
 
     #
     # global variables
@@ -210,13 +208,11 @@ setup_columnflow() {
     export CF_ORIG_PYTHON3PATH="${PYTHON3PATH}"
     export CF_ORIG_LD_LIBRARY_PATH="${LD_LIBRARY_PATH}"
 
-
     #
     # common variables
     #
 
     cf_setup_common_variables || return "$?"
-
 
     #
     # minimal local software setup
@@ -224,36 +220,16 @@ setup_columnflow() {
 
     cf_setup_software_stack "${CF_SETUP_NAME}" || return "$?"
 
-
     #
-    # git hooks
-    #
-
-    # only in local env
-    if ${CF_LOCAL_ENV}; then
-        cf_setup_git_hooks || return "$?"
-    fi
-
-
-    #
-    # law setup
+    # additional common cf setup steps
     #
 
-    export LAW_HOME="${LAW_HOME:-${CF_BASE}/.law}"
-    export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${CF_BASE}/law.cfg}"
+    cf_setup_post_install || return "$?"
 
-    if ${CF_LOCAL_ENV} && which law &> /dev/null; then
-        # source law's bash completion scipt
-        source "$( law completion )" ""
-
-        # add completion to the claw command
-        complete -o bashdefault -o default -F _law_complete claw
-
-        # silently index
-        law index -q
-    fi
-
+    #
     # finalize
+    #
+
     export CF_SETUP="true"
 }
 
@@ -764,6 +740,102 @@ EOF
         # source the production sandbox
         source "${CF_BASE}/sandboxes/cf.sh" "" "no"
     fi
+}
+
+cf_setup_post_install() {
+    # Performs additional, central setup steps after variables are set and software is installed. These steps are meant
+    # to be common to all setups and that can be adjusted later on through updates of the columnflow module.
+    #
+    # Current steps:
+    #   - setup git hooks
+    #   - setup law
+    #   - check size of the target tmp dir
+    #
+    # Required environment variables:
+    #   CF_LOCAL_ENV
+    #       Should be true or false, indicating if the setup is run in a local environment.
+    #   CF_REPO_BASE
+    #       The base directory of the analysis repository, which is used to determine the law home and config file.
+
+    #
+    # git hooks
+    #
+
+    # only in local env
+    if ${CF_LOCAL_ENV}; then
+        cf_setup_git_hooks || return "$?"
+    fi
+
+    #
+    # law setup
+    #
+
+    if [ ! -z "${CF_REPO_BASE}" ]; then
+        export LAW_HOME="${LAW_HOME:-${CF_REPO_BASE}/.law}"
+        export LAW_CONFIG_FILE="${LAW_CONFIG_FILE:-${CF_REPO_BASE}/law.cfg}"
+
+        if ${CF_LOCAL_ENV} && which law &> /dev/null; then
+            # source law's bash completion scipt
+            source "$( law completion )" ""
+
+            # add completion to the claw command
+            complete -o bashdefault -o default -F _law_complete claw
+
+            # silently index
+            law index -q
+        fi
+    fi
+
+    #
+    # check the tmp directory size
+    #
+
+    if ${CF_LOCAL_ENV} && which law &> /dev/null; then
+        cf_check_tmp_dir
+    fi
+
+    return "0"
+}
+
+cf_check_tmp_dir() {
+    # Computes the size of all user-owned files in the target tmp directory and issues a warning when the size exceeds
+    # certain thresholds. If a variable CF_SKIP_TMP_CHECK is set to true, the check is skipped.
+
+    # check if skipping
+    if [ ! -z "${CF_SKIP_TMP_CHECK}" ] && ${CF_SKIP_TMP_CHECK}; then
+        return "0"
+    fi
+
+    # determine the tmp directory
+    local tmp_dir="$( law config target.tmp_dir )"
+    local ret="$?"
+    if [ "${ret}" != "0" ]; then
+        >&2 cf_color "red" "cf_check_tmp_dir: 'law config target.tmp_dir' failed with error code ${ret}"
+        return "${ret}"
+    elif [ -z "${tmp_dir}" ]; then
+        >&2 cf_color "red" "cf_check_tmp_dir: 'law config target.tmp_dir' must not be empty"
+        return "2"
+    elif [ ! -d "${tmp_dir}" ]; then
+        >&2 cf_color "red" "cf_check_tmp_dir: 'law config target.tmp_dir' is not a directory"
+        return "3"
+    fi
+
+    # compute the size
+    local tmp_size="$( find "${tmp_dir}" -maxdepth 1 -name "*" -user "$( id -u )" -exec du -cb {} + | grep 'total$' | cut -d $'\t' -f 1 )"
+
+    # warn above 1GB with color changing when above 2GB
+    local thresh1="1073741824"
+    local thresh2="2147483648"
+    if [ "${tmp_size}" -gt "${thresh1}" ]; then
+        local hsize="$( python -c "import law; print(law.util.human_bytes(${tmp_size}, fmt=True))" )"
+        local color="$( [ "${tmp_size}" -lt "${thresh2}" ] && echo "yellow" || echo "red" )"
+        echo
+        cf_color "${color}" "the combined size of your files in the directory ${tmp_dir} is $( cf_color "${color}_bright" "${hsize}" )"
+        cf_color "${color}" "please consider cleaning up using $( cf_color "${color}_bright" "'cf_remove_tmp [all]'" )"
+        echo
+    fi
+
+    return "0"
 }
 
 cf_setup_git_hooks() {
