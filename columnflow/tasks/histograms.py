@@ -72,7 +72,7 @@ class CreateHistograms(_CreateHistograms):
         }
         axes = {ax.name: ax for ax in h.axes}
         for axis_name, axis_type in expected.items():
-            if not (ax := axes.get(axis_name)):
+            if (ax := axes.get(axis_name)) is None:
                 raise Exception(f"missing axis '{axis_name}' in histogram: {h}")
             if not isinstance(ax, axis_type):
                 raise ValueError(f"axis '{axis_name}' must have type '{axis_type}', found '{type(ax)}'")
