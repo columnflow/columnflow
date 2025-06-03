@@ -10,9 +10,10 @@ from dataclasses import dataclass
 
 import law
 
+from columnflow.types import Callable
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
+from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array, EMPTY_FLOAT
 from columnflow.types import Any
 
 np = maybe_import("numpy")
@@ -23,7 +24,7 @@ ak = maybe_import("awkward")
 class ElectronSFConfig:
     correction: str
     campaign: str
-    working_point: str = ""
+    working_point: str | dict[str, Callable] = ""
     hlt_path: str = ""
 
     def __post_init__(self) -> None:
@@ -88,6 +89,21 @@ def electron_weights(
             working_point="wp80iso",  # for trigger weights use hlt_path instead
         )
 
+    The *working_point* can also be a dictionary mapping working point names to functions
+    that return a boolean mask for the electrons. This is useful to compute scale factors for
+    multiple working points at once, e.g. for the electron reconstruction scale factors:
+
+    .. code-block:: python
+        cfg.x.electron_sf_names = ElectronSFConfig(
+            correction="Electron-ID-SF",
+            campaign="2022Re-recoE+PromptFG",
+            working_point={
+                "RecoBelow20": lambda variable_map: variable_map["pt"] < 20.0,
+                "Reco20to75": lambda variable_map: (variable_map["pt"] >= 20.0) & (variable_map["pt"] < 75.0),
+                "RecoAbove75": lambda variable_map: variable_map["pt"] >= 75.0,
+            },
+        )
+
     *get_electron_config* can be adapted in a subclass in case it is stored differently in the
     config.
 
@@ -121,8 +137,28 @@ def electron_weights(
             **variable_map,
             "ValType": syst,
         }
-        inputs = [variable_map_syst[inp.name] for inp in self.electron_sf_corrector.inputs]
-        sf_flat = self.electron_sf_corrector(*inputs)
+        if isinstance(variable_map["WorkingPoint"], str):
+            inputs = [variable_map_syst[inp.name] for inp in self.electron_sf_corrector.inputs]
+            sf_flat = self.electron_sf_corrector(*inputs)
+        elif isinstance(variable_map["WorkingPoint"], dict):
+            sf_flat = np.ones_like(pt, dtype=np.float32) * EMPTY_FLOAT
+            for working_point, mask_fn in variable_map_syst["WorkingPoint"].items():
+                mask = mask_fn(variable_map)
+                variable_map_syst_wp = {
+                    **variable_map_syst,
+                    "WorkingPoint": working_point,
+                }
+                for key, value in variable_map_syst_wp.items():
+                    # apply mask to array-like values
+                    if isinstance(value, np.ndarray) or isinstance(value, ak.Array):
+                        variable_map_syst_wp[key] = value[mask]
+                # call the corrector with the masked inputs
+                inputs = [variable_map_syst_wp[inp.name] for inp in self.electron_sf_corrector.inputs]
+                sf_flat[mask] = self.electron_sf_corrector(*inputs)
+            if np.any(sf_flat == EMPTY_FLOAT):
+                raise ValueError("some electrons did not have a valid scale factor, check your inputs")
+        else:
+            raise ValueError(f"unsupported working point type {type(variable_map['WorkingPoint'])}")
 
         # add the correct layout to it
         sf = layout_ak_array(sf_flat, events.Electron.pt[electron_mask])
