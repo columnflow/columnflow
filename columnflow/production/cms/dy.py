@@ -10,9 +10,11 @@ import law
 
 from dataclasses import dataclass
 
+from functools import partial
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set
-from columnflow.columnar_util import set_ak_column
+from columnflow.columnar_util import set_ak_column, EMPTY_FLOAT, attach_coffea_behavior, default_coffea_collections
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -130,9 +132,9 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     # only run on mc
     mc_only=True,
     # function to determine the correction file
-    get_dy_weight_file=(lambda self, external_files: external_files.dy_weight_sf),
+    get_dy_weight_file=(lambda self, external_files: external_files.dy_weight_sf_uhh),
     # function to load the config
-    get_dy_weight_config=(lambda self: self.config_inst.x.dy_weight_config),
+    get_dy_weight_config=(lambda self: self.config_inst.x.dy_weight_config_uhh),
 )
 def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
@@ -459,12 +461,11 @@ def recoil_corrected_met_setup(
     self.recoil_unc_corrector = correction_set[self.dy_recoil_config.unc_correction]
 
 
-# Weight producer for costum DY weights
+# Weight producer for custom DY weights
 
 @producer(
-    uses={"njets", "dilepton_pt"},
-    # weight variations are defined in init
-    produces={"dy_weight_uhh"},
+    uses={"Muon.pt", "Jet"},
+    produces={"dimuon.pt", "njets", "dy_weight_uhh"},
     # only run on mc
     mc_only=True,
     # function to determine the correction file
@@ -477,12 +478,12 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     Creates Drell-Yan weights using the correctionlib.
     https://cms-higgs-leprare.docs.cern.ch/htt-common/DY_reweight/#correctionlib-file
 
-    Requires an external file in the config under ``dy_weight_uhh``:
+    Requires an external file in the config under ``dy_weight``:
 
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "dy_weight_uhh": "/data/dust/user/alvesand/hh2bbtautau/hbt_tmp/luigi-tmp-114309664.gz.json.gz",  # noqa
+            "dy_weight": ".../hbt.ExportDYWeights/22pre_v14/prod8_dy_v3_jets/hbt_corrections.json.gz",  # noqa
         })
 
     *get_dy_weight_file* can be adapted in a subclass in case it is stored differently in the external files.
@@ -499,12 +500,24 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     *get_dy_weight_config* can be adapted in a subclass in case it is stored differently in the config.
     """
 
+    # sum two muons to get the dimuon pt
+    leps = ak.concatenate([events.Muon * 1], axis=1)[:, :2]
+    dimuon = leps.sum(axis=1)
+    # calculate number of jets
+    events = attach_coffea_behavior(events, {"Jet": default_coffea_collections["Jet"]})
+    event_njet = events.Jet[:, :]
+    njets = event_njet.sum(axis=1)
+
+    # save as columns
+    events = set_ak_column(events, "njets", njets * 1)
+    events = set_ak_column(events, "dimuon_pt", dimuon.pt)
+
     # map the input variable names from the corrector to our columns
     variable_map = {
-        "era": self.dy_config.era,
-        "njets": 2,  # events.njets,
-        "ptll": events.dilepton_pt,
-        "syst": self.dy_config.syst,
+        "era": self.config_inst.x.dy_weight_config_uhh.era,
+        "njets": events.njets,
+        "ptll": events.dimuon_pt,
+        "syst": self.config_inst.x.dy_weight_config_uhh.syst,
     }
 
     # initializing the list of weight variations
@@ -524,21 +537,26 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     for column_name in weights_list:
         variable_map = {**variable_map}
 
-        # evaluating dy weights given a certain era, ptll array and sytematic shift
-        inputs = [variable_map[inp.name] for inp in self.dy_corrector.inputs]
         try:
+            # evaluating dy weights given a certain era, njets and ptll arrays, and a systematic shift
+            inputs = [variable_map[inp.name] for inp in self.dy_corrector.inputs]
             dy_weight = self.dy_corrector.evaluate(*inputs)
+            print(dy_weight)
         except:
             from IPython import embed
-            embed(header="Error evaluating DY weights ...")
+            embed(header="dy_weights_uhh...")
 
         # save the weights in a new column
         events = set_ak_column(events, column_name, dy_weight, value_type=np.float32)
 
+    print("---------------")
+    print("Exiting DY weight producer ... ")
+    print("---------------")
+
     return events
 
 
-@dy_weights.init
+@dy_weights_uhh.init
 def dy_weights_uhh_init(self: Producer) -> None:
 
     if self.config_inst.campaign.x.year not in {2022, 2023}:
@@ -556,6 +574,7 @@ def dy_weights_uhh_requires(self: Producer, task: law.Task, reqs: dict) -> None:
     """
     Adds the requirements needed the underlying task to derive the Drell-Yan weights into *reqs*.
     """
+
     if "external_files" in reqs:
         return
 
@@ -563,7 +582,7 @@ def dy_weights_uhh_requires(self: Producer, task: law.Task, reqs: dict) -> None:
     reqs["external_files"] = BundleExternalFiles.req(task)
 
 
-@dy_weights.setup
+@dy_weights_uhh.setup
 def dy_weights_uhh_setup(
     self: Producer,
     task: law.Task,
@@ -577,18 +596,24 @@ def dy_weights_uhh_setup(
     """
     bundle = reqs["external_files"]
 
-    # import all correctors from the external file
-    correction_set = load_correction_set(self.get_dy_weight_file(bundle.files))
+    try:
+        # import all correctors from the external file
+        correction_set = load_correction_set(self.get_dy_weight_file(bundle.files))
 
-    # check number of fetched correctors
-    if len(correction_set.keys()) != 1:
-        raise Exception("Expected exactly one type of Drell-Yan correction")
+        # check number of fetched correctors
+        if len(correction_set.keys()) != 1:
+            raise Exception("Expected exactly one type of Drell-Yan correction")
 
-    # create the weight corrector
-    self.dy_config: DrellYanConfigUHH = self.get_dy_weight_config_uhh()
-    self.dy_corrector = correction_set["dy_weight"]
-    print("DY corrector is ")
-    print(self.dy_corrector)
+        # create the weight corrector
+        self.dy_config: DrellYanConfigUHH = self.get_dy_weight_config()
+        self.dy_corrector = correction_set["dy_weight"]
+        print("correction_set is")
+        print(correction_set)
+        print("dy_corrector is ")
+        print(self.dy_corrector)
+    except:
+        from IPython import embed
+        embed(header="dy_weights_uhh_setup ... ")
 
     # TODO: add uncertainty corrector later
     # self.dy_unc_corrector = correction_set[self.dy_config.unc_correction]
