@@ -505,8 +505,7 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     dimuon = leps.sum(axis=1)
     # calculate number of jets
     events = attach_coffea_behavior(events, {"Jet": default_coffea_collections["Jet"]})
-    event_njet = events.Jet[:, :]
-    njets = event_njet.sum(axis=1)
+    njets = ak.num(events.Jet["pt"], axis=1)
 
     # save as columns
     events = set_ak_column(events, "njets", njets * 1)
