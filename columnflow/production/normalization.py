@@ -352,6 +352,23 @@ def normalization_weights_setup(
         for proc_id, br in branching_ratios.items():
             sum_weights = merged_selection_stats["sum_mc_weight_per_process"][str(proc_id)]
             process_weight_table[0, proc_id] = lumi * inclusive_xsec * br / sum_weights
+
+        # fill in cross sections of missing leaf processes
+        missing_proc_ids = set(proc.id for proc in inclusive_proc.get_leaf_processes()) - set(branching_ratios.keys())
+        for proc_id in missing_proc_ids:
+            process_inst = inclusive_proc.get_process(proc_id)
+            if (
+                self.config_inst.campaign.ecm in process_inst.xsecs and
+                str(proc_id) in merged_selection_stats["sum_mc_weight_per_process"]
+            ):
+                xsec = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
+                sum_weights = merged_selection_stats["sum_mc_weight_per_process"][str(proc_id)]
+                process_weight_table[0, process_inst.id] = lumi * xsec / sum_weights
+                logger.warning(
+                    f"added cross section for missing leaf process {process_inst.name} ({proc_id}) from xsec entry",
+                )
+            else:
+                logger.warning(f"no cross section found for missing leaf process {process_inst.name} ({proc_id})")
     else:
         # fill the process weight table with per-process cross sections
         for process_inst in process_insts:
