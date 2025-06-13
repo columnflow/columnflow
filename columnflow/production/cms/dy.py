@@ -10,11 +10,9 @@ import law
 
 from dataclasses import dataclass
 
-from functools import partial
-
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set
-from columnflow.columnar_util import set_ak_column, EMPTY_FLOAT, attach_coffea_behavior, default_coffea_collections
+from columnflow.columnar_util import set_ak_column, attach_coffea_behavior, default_coffea_collections
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -527,7 +525,7 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     }
 
     # initializing the list of weight variations
-    weights_list = [("dy_weight")]
+    weights_list = [("dy_weight_uhh")]
 
     # TODO: add systematics later
     # appending the respective number of uncertainties to the weight list
