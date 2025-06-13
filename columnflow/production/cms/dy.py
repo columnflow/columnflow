@@ -475,8 +475,8 @@ def recoil_corrected_met_setup(
 # Weight producer for custom DY weights
 
 @producer(
-    uses={"Muon.pt", "Jet"},
-    produces={"dimuon.pt", "njets", "dy_weight_uhh"},
+    uses={"Muon.pt", "Jet.pt"},
+    produces={"dy_weight_uhh"},
     # only run on mc
     mc_only=True,
     # function to determine the correction file
@@ -518,15 +518,11 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     events = attach_coffea_behavior(events, {"Jet": default_coffea_collections["Jet"]})
     njets = ak.num(events.Jet["pt"], axis=1)
 
-    # save as columns
-    events = set_ak_column(events, "njets", njets * 1)
-    events = set_ak_column(events, "dimuon_pt", dimuon.pt)
-
     # map the input variable names from the corrector to our columns
     variable_map = {
         "era": self.config_inst.x.dy_weight_config_uhh.era,
-        "njets": events.njets,
-        "ptll": events.dimuon_pt,
+        "njets": njets,
+        "ptll": dimuon.pt,
         "syst": self.config_inst.x.dy_weight_config_uhh.syst,
     }
 
@@ -547,21 +543,12 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     for column_name in weights_list:
         variable_map = {**variable_map}
 
-        try:
-            # evaluating dy weights given a certain era, njets and ptll arrays, and a systematic shift
-            inputs = [variable_map[inp.name] for inp in self.dy_corrector.inputs]
-            dy_weight = self.dy_corrector.evaluate(*inputs)
-            print(dy_weight)
-        except:
-            from IPython import embed
-            embed(header="dy_weights_uhh...")
+        # evaluating dy weights given a certain era, njets and ptll arrays, and a systematic shift
+        inputs = [variable_map[inp.name] for inp in self.dy_corrector.inputs]
+        dy_weight = self.dy_corrector.evaluate(*inputs)
 
         # save the weights in a new column
         events = set_ak_column(events, column_name, dy_weight, value_type=np.float32)
-
-    print("---------------")
-    print("Exiting DY weight producer ... ")
-    print("---------------")
 
     return events
 
@@ -606,24 +593,16 @@ def dy_weights_uhh_setup(
     """
     bundle = reqs["external_files"]
 
-    try:
-        # import all correctors from the external file
-        correction_set = load_correction_set(self.get_dy_weight_file(bundle.files))
+    # import all correctors from the external file
+    correction_set = load_correction_set(self.get_dy_weight_file(bundle.files))
 
-        # check number of fetched correctors
-        if len(correction_set.keys()) != 1:
-            raise Exception("Expected exactly one type of Drell-Yan correction")
+    # check number of fetched correctors
+    if len(correction_set.keys()) != 1:
+        raise Exception("Expected exactly one type of Drell-Yan correction")
 
-        # create the weight corrector
-        self.dy_config: DrellYanConfigUHH = self.get_dy_weight_config()
-        self.dy_corrector = correction_set["dy_weight"]
-        print("correction_set is")
-        print(correction_set)
-        print("dy_corrector is ")
-        print(self.dy_corrector)
-    except:
-        from IPython import embed
-        embed(header="dy_weights_uhh_setup ... ")
+    # create the weight corrector
+    self.dy_config: DrellYanConfigUHH = self.get_dy_weight_config()
+    self.dy_corrector = correction_set["dy_weight"]
 
     # TODO: add uncertainty corrector later
     # self.dy_unc_corrector = correction_set[self.dy_config.unc_correction]
