@@ -130,9 +130,9 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
     # only run on mc
     mc_only=True,
     # function to determine the correction file
-    get_dy_weight_file=(lambda self, external_files: external_files.dy_weight_sf_uhh),
+    get_dy_weight_file=(lambda self, external_files: external_files.dy_weight_sf),
     # function to load the config
-    get_dy_weight_config=(lambda self: self.config_inst.x.dy_weight_config_uhh),
+    get_dy_weight_config=(lambda self: self.config_inst.x.dy_weight_config),
 )
 def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
