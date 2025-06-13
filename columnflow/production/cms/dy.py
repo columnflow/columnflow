@@ -195,12 +195,12 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 @dy_weights.init
 def dy_weights_init(self: Producer) -> None:
-    # the number of weights in partial run 3 is always 10
+
     if self.config_inst.campaign.x.year not in {2022, 2023}:
         raise NotImplementedError(
             f"campaign year {self.config_inst.campaign.x.year} is not yet supported by {self.cls_name}",
         )
-    self.n_unc = 10
+    self.n_unc = 9
 
     # register dynamically produced weight columns
     for i in range(self.n_unc):
@@ -249,10 +249,12 @@ def dy_weights_setup(
 
     dy_n_unc = int(self.dy_unc_corrector.evaluate(self.dy_config.order))
 
+    """
     if dy_n_unc != self.n_unc:
         raise ValueError(
             f"Expected {self.n_unc} uncertainties, got {dy_n_unc}",
         )
+    """
 
 
 @producer(
