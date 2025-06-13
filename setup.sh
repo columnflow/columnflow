@@ -816,12 +816,16 @@ cf_check_tmp_dir() {
         >&2 cf_color "red" "cf_check_tmp_dir: 'law config target.tmp_dir' must not be empty"
         return "2"
     elif [ ! -d "${tmp_dir}" ]; then
-        >&2 cf_color "red" "cf_check_tmp_dir: 'law config target.tmp_dir' is not a directory"
-        return "3"
+        # nothing to do
+        return "0"
     fi
 
-    # compute the size
-    local tmp_size="$( find "${tmp_dir}" -maxdepth 1 -name "*" -user "$( id -u )" -exec du -cb {} + | grep 'total$' | cut -d $'\t' -f 1 )"
+    # compute the size, with a notification shown if it takes too long
+    ( sleep 5 && cf_color yellow "computing the size of your files in ${tmp_dir} ..." ) &
+    local msg_pid="$!"
+    local tmp_size="$( find "${tmp_dir}" -maxdepth 1 -user "$( id -u )" -exec du -cb {} + | grep 'total$' | cut -d $'\t' -f 1 | sort | head -n 1 )"
+    kill "${msg_pid}" 2> /dev/null
+    wait "${msg_pid}" 2> /dev/null
 
     # warn above 1GB with color changing when above 2GB
     local thresh1="1073741824"
