@@ -475,8 +475,8 @@ def recoil_corrected_met_setup(
 # Weight producer for custom DY weights
 
 @producer(
-    uses={"Muon.pt", "Jet.pt"},
-    produces={"dy_weight_uhh"},
+    uses={"{Muon,Electron,Tau}.{pt,eta,phi,mass}", "Jet.pt"},
+    produces={"dy_weight"},
     # only run on mc
     mc_only=True,
     # function to determine the correction file
@@ -512,8 +512,8 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     """
 
     # sum two muons to get the dimuon pt
-    leps = ak.concatenate([events.Muon * 1], axis=1)[:, :2]
-    dimuon = leps.sum(axis=1)
+    leps = ak.concatenate([events.Electron * 1, events.Muon * 1, events.Tau * 1], axis=1)[:, :2]
+    dilep = leps.sum(axis=1)
     # calculate number of jets
     events = attach_coffea_behavior(events, {"Jet": default_coffea_collections["Jet"]})
     njets = ak.num(events.Jet["pt"], axis=1)
@@ -522,12 +522,12 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     variable_map = {
         "era": self.config_inst.x.dy_weight_config_uhh.era,
         "njets": njets,
-        "ptll": dimuon.pt,
+        "ptll": dilep.pt,
         "syst": self.config_inst.x.dy_weight_config_uhh.syst,
     }
 
     # initializing the list of weight variations
-    weights_list = [("dy_weight_uhh")]
+    weights_list = [("dy_weight")]
 
     # TODO: add systematics later
     # appending the respective number of uncertainties to the weight list
