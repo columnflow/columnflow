@@ -367,8 +367,6 @@ def normalization_weights_setup(
                 logger.warning(
                     f"added cross section for missing leaf process {process_inst.name} ({proc_id}) from xsec entry",
                 )
-            else:
-                logger.warning(f"no cross section found for missing leaf process {process_inst.name} ({proc_id})")
     else:
         # fill the process weight table with per-process cross sections
         for process_inst in process_insts:

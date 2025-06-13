@@ -383,6 +383,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         while lookup:
             pattern, obj, keys_func = lookup.popleft()
 
+            # when pattern starts with a "!", it is a negation
+            negate = pattern.startswith("!")
+            if negate:
+                pattern = pattern[1:]
+
             # create the copy of comparison keys on demand
             # (the original sequence is living once on the previous stack until now)
             _keys = keys_func()
@@ -391,7 +396,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             regex = is_regex(pattern)
             while _keys:
                 key = _keys.popleft()
-                if law.util.multi_match(key, pattern, regex=regex):
+                if law.util.multi_match(key, pattern, regex=regex) != negate:
                     # when obj is not a dict, we found the value
                     if not isinstance(obj, dict):
                         return obj
