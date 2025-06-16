@@ -790,9 +790,9 @@ cf_setup_post_install() {
     # check the tmp directory size
     #
 
-    if ${CF_LOCAL_ENV} && which law &> /dev/null; then
-        cf_check_tmp_dir
-    fi
+    #if ${CF_LOCAL_ENV} && which law &> /dev/null; then
+    #    cf_check_tmp_dir
+    #fi
 
     return "0"
 }
