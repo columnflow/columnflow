@@ -470,10 +470,10 @@ class MLTraining(
         MergeMLEvents=MergeMLEvents,
         MergeMLStats=MergeMLStats,
     )
-
     @property
     def sandbox(self):
         # determine the sandbox dynamically based on the response of the model
+        self.local_target
         return self.ml_model_inst.sandbox(self)
 
     @property
@@ -624,7 +624,7 @@ class MLEvaluation(
 
         reqs["models"] = self.reqs.MLTraining.req_different_branching(
             self,
-            configs=(self.config_inst.name,),
+            configs=tuple(map(lambda x: x.name, self.ml_model_inst.used_datasets.keys())),
         )
 
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
@@ -650,7 +650,7 @@ class MLEvaluation(
         reqs = {
             "models": self.reqs.MLTraining.req_different_branching(
                 self,
-                configs=(self.config_inst.name,),
+                configs=tuple(map(lambda x: x.name, self.ml_model_inst.used_datasets.keys())),
                 branch=-1,
             ),
             "events": self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch),
