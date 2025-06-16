@@ -72,7 +72,7 @@ def category_ids_init(self: Producer, **kwargs) -> None:
             continue
 
         # treat all selections as lists of categorizers
-        for sel in law.util.make_list(cat_inst.selection):
+        for sel in law.util.flatten(cat_inst.selection):
             if Categorizer.derived_by(sel):
                 categorizer = sel
             elif Categorizer.has_cls(sel):
