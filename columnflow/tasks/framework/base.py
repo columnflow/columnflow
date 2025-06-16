@@ -23,7 +23,7 @@ import law
 import order as od
 
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
-from columnflow.util import is_regex, prettify, DotDict
+from columnflow.util import get_docs_url, is_regex, prettify, DotDict
 from columnflow.types import Sequence, Callable, Any, T
 
 
@@ -354,10 +354,16 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             else getattr(inst_or_params, "analysis", None)
         )
         if analysis not in {law.NO_STR, None, ""}:
-            keys["analysis"] = analysis
+            prefix = "ana"
+            keys[prefix] = f"{prefix}_{analysis}"
 
         # add the task family
-        keys["task_family"] = cls.task_family
+        prefix = "task"
+        keys[prefix] = f"{prefix}_{cls.task_family}"
+
+        # for backwards compatibility, add the task family again without the prefix
+        # (TODO: this should be removed in the future)
+        keys[f"{prefix}_compat"] = cls.task_family
 
         return keys
 
@@ -375,7 +381,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return empty_value
 
         # the keys to use for the lookup are the flattened values of the keys dict
-        flat_keys = collections.deque(law.util.flatten(keys.values() if isinstance(keys, dict) else keys))
+        flat_keys = law.util.flatten(keys.values() if isinstance(keys, dict) else keys)
 
         # start tree traversal using a queue lookup consisting of names and values of tree nodes,
         # as well as the remaining keys (as a deferred function) to compare for that particular path
@@ -389,9 +395,27 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
             # check if the pattern matches any key
             regex = is_regex(pattern)
-            while _keys:
-                key = _keys.popleft()
+            for i, key in enumerate(_keys):
                 if law.util.multi_match(key, pattern, regex=regex):
+                    # for a limited time, show a deprecation warning when the old task family key was matched
+                    # (old = no "task_" prefix)
+                    # TODO: remove once deprecated
+                    if "task_compat" in keys and key == keys["task_compat"]:
+                        docs_url = get_docs_url(
+                            "user_guide",
+                            "best_practices.html",
+                            anchor="selecting-output-locations",
+                        )
+                        logger.warning_once(
+                            "dfs_lookup_old_task_key",
+                            f"during the lookup of a pinned location, version or resource value of a '{cls.__name__}' "
+                            f"task, an entry matched based on the task family '{key}' that misses the new 'task_' "
+                            "prefix; please update the pinned entries in your law.cfg file by adding the 'task_' "
+                            f"prefix to entries that contain the task family, e.g. 'task_{key}: VALUE'; support for "
+                            f"missing prefixes will be removed in a future version; see {docs_url} for more info",
+                        )
+                    # remove the matched key from remaining lookup keys
+                    _keys.pop(i)
                     # when obj is not a dict, we found the value
                     if not isinstance(obj, dict):
                         return obj
@@ -1449,7 +1473,8 @@ class ConfigTask(AnalysisTask):
             else getattr(inst_or_params, "config", None)
         )
         if config not in {law.NO_STR, None, ""}:
-            keys.insert_before("task_family", "config", config)
+            prefix = "cfg"
+            keys.insert_before("task", prefix, f"{prefix}_{config}")
 
         return keys
 
@@ -1629,7 +1654,8 @@ class ShiftTask(ConfigTask):
             else getattr(inst_or_params, "shift", None)
         )
         if shift not in (law.NO_STR, None, ""):
-            keys["shift"] = shift
+            prefix = "shift"
+            keys[prefix] = f"{prefix}_{shift}"
 
         return keys
 
@@ -1720,7 +1746,8 @@ class DatasetTask(ShiftTask):
             else getattr(inst_or_params, "dataset", None)
         )
         if dataset not in {law.NO_STR, None, ""}:
-            keys.insert_before("shift", "dataset", dataset)
+            prefix = "dataset"
+            keys.insert_before("shift", prefix, f"{prefix}_{dataset}")
 
         return keys
 

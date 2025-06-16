@@ -120,7 +120,8 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "calibrator", None)
         )
         if calibrator not in (law.NO_STR, None, ""):
-            keys["calibrator"] = f"calib_{calibrator}"
+            prefix = "calib"
+            keys[prefix] = f"{prefix}_{calibrator}"
 
         return keys
 
@@ -304,7 +305,8 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "calibrators", None)
         )
         if calibrators not in {law.NO_STR, None, "", ()}:
-            keys["calibrators"] = [f"calib_{calibrator}" for calibrator in calibrators]
+            prefix = "calib"
+            keys[prefix] = [f"{prefix}_{calibrator}" for calibrator in calibrators]
 
         return keys
 
@@ -510,7 +512,8 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "selector", None)
         )
         if selector not in (law.NO_STR, None, ""):
-            keys["selector"] = f"sel_{selector}"
+            prefix = "sel"
+            keys[prefix] = f"{prefix}_{selector}"
 
         return keys
 
@@ -702,7 +705,8 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "reducer", None)
         )
         if reducer not in (law.NO_STR, None, ""):
-            keys["reducer"] = f"red_{reducer}"
+            prefix = "red"
+            keys[prefix] = f"{prefix}_{reducer}"
 
         return keys
 
@@ -877,7 +881,8 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "producer", None)
         )
         if producer not in (law.NO_STR, None, ""):
-            keys["producer"] = f"prod_{producer}"
+            prefix = "prod"
+            keys[prefix] = f"{prefix}_{producer}"
 
         return keys
 
@@ -1061,7 +1066,8 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "producers", None)
         )
         if producers not in {law.NO_STR, None, "", ()}:
-            keys["producers"] = [f"prod_{producer}" for producer in producers]
+            prefix = "prod"
+            keys[prefix] = [f"{prefix}_{producer}" for producer in producers]
 
         return keys
 
@@ -1679,7 +1685,8 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "hist_producer", None)
         )
         if producer not in (law.NO_STR, None, ""):
-            keys["hist_producer"] = f"hist_{producer}"
+            prefix = "hist"
+            keys[prefix] = f"{prefix}_{producer}"
 
         return keys
 
