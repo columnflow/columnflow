@@ -10,11 +10,10 @@ from dataclasses import dataclass
 
 import law
 
-from columnflow.types import Callable
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set, DotDict
 from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array, EMPTY_FLOAT
-from columnflow.types import Any
+from columnflow.types import Any, Callable
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
