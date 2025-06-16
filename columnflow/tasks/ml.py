@@ -470,10 +470,10 @@ class MLTraining(
         MergeMLEvents=MergeMLEvents,
         MergeMLStats=MergeMLStats,
     )
+
     @property
     def sandbox(self):
         # determine the sandbox dynamically based on the response of the model
-        self.local_target
         return self.ml_model_inst.sandbox(self)
 
     @property
