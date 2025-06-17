@@ -22,38 +22,40 @@ For convenience, if no file system with that name was defined, `LOCAL_FS_NAME` i
 - `wlcg, WLCG_FS_NAME` refers to a specific remote storage system named `WLCG_FS_NAME` that should be defined in the `law.cfg` file.
 
 `TASK_IDENTIFIER` identifies the task the location should apply to.
-It can be a simple task family such as `cf.CalibrateEvents`, but for larger analyses a more fine grained selection is required.
+It can be a simple task family such as `task_cf.CalibrateEvents` (see the format below), but for larger analyses a more fine grained selection is required.
 For this purpose, `TASK_IDENTIFIER` can be a `__`-separated sequence of so-called lookup keys, e.g.
 
 ```ini
 [outputs]
 
-run3_23__cf.CalibrateEvents__nominal: wlcg, wlcg_fs_run3_23
+cfg_run3_23__task_cf.CalibrateEvents__shift_nominal: wlcg, wlcg_fs_run3_23
 ```
 
 Here, three keys are defined, making use of the config name, the task family, and the name of a systematic shift.
 The exact selection of possible keys and their resolution order is defined by the task itself in {py:meth}:`~columnflow.tasks.framework.base.AnalysisTask.get_config_lookup_keys` (and subclasses).
 Most tasks, however, define their lookup keys as:
 
-1. analysis name
-2. config name
-3. task family
-4. dataset name
-5. shift name
+1. analysis name, prefixed by `ana_`
+2. config name, prefixed by `cfg_`
+3. task family, prefixed by `task_`
+4. dataset name, prefixed by `dataset_`
+5. shift name, prefixed by `shift_`
 6. calibrator name, prefixed by `calib_`
 7. selector name, prefixed by `sel_`
-8. producer name, prefixed by `prod_`
+8. reducer name, prefixed by `red_`
+9. producer name, prefixed by `prod_`
+10. hist producer name, prefixed by `hist_`
 
 When defining `TASK_IDENTIFIER`'s, not all keys need to be specified, and patterns or regular expressions (`^EXPR$`) can be used.
-The definition order is **important** as the first matching definition is used.
+The definition order in the config file is **important** as the first matching definition is used.
 This way, output locations are highly customizable.
 
 ```ini
 [outputs]
 
 # store all run3 outputs on a specific fs, and all other outputs locally
-run3_*__cf.CalibrateEvents: wlcg, wlcg_fs_run3
-cf.CalibrateEvents: local
+cfg_run3_*__task_cf.CalibrateEvents: wlcg, wlcg_fs_run3
+task_cf.CalibrateEvents: local
 ```
 
 ## Controlling versions of upstream tasks
@@ -90,18 +92,18 @@ Consider the following two examples for defining versions, one via auxiliary con
 
 ```python
 cfg.x.versions = {
-    "run3_*": {
-        "cf.CalibrateEvents": "v2",
+    "cfg_run3_*": {
+        "task_cf.CalibrateEvents": "v2",
     },
-    "cf.CalibrateEvents": "v1",
+    "task_cf.CalibrateEvents": "v1",
 }
 ```
 
 ```ini
 [versions]
 
-run3_*__cf.CalibrateEvents: v2
-cf.CalibrateEvents: v1
+cfg_run3_*__task_cf.CalibrateEvents: v2
+task_cf.CalibrateEvents: v1
 ```
 
 They are **equivalent** since the `__`-separated `TASK_IDENTIFIER`'s in the `law.cfg` are internallly converted to the same nested dictionary structure.

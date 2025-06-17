@@ -267,11 +267,10 @@ lfn_sources: local_dcache
 # output locations per task family
 # for local targets : "local[, STORE_PATH]"
 # for remote targets: "wlcg[, WLCG_FS_NAME]"
-cf.Task1: local
-cf.Task2: local, /shared/path/to/store/output
-cf.Task3: /shared/path/to/store/output
+task_cf.Task1: local
+task_cf.Task2: local, /shared/path/to/store/output
+task_cf.Task3: /shared/path/to/store/output
 ...
-
 ```
 
 It is important to redirect the setup to the custom config file by setting the ```LAW_CONFIG_FILE``` environment variable in the `setup.sh` file to the path of the custom config file as follows:
