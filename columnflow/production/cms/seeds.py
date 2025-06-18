@@ -30,10 +30,6 @@ def create_seed(val: int, n_hex: int = 16) -> int:
     return int(hashlib.sha256(bytes(str(val), "utf-8")).hexdigest()[:-(n_hex + 1):-1], base=16)
 
 
-# store a vectorized version (only interface, not actually simd'ing)
-create_seed_vec = np.vectorize(create_seed, otypes=[np.uint64])
-
-
 @producer(
     uses={
         # global columns for event seed
@@ -74,7 +70,7 @@ def deterministic_event_seeds(self, events: ak.Array, **kwargs) -> ak.Array:
         before invoking this producer.
     """
     # started from an already hashed seed based on event, run and lumi info multiplied with primes
-    seed = create_seed_vec(
+    seed = self.create_seed_vec(
         np.asarray(
             self.primes[7] * ak.values_astype(events.event, np.uint64) +
             self.primes[5] * ak.values_astype(events.run, np.uint64) +
@@ -125,7 +121,7 @@ def deterministic_event_seeds(self, events: ak.Array, **kwargs) -> ak.Array:
         seed = seed + primes * ak.values_astype(hashed, np.uint64)
 
     # create and store them
-    seed = ak.Array(create_seed_vec(np.asarray(seed)))
+    seed = ak.Array(self.create_seed_vec(np.asarray(seed)))
     events = set_ak_column(events, "deterministic_seed", seed, value_type=np.uint64)
 
     # uniqueness test across the chunk for debugging
@@ -178,6 +174,9 @@ def deterministic_event_seeds_setup(
 
     self.apply_route = apply_route
 
+    # store a vectorized version of the create_seed function (only interface, not actually simd'ing)
+    self.create_seed_vec = np.vectorize(create_seed, otypes=[np.uint64])
+
 
 class deterministic_object_seeds(Producer):
 
@@ -217,7 +216,7 @@ class deterministic_object_seeds(Producer):
             )
         )
         np_object_seed = np.asarray(ak.flatten(object_seed))
-        np_object_seed[:] = create_seed_vec(np_object_seed)
+        np_object_seed[:] = self.create_seed_vec(np_object_seed)
 
         # store them
         events = set_ak_column(events, f"{self.object_field}.deterministic_seed", object_seed, value_type=np.uint64)
@@ -252,6 +251,9 @@ class deterministic_object_seeds(Producer):
         """
         # store primes in array
         self.primes = np.array(primes, dtype=np.uint64)
+
+        # store a vectorized version of the create_seed function (only interface, not actually simd'ing)
+        self.create_seed_vec = np.vectorize(create_seed, otypes=[np.uint64])
 
 
 deterministic_jet_seeds = deterministic_object_seeds.derive(
