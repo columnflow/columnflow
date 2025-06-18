@@ -389,11 +389,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         while lookup:
             pattern, obj, keys_func = lookup.popleft()
 
-            # when pattern starts with a "!", it is a negation
-            negate = pattern.startswith("!")
-            if negate:
-                pattern = pattern[1:]
-
             # create the copy of comparison keys on demand
             # (the original sequence is living once on the previous stack until now)
             _keys = keys_func()
