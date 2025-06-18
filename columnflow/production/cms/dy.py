@@ -332,7 +332,7 @@ def recoil_corrected_met(self: Producer, events: ak.Array, **kwargs) -> ak.Array
 
     # Determine jet multiplicity for the event (jet selection as in original)
     if self.njet_column:
-        njet = np.asarry(events[self.njet_column], dtype=np.float32)
+        njet = np.asarray(events[self.njet_column], dtype=np.float32)
     else:
         jet_selection = (
             ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) |
