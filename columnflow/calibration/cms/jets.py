@@ -603,12 +603,15 @@ def jec_setup(
             if jec_era is None:
                 jec_era = "Run" + self.dataset_inst.get_aux("era")
 
-        return [
-            f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}".replace("__", "_")
-            if is_data else
-            f"{jec.campaign}_{jec.version}_MC_{name}_{jec.jet_type}"
-            for name in names
-        ]
+            # if JEC era is specified as empty string, infer that the Run part is not included in the key
+            if jec_era == "":
+                jme_key = f"{jec.campaign}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
+            else:
+                jme_key = f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
+        else:
+            jme_key = f"{jec.campaign}_{jec.version}_MC_{{name}}_{jec.jet_type}"
+
+        return [jme_key.format(name=name) for name in names]
 
     jec_keys = make_jme_keys(jec_cfg.levels)
     jec_keys_subset_type1_met = make_jme_keys(jec_cfg.levels_for_type1_met)
