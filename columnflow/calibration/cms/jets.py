@@ -581,6 +581,8 @@ def jec_setup(
                     "CorrelationGroupFlavor",
                     "CorrelationGroupUncorrelated",
                 ],
+                # whether the JECs for data should be era-specific
+                "data_per_era": True,
             },
         })
 
@@ -597,18 +599,27 @@ def jec_setup(
     jec_cfg = self.get_jec_config()
 
     def make_jme_keys(names, jec=jec_cfg, is_data=self.dataset_inst.is_data):
-        if is_data:
+        if is_data and jec.get("data_per_era", True):
+            if "data_per_era" not in jec:
+                logger.warning_once(
+                    f"{id(self)}_depr_jec_config_data_per_era",
+                    "config aux 'jec' does not contain key 'data_per_era'. "
+                    "This may be due to an outdated config. Continuing under the assumption that "
+                    "JEC keys for data are era-specific. "
+                    "This assumption will be removed in future versions of "
+                    "columnflow, so please adapt the config according to the "
+                    "documentation to remove this warning and ensure future "
+                    "compatibility of the code.",
+                )
             jec_era = self.dataset_inst.get_aux("jec_era", None)
             # if no special JEC era is specified, infer based on 'era'
             if jec_era is None:
-                jec_era = "Run" + self.dataset_inst.get_aux("era")
+                jec_era = "Run" + self.dataset_inst.get_aux("era", None)
 
-            # if JEC era is specified as empty string, infer that the Run part is not included in the key
-            if jec_era == "":
-                jme_key = f"{jec.campaign}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
-            else:
-                jme_key = f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
-        else:
+            jme_key = f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
+        elif is_data:
+            jme_key = f"{jec.campaign}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
+        else:  # MC
             jme_key = f"{jec.campaign}_{jec.version}_MC_{{name}}_{jec.jet_type}"
 
         return [jme_key.format(name=name) for name in names]
