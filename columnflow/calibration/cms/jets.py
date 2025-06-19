@@ -228,6 +228,7 @@ def get_jec_config_default(self: Calibrator) -> DotDict:
 
 @calibrator(
     uses={
+        "run",
         optional("fixedGridRhoFastjetAll"),
         optional("Rho.fixedGridRhoFastjetAll"),
         attach_coffea_behavior,
@@ -328,7 +329,7 @@ def jec(
     events = set_ak_column_f32(events, f"{jet_name}.pt_raw", events[jet_name].pt * (1 - events[jet_name].rawFactor))
     events = set_ak_column_f32(events, f"{jet_name}.mass_raw", events[jet_name].mass * (1 - events[jet_name].rawFactor))
 
-    def correct_jets(*, pt, eta, phi, area, rho, evaluator_key="jec"):
+    def correct_jets(*, pt, eta, phi, area, rho, run, evaluator_key="jec"):
         # variable naming convention
         variable_map = {
             "JetA": area,
@@ -336,6 +337,7 @@ def jec(
             "JetPt": pt,
             "JetPhi": phi,
             "Rho": ak.values_astype(rho, np.float32),
+            "run": run,
         }
 
         # apply all correctors sequentially, updating the pt each time
@@ -370,6 +372,7 @@ def jec(
             phi=events[jet_name].phi,
             area=events[jet_name].area,
             rho=rho,
+            run=events.run,
             evaluator_key="jec_subset_type1_met",
         )
 
@@ -392,6 +395,7 @@ def jec(
         phi=events[jet_name].phi,
         area=events[jet_name].area,
         rho=rho,
+        run=events.run,
         evaluator_key="jec",
     )
 
@@ -600,7 +604,7 @@ def jec_setup(
                 jec_era = "Run" + self.dataset_inst.get_aux("era")
 
         return [
-            f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}"
+            f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}".replace("__", "_")
             if is_data else
             f"{jec.campaign}_{jec.version}_MC_{name}_{jec.jet_type}"
             for name in names
