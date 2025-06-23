@@ -155,11 +155,21 @@
       "contributions": [
         "code"
       ]
-    }, {
+    },
+    {
       "login": "philippgadow",
       "name": "philippgadow",
       "avatar_url": "https://avatars.githubusercontent.com/u/6804366?v=4",
       "profile": "https://github.com/philippgadow",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "LuSchaller",
+      "name": "Lukas Schaller",
+      "avatar_url": "https://avatars.githubusercontent.com/u/30951523?v=4",
+      "profile": "https://github.com/LuSchaller",
       "contributions": [
         "code"
       ]
