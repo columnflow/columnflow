@@ -44,7 +44,8 @@ Most tasks, however, define their lookup keys as:
 7. selector name, prefixed by `sel_`
 8. reducer name, prefixed by `red_`
 9. producer name, prefixed by `prod_`
-10. hist producer name, prefixed by `hist_`
+10. ml model name, prefixed by `ml_`
+11. hist producer name, prefixed by `hist_`
 
 When defining `TASK_IDENTIFIER`'s, not all keys need to be specified, and patterns or regular expressions (`^EXPR$`) can be used.
 The definition order in the config file is **important** as the first matching definition is used.

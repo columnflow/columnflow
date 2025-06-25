@@ -1283,6 +1283,25 @@ class MLModelMixinBase(ConfigTask):
             not shift_inst.has_tag("disjoint_from_nominal")
         )
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: MLModelMixinBase | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the ml model name
+        ml_model = (
+            inst_or_params.get("ml_model")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "ml_model", None)
+        )
+        if ml_model not in (law.NO_STR, None, ""):
+            prefix = "ml"
+            keys[prefix] = f"{prefix}_{ml_model}"
+
+        return keys
+
 
 class MLModelTrainingMixin(
     MLModelMixinBase,
@@ -1609,6 +1628,25 @@ class MLModelsMixin(ConfigTask):
             ))
 
         return columns
+
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: MLModelsMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the ml model names
+        ml_models = (
+            inst_or_params.get("ml_models")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "ml_models", None)
+        )
+        if ml_models not in {law.NO_STR, None, "", ()}:
+            prefix = "ml"
+            keys[prefix] = [f"{prefix}_{ml_model}" for ml_model in ml_models]
+
+        return keys
 
 
 class HistProducerClassMixin(ArrayFunctionClassMixin):
