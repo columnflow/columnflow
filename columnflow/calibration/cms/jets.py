@@ -614,7 +614,13 @@ def jec_setup(
             jec_era = self.dataset_inst.get_aux("jec_era", None)
             # if no special JEC era is specified, infer based on 'era'
             if jec_era is None:
-                jec_era = "Run" + self.dataset_inst.get_aux("era", None)
+                era = self.dataset_inst.get_aux("era", None)
+                if era is None:
+                    raise ValueError(
+                        "JEC data key is requested to be era dependent, but neither jec_era or era "
+                        f"auxiliary is set for dataset {self.dataset_inst.name}.",
+                    )
+                jec_era = "Run" + era
 
             jme_key = f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
         elif is_data:
