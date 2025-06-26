@@ -756,13 +756,19 @@ cf_setup_post_install() {
     #       Should be true or false, indicating if the setup is run in a local environment.
     #   CF_REPO_BASE
     #       The base directory of the analysis repository, which is used to determine the law home and config file.
+    #
+    # Optional environment variables:
+    #   CF_SKIP_SETUP_GIT_HOOKS
+    #       When set to true, the setup of git hooks is skipped.
+    #   CF_SKIP_CHECK_TMP_DIR
+    #       When set to true, the check of the size of the target tmp directory is skipped.
 
     #
     # git hooks
     #
 
     # only in local env
-    if ${CF_LOCAL_ENV}; then
+    if ! ${CF_SKIP_SETUP_GIT_HOOKS} && ${CF_LOCAL_ENV}; then
         cf_setup_git_hooks || return "$?"
     fi
 
@@ -790,7 +796,7 @@ cf_setup_post_install() {
     # check the tmp directory size
     #
 
-    if ${CF_LOCAL_ENV} && which law &> /dev/null; then
+    if ! ${CF_SKIP_CHECK_TMP_DIR} && ${CF_LOCAL_ENV} && which law &> /dev/null; then
         cf_check_tmp_dir
     fi
 
@@ -816,12 +822,16 @@ cf_check_tmp_dir() {
         >&2 cf_color "red" "cf_check_tmp_dir: 'law config target.tmp_dir' must not be empty"
         return "2"
     elif [ ! -d "${tmp_dir}" ]; then
-        >&2 cf_color "red" "cf_check_tmp_dir: 'law config target.tmp_dir' is not a directory"
-        return "3"
+        # nothing to do
+        return "0"
     fi
 
-    # compute the size
-    local tmp_size="$( find "${tmp_dir}" -maxdepth 1 -name "*" -user "$( id -u )" -exec du -cb {} + | grep 'total$' | cut -d $'\t' -f 1 )"
+    # compute the size, with a notification shown if it takes too long
+    ( sleep 5 && cf_color yellow "computing the size of your files in ${tmp_dir} ..." ) &
+    local msg_pid="$!"
+    local tmp_size="$( find "${tmp_dir}" -maxdepth 1 -user "$( id -u )" -exec du -cb {} + | grep 'total$' | cut -d $'\t' -f 1 | sort | head -n 1 )"
+    kill "${msg_pid}" 2> /dev/null
+    wait "${msg_pid}" 2> /dev/null
 
     # warn above 1GB with color changing when above 2GB
     local thresh1="1073741824"
@@ -1102,6 +1112,8 @@ for flag_name in \
         CF_REINSTALL_SOFTWARE \
         CF_REINSTALL_HOOKS \
         CF_SKIP_BANNER \
+        CF_SKIP_SETUP_GIT_HOOKS \
+        CF_SKIP_CHECK_TMP_DIR \
         CF_ON_HTCONDOR \
         CF_ON_SLURM \
         CF_ON_GRID \

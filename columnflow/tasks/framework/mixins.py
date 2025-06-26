@@ -120,7 +120,8 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "calibrator", None)
         )
         if calibrator not in (law.NO_STR, None, ""):
-            keys["calibrator"] = f"calib_{calibrator}"
+            prefix = "calib"
+            keys[prefix] = f"{prefix}_{calibrator}"
 
         return keys
 
@@ -304,7 +305,8 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "calibrators", None)
         )
         if calibrators not in {law.NO_STR, None, "", ()}:
-            keys["calibrators"] = [f"calib_{calibrator}" for calibrator in calibrators]
+            prefix = "calib"
+            keys[prefix] = [f"{prefix}_{calibrator}" for calibrator in calibrators]
 
         return keys
 
@@ -510,7 +512,8 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "selector", None)
         )
         if selector not in (law.NO_STR, None, ""):
-            keys["selector"] = f"sel_{selector}"
+            prefix = "sel"
+            keys[prefix] = f"{prefix}_{selector}"
 
         return keys
 
@@ -702,7 +705,8 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "reducer", None)
         )
         if reducer not in (law.NO_STR, None, ""):
-            keys["reducer"] = f"red_{reducer}"
+            prefix = "red"
+            keys[prefix] = f"{prefix}_{reducer}"
 
         return keys
 
@@ -877,7 +881,8 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "producer", None)
         )
         if producer not in (law.NO_STR, None, ""):
-            keys["producer"] = f"prod_{producer}"
+            prefix = "prod"
+            keys[prefix] = f"{prefix}_{producer}"
 
         return keys
 
@@ -1061,7 +1066,8 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "producers", None)
         )
         if producers not in {law.NO_STR, None, "", ()}:
-            keys["producers"] = [f"prod_{producer}" for producer in producers]
+            prefix = "prod"
+            keys[prefix] = [f"{prefix}_{producer}" for producer in producers]
 
         return keys
 
@@ -1276,6 +1282,25 @@ class MLModelMixinBase(ConfigTask):
             dataset_inst in self.ml_model_inst.datasets(config_inst) and
             not shift_inst.has_tag("disjoint_from_nominal")
         )
+
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: MLModelMixinBase | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the ml model name
+        ml_model = (
+            inst_or_params.get("ml_model")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "ml_model", None)
+        )
+        if ml_model not in (law.NO_STR, None, ""):
+            prefix = "ml"
+            keys[prefix] = f"{prefix}_{ml_model}"
+
+        return keys
 
 
 class MLModelTrainingMixin(
@@ -1604,6 +1629,25 @@ class MLModelsMixin(ConfigTask):
 
         return columns
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: MLModelsMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the ml model names
+        ml_models = (
+            inst_or_params.get("ml_models")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "ml_models", None)
+        )
+        if ml_models not in {law.NO_STR, None, "", ()}:
+            prefix = "ml"
+            keys[prefix] = [f"{prefix}_{ml_model}" for ml_model in ml_models]
+
+        return keys
+
 
 class HistProducerClassMixin(ArrayFunctionClassMixin):
     """
@@ -1679,7 +1723,8 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
             else getattr(inst_or_params, "hist_producer", None)
         )
         if producer not in (law.NO_STR, None, ""):
-            keys["hist_producer"] = f"hist_{producer}"
+            prefix = "hist"
+            keys[prefix] = f"{prefix}_{producer}"
 
         return keys
 

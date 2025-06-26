@@ -101,7 +101,7 @@ if __name__ == "__main__":
     print("file content loaded into variable 'objects'")
 
     # interpret data
-    intepreted = objects
+    interpreted = objects
     if args.events:
         # preload common packages
         import awkward as ak  # noqa

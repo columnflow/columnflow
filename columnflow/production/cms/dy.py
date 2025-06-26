@@ -247,8 +247,6 @@ def dy_weights_setup(
         # MET information
         # -> only Run 3 (PuppiMET) is supported
         "PuppiMET.{pt,phi}",
-        # Number of jets (as a per-event scalar)
-        "Jet.{pt,phi,eta,mass}",
         # Gen-level boson information (full boson momentum)
         # -> gen_dilepton_vis.pt, gen_dilepton_vis.phi, gen_dilepton_all.pt, gen_dilepton_all.phi
         gen_dilepton.PRODUCES,
@@ -257,6 +255,8 @@ def dy_weights_setup(
         "RecoilCorrMET.{pt,phi}",
         "RecoilCorrMET.{pt,phi}_{recoilresp,recoilres}_{up,down}",
     },
+    # custom njet column to be used to derive corrections
+    njet_column=None,
     mc_only=True,
     # function to determine the recoil correction file from external files
     get_dy_recoil_file=(lambda self, external_files: external_files.dy_recoil_sf),
@@ -331,12 +331,15 @@ def recoil_corrected_met(self: Producer, events: ak.Array, **kwargs) -> ak.Array
     uperp = -u_x * full_unit_y + u_y * full_unit_x
 
     # Determine jet multiplicity for the event (jet selection as in original)
-    jet_selection = (
-        ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) |
-        ((events.Jet.pt > 50) & (np.abs(events.Jet.eta) >= 2.5))
-    )
-    selected_jets = events.Jet[jet_selection]
-    njet = np.asarray(ak.num(selected_jets, axis=1), dtype=np.float32)
+    if self.njet_column:
+        njet = np.asarray(events[self.njet_column], dtype=np.float32)
+    else:
+        jet_selection = (
+            ((events.Jet.pt > 30) & (np.abs(events.Jet.eta) < 2.5)) |
+            ((events.Jet.pt > 50) & (np.abs(events.Jet.eta) >= 2.5))
+        )
+        selected_jets = events.Jet[jet_selection]
+        njet = np.asarray(ak.num(selected_jets, axis=1), dtype=np.float32)
 
     # Apply nominal recoil correction on U components
     # (see here: https://cms-higgs-leprare.docs.cern.ch/htt-common/V_recoil/#example-snippet)
@@ -416,6 +419,14 @@ def recoil_corrected_met(self: Producer, events: ak.Array, **kwargs) -> ak.Array
         events = set_ak_column(events, f"RecoilCorrMET.phi_{postfix}", met_var_phi, value_type=np.float32)
 
     return events
+
+
+@recoil_corrected_met.init
+def recoil_corrected_met_init(self: Producer) -> None:
+    if self.njet_column:
+        self.uses.add(f"{self.njet_column}")
+    else:
+        self.uses.add("Jet.{pt,eta,phi,mass}")
 
 
 @recoil_corrected_met.requires

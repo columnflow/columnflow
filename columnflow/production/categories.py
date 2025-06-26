@@ -6,6 +6,9 @@ Column production methods related defining categories.
 
 from __future__ import annotations
 
+import functools
+import operator
+
 import law
 
 from columnflow.categorization import Categorizer
@@ -34,16 +37,20 @@ def category_ids(
     """
     Assigns each event an array of category ids.
     """
+    # evaluate all unique categorizers, storing their returned masks
+    cat_masks = {}
+    for categorizer in self.unique_categorizers:
+        events, mask = self[categorizer](events, **kwargs)
+        cat_masks[categorizer] = mask
+
+    # loop through categories and construct mask over all categorizers
     category_ids = []
-
     for cat_inst, categorizers in self.categorizer_map.items():
-        # start with a true mask
-        cat_mask = np.ones(len(events), dtype=bool)
-
-        # loop through selectors
-        for categorizer in categorizers:
-            events, mask = self[categorizer](events, **kwargs)
-            cat_mask = cat_mask & mask
+        cat_mask = functools.reduce(
+            operator.and_,
+            (cat_masks[c] for c in categorizers),
+            np.ones(len(events), dtype=bool),
+        )
 
         # covert to nullable array with the category ids or none, then apply ak.singletons
         ids = ak.where(cat_mask, np.float64(cat_inst.id), np.float64(np.nan))
@@ -72,7 +79,7 @@ def category_ids_init(self: Producer, **kwargs) -> None:
             continue
 
         # treat all selections as lists of categorizers
-        for sel in law.util.make_list(cat_inst.selection):
+        for sel in law.util.flatten(cat_inst.selection):
             if Categorizer.derived_by(sel):
                 categorizer = sel
             elif Categorizer.has_cls(sel):
@@ -95,3 +102,6 @@ def category_ids_init(self: Producer, **kwargs) -> None:
             self.produces.add(categorizer)
 
             self.categorizer_map.setdefault(cat_inst, []).append(categorizer)
+
+    # store a list of unique categorizers
+    self.unique_categorizers = law.util.make_unique(sum(self.categorizer_map.values(), []))
