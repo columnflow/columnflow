@@ -453,6 +453,9 @@ class MergeReducedEvents(_MergeReducedEvents):
         ReduceEvents=ReduceEvents,
     )
 
+    # approximate number of events per row group in the merged file
+    target_row_group_size = 50_000
+
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def file_merging(self):
         # check if the merging stats are present
@@ -499,7 +502,11 @@ class MergeReducedEvents(_MergeReducedEvents):
 
         # merge
         law.pyarrow.merge_parquet_task(
-            self, inputs, output, writer_opts=self.get_parquet_writer_opts(),
+            task=self,
+            inputs=inputs,
+            output=output,
+            writer_opts=self.get_parquet_writer_opts(),
+            target_row_group_size=self.target_row_group_size,
         )
 
         # optionally remove initial inputs
