@@ -505,6 +505,7 @@ class MergeReducedEvents(_MergeReducedEvents):
             task=self,
             inputs=inputs,
             output=output,
+            callback=self.create_progress_callback(len(inputs)),
             writer_opts=self.get_parquet_writer_opts(),
             target_row_group_size=self.target_row_group_size,
         )
