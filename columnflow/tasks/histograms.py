@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import luigi
 import law
+import order as od
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
@@ -21,7 +22,10 @@ from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
-from columnflow.util import dev_sandbox
+from columnflow.util import dev_sandbox, maybe_import
+
+
+hist = maybe_import("hist")
 
 
 class _CreateHistograms(
@@ -330,6 +334,32 @@ CreateHistogramsWrapper = wrapper_factory(
 )
 
 
+def update_ax_labels(hists: list[hist.Hist], config_inst: od.Config, variable_name: str) -> None:
+    """
+    Helper function to update the axis labels of histograms based on variable instances from
+    the *config_inst*.
+
+    :param hists: List of histograms to update.
+    :param config_inst: Configuration instance containing variable definitions.
+    :param variable_name: Name of the variable to update labels for, formatted as a string
+                         with variable names separated by hyphens (e.g., "var1-var2").
+    :raises ValueError: If a variable name is not found in the histogram axes.
+    """
+    labels = {}
+    for var_name in variable_name.split("-"):
+        var_inst = config_inst.get_variable(var_name, None)
+        if var_inst:
+            labels[var_name] = var_inst.x_title
+
+    for h in hists:
+        for var_name, label in labels.items():
+            ax_names = [ax.name for ax in h.axes]
+            if var_name in ax_names:
+                h.axes[var_name].label = label
+            else:
+                raise ValueError(f"variable '{var_name}' not found in histogram axes: {h.axes}")
+
+
 class _MergeHistograms(
     CalibratorsMixin,
     SelectorMixin,
@@ -439,9 +469,12 @@ class MergeHistograms(_MergeHistograms):
         variable_names = list(hists[0].keys())
         for variable_name in self.iter_progress(variable_names, len(variable_names), reach=(50, 100)):
             self.publish_message(f"merging histograms for '{variable_name}'")
+            variable_hists = [h[variable_name] for h in hists]
+
+            # update axis labels from variable insts for consistency
+            update_ax_labels(variable_hists, self.config_inst, variable_name)
 
             # merge them
-            variable_hists = [h[variable_name] for h in hists]
             merged = sum(variable_hists[1:], variable_hists[0].copy())
 
             # post-process the merged histogram
@@ -538,6 +571,9 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
                 coll["hists"].targets[variable_name].load(formatter="pickle")
                 for coll in inputs.values()
             ]
+
+            # update axis labels from variable insts for consistency
+            update_ax_labels(variable_hists, self.config_inst, variable_name)
 
             # merge and write the output
             merged = sum(variable_hists[1:], variable_hists[0].copy())
