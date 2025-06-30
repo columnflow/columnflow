@@ -280,16 +280,15 @@ class MergeReductionStats(_MergeReductionStats):
     n_inputs = luigi.IntParameter(
         default=10,
         significant=True,
-        description="minimal number of input files for sufficient statistics to infer merging "
-        "factors; default: 10",
+        description="minimal number of input files to infer merging factors with sufficient statistics; default: 10",
     )
     merged_size = law.BytesParameter(
         default=law.NO_FLOAT,
         unit="MB",
         significant=False,
-        description="the maximum file size of merged files; default unit is MB; when 0, the "
-        "merging factor is not actually calculated from input files, but it is assumed to be 1 "
-        "(= no merging); default: config value 'reduced_file_size' or 512MB'",
+        description="the maximum file size of merged files; default unit is MB; when 0, the merging factor is not "
+        "actually calculated from input files, but it is assumed to be 1 (= no merging); default: config value "
+        "'reduced_file_size' or 512MB",
     )
 
     # upstream requirements
@@ -301,6 +300,12 @@ class MergeReductionStats(_MergeReductionStats):
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
+
+        # cap n_inputs
+        if "n_inputs" in params and (dataset_info_inst := params.get("dataset_info_inst")):
+            n_files = dataset_info_inst.n_files
+            if params["n_inputs"] < 0 or params["n_inputs"] > n_files:
+                params["n_inputs"] = n_files
 
         # check for the default merged size
         if "merged_size" in params:
@@ -407,7 +412,7 @@ class MergeReductionStats(_MergeReductionStats):
         self.publish_message(f" stats of {n} input files ".center(40, "-"))
         self.publish_message(f"average size: {law.util.human_bytes(stats['avg_size'], fmt=True)}")
         deviation = stats["std_size"] / stats["avg_size"]
-        self.publish_message(f"deviation   : {deviation * 100:.2f} % (std / avg)")
+        self.publish_message(f"deviation   : {deviation * 100:.2f}% (std/avg)")
         self.publish_message(" merging info ".center(40, "-"))
         self.publish_message(f"target size : {self.merged_size} MB")
         self.publish_message(f"merging     : {stats['merge_factor']} into 1")
