@@ -239,7 +239,12 @@ class ReduceEvents(_ReduceEvents):
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(
-            self, sorted_chunks, output["events"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            task=self,
+            inputs=sorted_chunks,
+            output=output["events"],
+            local=True,
+            writer_opts=self.get_parquet_writer_opts(),
+            target_row_group_size=self.merging_row_group_size,
         )
 
 
@@ -458,8 +463,8 @@ class MergeReducedEvents(_MergeReducedEvents):
         ReduceEvents=ReduceEvents,
     )
 
-    # approximate number of events per row group in the merged file
-    target_row_group_size = 50_000
+    # number of events per row group in the merged file
+    merging_row_group_size = law.config.get_expanded_int("analysis", "merging_row_group_size", 50_000)
 
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def file_merging(self):
@@ -512,7 +517,7 @@ class MergeReducedEvents(_MergeReducedEvents):
             output=output,
             callback=self.create_progress_callback(len(inputs)),
             writer_opts=self.get_parquet_writer_opts(),
-            target_row_group_size=self.target_row_group_size,
+            target_row_group_size=self.merging_row_group_size,
         )
 
         # optionally remove initial inputs

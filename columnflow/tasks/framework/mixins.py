@@ -2402,6 +2402,9 @@ class ChunkedIOMixin(ConfigTask):
         description="when True, checks whether columns if input arrays overlap in at least one field",
     )
 
+    # number of events per row group in the merged file
+    merging_row_group_size = law.config.get_expanded_int("analysis", "merging_row_group_size", 50_000)
+
     exclude_params_req = {"check_finite_output", "check_overlapping_inputs"}
 
     # define default chunk and pool sizes that can be adjusted per inheriting task
