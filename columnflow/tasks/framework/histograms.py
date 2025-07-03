@@ -31,7 +31,7 @@ class HistogramsUserBase(
     CategoriesMixin,
     VariablesMixin,
 ):
-    single_config = True
+    single_config = False
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -42,6 +42,7 @@ class HistogramsUserBase(
 
     def load_histogram(
         self,
+        config: str | od.Config,
         dataset: str | od.Dataset,
         variable: str | od.Variable,
     ) -> hist.Hist:
@@ -56,12 +57,15 @@ class HistogramsUserBase(
             dataset = dataset.name
         if isinstance(variable, od.Variable):
             variable = variable.name
-        histogram = self.input()[dataset]["collection"][0]["hists"].targets[variable].load(formatter="pickle")
+        if isinstance(config, od.Config):
+            config = config.name
+        histogram = self.input()[config][dataset]["collection"][0]["hists"].targets[variable].load(formatter="pickle")
         return histogram
 
     def slice_histogram(
         self,
         histogram: hist.Hist,
+        config_inst: od.Config,
         processes: str | list[str],
         categories: str | list[str],
         shifts: str | list[str],
@@ -91,21 +95,21 @@ class HistogramsUserBase(
         shifts = law.util.make_list(shifts)
 
         # get all leaf categories
-        category_insts = list(map(self.config_inst.get_category, categories))
+        category_insts = list(map(config_inst.get_category, categories))
         leaf_category_insts = set(flatten_nested_list([
             category_inst.get_leaf_categories() or [category_inst]
             for category_inst in category_insts
         ]))
 
         # get all sub processes
-        process_insts = list(map(self.config_inst.get_process, processes))
+        process_insts = list(map(config_inst.get_process, processes))
         sub_process_insts = set(flatten_nested_list([
             [sub for sub, _, _ in proc.walk_processes(include_self=True)]
             for proc in process_insts
         ]))
 
         # get all shift instances
-        shift_insts = [self.config_inst.get_shift(shift) for shift in shifts]
+        shift_insts = [config_inst.get_shift(shift) for shift in shifts]
 
         # work on a copy
         h = histogram.copy()
@@ -155,13 +159,17 @@ class HistogramsUserSingleShiftBase(
 
     def requires(self):
         return {
-            d: self.reqs.MergeHistograms.req_different_branching(
-                self,
-                dataset=d,
-                branch=-1,
-                _prefer_cli={"variables"},
-            )
-            for d in self.datasets
+            config_inst.name: {
+                d: self.reqs.MergeHistograms.req_different_branching(
+                    self,
+                    dataset=d,
+                    branch=-1,
+                    _prefer_cli={"variables"},
+                )
+                for d in self.datasets[i]
+                if config_inst.has_dataset(d)
+            }
+            for i, config_inst in enumerate(self.config_insts)
         }
 
 
@@ -184,11 +192,14 @@ class HistogramsUserMultiShiftBase(
 
     def requires(self):
         return {
-            d: self.reqs.MergeShiftedHistograms.req_different_branching(
-                self,
-                dataset=d,
-                branch=-1,
-                _prefer_cli={"variables"},
-            )
-            for d in self.datasets
+            config: {
+                d: self.reqs.MergeShiftedHistograms.req_different_branching(
+                    self,
+                    dataset=d,
+                    branch=-1,
+                    _prefer_cli={"variables"},
+                )
+                for d in self.datasets[i]
+            }
+            for i, config in enumerate(self.configs)
         }
