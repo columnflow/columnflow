@@ -168,7 +168,12 @@ class ProduceColumns(_ProduceColumns):
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(
-            self, sorted_chunks, output["columns"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            task=self,
+            inputs=sorted_chunks,
+            output=output["columns"],
+            local=True,
+            writer_opts=self.get_parquet_writer_opts(),
+            target_row_group_size=self.merging_row_group_size,
         )
 
 
