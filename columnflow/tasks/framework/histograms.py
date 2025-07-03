@@ -158,6 +158,7 @@ class HistogramsUserSingleShiftBase(
         return reqs
 
     def requires(self):
+        datasets = [self.datasets] if self.single_config else self.datasets
         return {
             config_inst.name: {
                 d: self.reqs.MergeHistograms.req_different_branching(
@@ -166,7 +167,7 @@ class HistogramsUserSingleShiftBase(
                     branch=-1,
                     _prefer_cli={"variables"},
                 )
-                for d in self.datasets[i]
+                for d in datasets[i]
                 if config_inst.has_dataset(d)
             }
             for i, config_inst in enumerate(self.config_insts)
@@ -191,6 +192,7 @@ class HistogramsUserMultiShiftBase(
         return reqs
 
     def requires(self):
+        datasets = [self.datasets] if self.single_config else self.datasets
         return {
             config: {
                 d: self.reqs.MergeShiftedHistograms.req_different_branching(
@@ -199,7 +201,7 @@ class HistogramsUserMultiShiftBase(
                     branch=-1,
                     _prefer_cli={"variables"},
                 )
-                for d in self.datasets[i]
+                for d in datasets[i]
             }
             for i, config in enumerate(self.configs)
         }
