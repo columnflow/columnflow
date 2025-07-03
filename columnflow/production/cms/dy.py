@@ -475,7 +475,7 @@ def recoil_corrected_met_setup(
 # Weight producer for custom DY weights
 
 @producer(
-    uses={"{Muon,Electron,Tau}.{pt,eta,phi,mass}", "Jet.pt"},
+    uses={"{Muon,Electron,Tau}.{pt,eta,phi,mass}", "Jet.pt", "gen_dilepton_pt"},
     produces={"dy_weight"},
     # only run on mc
     mc_only=True,
@@ -514,6 +514,7 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # sum two muons to get the dimuon pt
     leps = ak.concatenate([events.Electron * 1, events.Muon * 1, events.Tau * 1], axis=1)[:, :2]
     dilep = leps.sum(axis=1)
+    events = set_ak_column(events, "dilep_pt", dilep.pt, value_type=np.float32)
     # calculate number of jets
     events = attach_coffea_behavior(events, {"Jet": default_coffea_collections["Jet"]})
     njets = ak.num(events.Jet["pt"], axis=1)
@@ -522,7 +523,14 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     variable_map = {
         "era": self.config_inst.x.dy_weight_config_uhh.era,
         "njets": njets,
-        "ptll": dilep.pt,
+        "ptll": events.dilep_pt,
+        "syst": self.config_inst.x.dy_weight_config_uhh.syst,
+    }
+
+    variable_map_gen = {
+        "era": self.config_inst.x.dy_weight_config_uhh.era,
+        "njets": njets,
+        "ptll": events.gen_dilepton_pt,
         "syst": self.config_inst.x.dy_weight_config_uhh.syst,
     }
 
@@ -542,13 +550,17 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # preparing the input variables for the corrector
     for column_name in weights_list:
         variable_map = {**variable_map}
+        variable_map_gen = {**variable_map_gen}
 
         # evaluating dy weights given a certain era, njets and ptll arrays, and a systematic shift
         inputs = [variable_map[inp.name] for inp in self.dy_corrector.inputs]
         dy_weight = self.dy_corrector.evaluate(*inputs)
 
+        inputs_gen = [variable_map_gen[inp.name] for inp in self.dy_corrector.inputs]
+        dy_weight_gen = self.dy_corrector.evaluate(*inputs_gen)
+
         # save the weights in a new column
-        events = set_ak_column(events, column_name, dy_weight, value_type=np.float32)
+        events = set_ak_column(events, column_name, dy_weight_gen, value_type=np.float32)
 
     return events
 
