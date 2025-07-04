@@ -159,7 +159,7 @@ class PlotVariablesBase(_PlotVariablesBase):
         plot_shift_names = set(shift_inst.name for shift_inst in plot_shifts)
 
         # get assignment of processes to datasets and shifts
-        config_process_map, process_shift_map = self.get_config_process_map()
+        config_process_map, _ = self.get_config_process_map()
 
         # histogram data per process copy
         hists: dict[od.Config, dict[od.Process, hist.Hist]] = {}
@@ -192,8 +192,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                         h = h[{"process": sum}]
 
                         # create expected shift bins and fill them with the nominal histogram
-                        expected_shifts = plot_shift_names & process_shift_map[process_inst.name]
-                        add_missing_shifts(h, expected_shifts, str_axis="shift", nominal_bin="nominal")
+                        add_missing_shifts(h, plot_shift_names, str_axis="shift", nominal_bin="nominal")
 
                         # add the histogram
                         if process_inst in hists_config:
@@ -243,14 +242,6 @@ class PlotVariablesBase(_PlotVariablesBase):
             for process_inst in hists.keys():
                 h = hists[process_inst]
                 # determine expected shifts from the intersection of requested shifts and those known for the process
-                process_shifts = (
-                    process_shift_map[process_inst.name]
-                    if process_inst.name in process_shift_map
-                    else {"nominal"}
-                )
-                expected_shifts = plot_shift_names & process_shifts
-                if not expected_shifts:
-                    raise Exception(f"no shifts to plot found for process {process_inst.name}")
                 # selections
                 h = h[{
                     "category": [
@@ -260,7 +251,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                     ],
                     "shift": [
                         hist.loc(s_name)
-                        for s_name in expected_shifts
+                        for s_name in plot_shift_names
                         if s_name in h.axes["shift"]
                     ],
                 }]
