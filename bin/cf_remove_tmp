@@ -39,18 +39,18 @@ cf_remove_tmp() {
 
     local pattern="luigi-tmp-*"
     [ "${mode}" = "all" ] && pattern="*"
+
     prompt="Are you sure you want to delete all files in path \"${tmp_dir}\" matching \"${pattern}\"? (y/n) "
     read -rp "$prompt" confirm
-
     case "$confirm" in
     [Yy])
         # remove all files and directories in tmp_dir owned by the user
-        echo "Deleting files..."
+        echo "deleting files..."
         find "${tmp_dir}" -maxdepth 1 -name "${pattern}" -user "$( id -u )" -print -exec rm -r "{}" \;
         ;;
     *)
-        echo "Canceled."
-        exit 1
+        >&2 echo "canceled"
+        return "4"
         ;;
     esac
 }

@@ -58,7 +58,7 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
         (status == 1) &
         events.GenPart.hasFlags("fromHardProcess")
     )
-    # taus need to have status == 2,
+    # taus need to have status == 2
     tau_mask = (
         (pdg_id == 15) & (status == 2) & events.GenPart.hasFlags("fromHardProcess")
     )
