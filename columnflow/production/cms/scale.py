@@ -220,10 +220,14 @@ def murmuf_envelope_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Ar
     # take the max/min value of all considered variations
     murf_weights = (events.LHEScaleWeight[non_zero_mask] / murf_nominal)[:, envelope_indices]
 
+    weights_up = np.ones(len(events), dtype=np.float32)
+    weights_down = np.ones(len(events), dtype=np.float32)
+    weights_up[non_zero_mask] = ak.max(murf_weights, axis=1)
+    weights_down[non_zero_mask] = ak.min(murf_weights, axis=1)
     # store columns
     events = set_ak_column_f32(events, "murmuf_envelope_weight", ones)
-    events = set_ak_column_f32(events, "murmuf_envelope_weight_down", ak.min(murf_weights, axis=1))
-    events = set_ak_column_f32(events, "murmuf_envelope_weight_up", ak.max(murf_weights, axis=1))
+    events = set_ak_column_f32(events, "murmuf_envelope_weight_down", weights_down)
+    events = set_ak_column_f32(events, "murmuf_envelope_weight_up", weights_up)
 
     return events
 
