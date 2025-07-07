@@ -3032,7 +3032,11 @@ class DaskArrayReader(object):
         # case nested nodes separated by "*.list.element.*" (rather than "*.list.item.*") are found
         # (to be removed in the future)
         if open_options.get("split_row_groups"):
-            nodes = ak.ak_from_parquet.metadata(path)[0]
+            try:
+                nodes = ak.ak_from_parquet.metadata(path)[0]
+            except:
+                logger.error(f"unable to read {path}")
+                raise
             cre = re.compile(r"^.+\.list\.element(|\..+)$")
             if any(map(cre.match, nodes)):
                 logger.warning(

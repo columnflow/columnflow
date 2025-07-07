@@ -1715,6 +1715,21 @@ class DatasetTask(ShiftTask):
         return params
 
     @classmethod
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
+
+        # also add a reference to the info instance when a global shift is defined
+        if "dataset_inst" in params and "global_shift_inst" in params:
+            shift_name = params["global_shift_inst"].name
+            params["dataset_info_inst"] = (
+                params["dataset_inst"].get_info(shift_name)
+                if shift_name in params["dataset_inst"].info
+                else params["dataset_inst"].get_info("nominal")
+            )
+
+        return params
+
+    @classmethod
     def get_known_shifts(
         cls,
         params: dict[str, Any],

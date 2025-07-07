@@ -60,12 +60,12 @@ def plot_variable_stack(
     hists, process_style_config = apply_process_settings(hists, process_settings)
     # variable-based settings (rebinning, slicing, flow handling)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
-    # process scaling
-    hists = apply_process_scaling(hists)
     # remove data in bins where sensitivity exceeds some threshold
     blinding_threshold = kwargs.get("blinding_threshold", None)
     if blinding_threshold:
         hists = blind_sensitive_bins(hists, config_inst, blinding_threshold)
+    # process scaling
+    hists = apply_process_scaling(hists)
     # density scaling per bin
     if density:
         hists = apply_density(hists, density)

@@ -228,6 +228,7 @@ def get_jec_config_default(self: Calibrator) -> DotDict:
 
 @calibrator(
     uses={
+        "run",
         optional("fixedGridRhoFastjetAll"),
         optional("Rho.fixedGridRhoFastjetAll"),
         attach_coffea_behavior,
@@ -328,7 +329,7 @@ def jec(
     events = set_ak_column_f32(events, f"{jet_name}.pt_raw", events[jet_name].pt * (1 - events[jet_name].rawFactor))
     events = set_ak_column_f32(events, f"{jet_name}.mass_raw", events[jet_name].mass * (1 - events[jet_name].rawFactor))
 
-    def correct_jets(*, pt, eta, phi, area, rho, evaluator_key="jec"):
+    def correct_jets(*, pt, eta, phi, area, rho, run, evaluator_key="jec"):
         # variable naming convention
         variable_map = {
             "JetA": area,
@@ -336,6 +337,7 @@ def jec(
             "JetPt": pt,
             "JetPhi": phi,
             "Rho": ak.values_astype(rho, np.float32),
+            "run": run,
         }
 
         # apply all correctors sequentially, updating the pt each time
@@ -370,6 +372,7 @@ def jec(
             phi=events[jet_name].phi,
             area=events[jet_name].area,
             rho=rho,
+            run=events.run,
             evaluator_key="jec_subset_type1_met",
         )
 
@@ -392,6 +395,7 @@ def jec(
         phi=events[jet_name].phi,
         area=events[jet_name].area,
         rho=rho,
+        run=events.run,
         evaluator_key="jec",
     )
 
@@ -577,6 +581,8 @@ def jec_setup(
                     "CorrelationGroupFlavor",
                     "CorrelationGroupUncorrelated",
                 ],
+                # whether the JECs for data should be era-specific
+                "data_per_era": True,
             },
         })
 
@@ -593,18 +599,36 @@ def jec_setup(
     jec_cfg = self.get_jec_config()
 
     def make_jme_keys(names, jec=jec_cfg, is_data=self.dataset_inst.is_data):
-        if is_data:
+        if is_data and jec.get("data_per_era", True):
+            if "data_per_era" not in jec:
+                logger.warning_once(
+                    f"{id(self)}_depr_jec_config_data_per_era",
+                    "config aux 'jec' does not contain key 'data_per_era'. "
+                    "This may be due to an outdated config. Continuing under the assumption that "
+                    "JEC keys for data are era-specific. "
+                    "This assumption will be removed in future versions of "
+                    "columnflow, so please adapt the config according to the "
+                    "documentation to remove this warning and ensure future "
+                    "compatibility of the code.",
+                )
             jec_era = self.dataset_inst.get_aux("jec_era", None)
             # if no special JEC era is specified, infer based on 'era'
             if jec_era is None:
-                jec_era = "Run" + self.dataset_inst.get_aux("era")
+                era = self.dataset_inst.get_aux("era", None)
+                if era is None:
+                    raise ValueError(
+                        "JEC data key is requested to be era dependent, but neither jec_era or era "
+                        f"auxiliary is set for dataset {self.dataset_inst.name}.",
+                    )
+                jec_era = "Run" + era
 
-        return [
-            f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{name}_{jec.jet_type}"
-            if is_data else
-            f"{jec.campaign}_{jec.version}_MC_{name}_{jec.jet_type}"
-            for name in names
-        ]
+            jme_key = f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
+        elif is_data:
+            jme_key = f"{jec.campaign}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
+        else:  # MC
+            jme_key = f"{jec.campaign}_{jec.version}_MC_{{name}}_{jec.jet_type}"
+
+        return [jme_key.format(name=name) for name in names]
 
     jec_keys = make_jme_keys(jec_cfg.levels)
     jec_keys_subset_type1_met = make_jme_keys(jec_cfg.levels_for_type1_met)
