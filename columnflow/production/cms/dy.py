@@ -533,6 +533,9 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         "ptll": events.gen_dilepton_pt,
         "syst": self.config_inst.x.dy_weight_config_uhh.syst,
     }
+    print("-----------------------------------")
+    print("any njets != 3:", ak.any(njets != 3))
+    print("-----------------------------------")
 
     # initializing the list of weight variations
     weights_list = [("dy_weight")]
@@ -560,7 +563,7 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         dy_weight_gen = self.dy_corrector.evaluate(*inputs_gen)
 
         # save the weights in a new column
-        events = set_ak_column(events, column_name, dy_weight_gen, value_type=np.float32)
+        events = set_ak_column(events, column_name, dy_weight, value_type=np.float32)
 
     return events
 
