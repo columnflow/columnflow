@@ -305,7 +305,7 @@ def normalization_weights_setup(
     allowed_ids = set(map(int, merged_selection_stats["sum_mc_weight_per_process"]))
 
     # complain if there are processes seen/id'ed during selection that are not part of the datasets
-    unknown_process_ids = {p.id for p in process_insts} - allowed_ids
+    unknown_process_ids = allowed_ids - {p.id for p in process_insts}
     if unknown_process_ids:
         raise Exception(
             f"selection stats contain ids of processes that were not previously registered to the config "

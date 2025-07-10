@@ -94,6 +94,11 @@ def tec(
     *get_tau_file* and *get_tec_config* can be adapted in a subclass in case they are stored
     differently in the config.
 
+    .. note::
+
+        In case you also perform the propagation from jet energy calibrations to MET, please check if the propagation of
+        tau energy calibrations to MET is required in your analysis!
+
     Resources:
     https://twiki.cern.ch/twiki/bin/view/CMS/TauIDRecommendationForRun2?rev=113
     https://gitlab.cern.ch/cms-nanoAOD/jsonpog-integration/-/blob/849c6a6efef907f4033715d52290d1a661b7e8f9/POG/TAU
