@@ -485,7 +485,10 @@ class MergeReducedEvents(_MergeReducedEvents):
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["stats"] = self.reqs.MergeReductionStats.req_different_branching(self)
-        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(self, branches=((0, -1),))
+        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(
+            self,
+            branches=((0, self.dataset_info_inst.n_files),)
+        )
         return reqs
 
     def requires(self):
