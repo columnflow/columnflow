@@ -487,7 +487,7 @@ class MergeReducedEvents(_MergeReducedEvents):
         reqs["stats"] = self.reqs.MergeReductionStats.req_different_branching(self)
         reqs["events"] = self.reqs.ReduceEvents.req_different_branching(
             self,
-            branches=((0, self.dataset_info_inst.n_files),)
+            branches=((0, self.dataset_info_inst.n_files),),
         )
         return reqs
 
