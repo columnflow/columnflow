@@ -195,6 +195,7 @@ class ReduceEvents(_ReduceEvents):
                 [inp.abspath for inp in inps],
                 source_type=["coffea_root"] + (len(inps) - 1) * ["awkward_parquet"],
                 read_columns=[read_columns, read_sel_columns] + (len(inps) - 2) * [read_columns],
+                chunk_size=self.reducer_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs within diffs
                 if self.check_overlapping_inputs:
