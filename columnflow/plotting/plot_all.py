@@ -80,13 +80,14 @@ def draw_syst_error_bands(
 
     # create pairs of shifts mapping from up -> down and vice versa
     shift_pairs = {}
+    shift_pairs[nominal_shift] = nominal_shift  # nominal shift maps to itself
     for up_shift, down_shift in shift_groups.values():
         shift_pairs[up_shift] = down_shift
         shift_pairs[down_shift] = up_shift
 
     # stack histograms separately per shift, falling back to the nominal one when missing
     shift_stacks: dict[od.Shift, hist.Hist] = {}
-    for shift_inst in sum(shift_groups.values(), []):
+    for shift_inst in sum(shift_groups.values(), [nominal_shift]):
         for _h in syst_hists:
             # when the shift is present, the flipped shift must exist as well
             shift_ax = _h.axes["shift"]
@@ -119,8 +120,8 @@ def draw_syst_error_bands(
         down_diffs = []
         for source, (up_shift, down_shift) in shift_groups.items():
             # get actual differences resulting from this shift
-            shift_up_diff = shift_stacks[up_shift].values()[b] - h.values()[b]
-            shift_down_diff = shift_stacks[down_shift].values()[b] - h.values()[b]
+            shift_up_diff = shift_stacks[up_shift].values()[b] - shift_stacks[nominal_shift].values()[b]
+            shift_down_diff = shift_stacks[down_shift].values()[b] - shift_stacks[nominal_shift].values()[b]
             # store them depending on whether they really increase or decrease the yield
             up_diffs.append(max(shift_up_diff, shift_down_diff, 0))
             down_diffs.append(min(shift_up_diff, shift_down_diff, 0))
