@@ -29,6 +29,20 @@ jobs:
           source setup.sh ""
           ./tests/run_linting
 
+  breaks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for accidental breakpoint() usage ⛔️
+        run: |
+          echo "🔍 Scanning for active 'breakpoint()' calls not commented out and not marked with '# noqa'..."
+          if git grep -P '^[^#\n]*\bbreakpoint\(\)(?!\s*#\s*noqa)' -- '*.py'; then
+            echo "::error file=,line=,col=::❌ Found active 'breakpoint()' without '# noqa'."
+            exit 1
+          else
+            echo "✅ No bad breakpoint() calls found."
+          fi
+
+
   lint_docs:
     runs-on: ubuntu-latest
     steps:
