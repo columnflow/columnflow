@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 import itertools
-from collections import Counter
+from collections import Counter, defaultdict
 
 import luigi
 import law
@@ -2180,7 +2180,24 @@ class DatasetsProcessesMixin(ConfigTask):
                         deep=True,
                     )
                 else:
-                    processes = config_inst.processes.names()
+                    processes = list(config_inst.processes.names())
+                    # protect against overlap between top-level processes
+                    to_remove = defaultdict(set)
+                    for process_name in processes:
+                        process = config_inst.get_process(process_name)
+                        # check any remaining process for overlap
+                        for child_process_name in processes:
+                            if child_process_name == process_name:
+                                continue
+                            if process.has_process(child_process_name, deep=True):
+                                to_remove[child_process_name].add(process_name)
+                    if to_remove:
+                        processes = [process_name for process_name in processes if process_name not in to_remove]
+                        for removed, reasons in to_remove.items():
+                            reasons = ", ".join(map("'{}'".format, reasons))
+                            logger.warning(
+                                f"removed '{removed}' from selected processes due to overlap with {reasons}",
+                            )
                 if not processes and not cls.allow_empty_processes:
                     raise ValueError(f"no processes found matching {processes_orig}")
             if datasets != law.no_value:

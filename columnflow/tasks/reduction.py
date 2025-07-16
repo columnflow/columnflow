@@ -195,6 +195,7 @@ class ReduceEvents(_ReduceEvents):
                 [inp.abspath for inp in inps],
                 source_type=["coffea_root"] + (len(inps) - 1) * ["awkward_parquet"],
                 read_columns=[read_columns, read_sel_columns] + (len(inps) - 2) * [read_columns],
+                chunk_size=self.reducer_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs within diffs
                 if self.check_overlapping_inputs:
@@ -485,7 +486,10 @@ class MergeReducedEvents(_MergeReducedEvents):
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["stats"] = self.reqs.MergeReductionStats.req_different_branching(self)
-        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(self, branches=((0, -1),))
+        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(
+            self,
+            branches=((0, self.dataset_info_inst.n_files),),
+        )
         return reqs
 
     def requires(self):
