@@ -14,8 +14,10 @@ import order as od
 import yaml
 
 from columnflow.types import Generator, Callable, TextIO, Sequence, Any
-from columnflow.util import DerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url
-
+from columnflow.util import (
+    DerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url,
+    freeze,
+)
 
 logger = law.logger.get_logger(__name__)
 
@@ -189,7 +191,29 @@ class FlowStrategy(enum.Enum):
         return self.value
 
 
-class InferenceModel(Derivable):
+class InferenceModelMeta(DerivableMeta):
+
+    def __new__(metacls, cls_name: str, bases: tuple, cls_dict: dict) -> InferenceModelMeta:
+        # add an instance cache if not disabled
+        cls_dict.setdefault("cache_instances", True)
+        cls_dict["_instances"] = {} if cls_dict["cache_instances"] else None
+
+        return super().__new__(metacls, cls_name, bases, cls_dict)
+
+    def __call__(cls, *args, **kwargs) -> InferenceModel:
+        # when not caching instances, return right away
+        if not cls.cache_instances:
+            return super().__call__(*args, **kwargs)
+
+        # build the cache key from the inst_dict in kwargs
+        key = freeze((cls, kwargs.get("inst_dict", {})))
+        if key not in cls._instances:
+            cls._instances[key] = super().__call__(*args, **kwargs)
+
+        return cls._instances[key]
+
+
+class InferenceModel(Derivable, metaclass=InferenceModelMeta):
     """
     Interface to statistical inference models with connections to config objects (such as py:class:`order.Config` or
     :py:class:`order.Dataset`).
