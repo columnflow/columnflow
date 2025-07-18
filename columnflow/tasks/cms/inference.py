@@ -117,15 +117,18 @@ class CreateDatacards(SerializeInferenceModelBase):
                     if not self.inference_model_inst.require_shapes_for_parameter(param_obj):
                         continue
                     # store the varied hists
-                    shift_source = (
-                        param_obj.config_data[config_inst.name].shift_source
-                        if config_inst.name in param_obj.config_data
-                        else None
-                    )
-                    for d in ["up", "down"]:
-                        shift_hists[(param_obj.name, d)] = h_proc[{
-                            "shift": hist.loc(f"{shift_source}_{d}" if shift_source else "nominal"),
-                        }]
+                    if config_inst.name in param_obj.config_data.keys():
+                        shift_source = param_obj.config_data[config_inst.name].shift_source
+                        for d in ["up", "down"]:
+                            shift_hists[(param_obj.name, d)] = h_proc[{
+                                "shift": hist.loc(config_inst.get_shift(f"{shift_source}_{d}").name),
+                            }]
+                    else:
+                        # when the parameter does not exist for this config, fill histogram with nominal value
+                        for d in ["up", "down"]:
+                            shift_hists[(param_obj.name, d)] = h_proc[{
+                                "shift": hist.loc("nominal"),
+                            }]
 
         # forward objects to the datacard writer
         outputs = self.output()
