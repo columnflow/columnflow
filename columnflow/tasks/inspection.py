@@ -34,7 +34,7 @@ class InspectHistograms(HistogramsUserSingleShiftBase):
         If `debugger` is set to True, an IPython debugger session is started for
         interactive inspection of the histograms.
         """
-        shifts = ["nominal", self.shift]
+        shifts = {self.shift, "nominal"}
         hists = {}
 
         for variable in self.variables:
