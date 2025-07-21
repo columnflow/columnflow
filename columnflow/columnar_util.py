@@ -24,9 +24,9 @@ from collections import namedtuple, OrderedDict, deque, defaultdict
 import law
 import order as od
 
-from columnflow.types import Sequence, Callable, Any, T, Generator
+from columnflow.types import Sequence, Callable, Any, T, Generator, Hashable
 from columnflow.util import (
-    UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
+    UNSET, maybe_import, classproperty, DotDict, DerivableMeta, CachedDerivableMeta, Derivable, pattern_matcher,
     get_source_code, real_path, freeze, get_docs_url,
 )
 
@@ -2260,26 +2260,10 @@ def skip_column(
     return tagged_column("skip", *routes)
 
 
-class TaskArrayFunctionMeta(DerivableMeta):
+class TaskArrayFunctionMeta(CachedDerivableMeta):
 
-    def __new__(metacls, cls_name: str, bases: tuple, cls_dict: dict) -> TaskArrayFunctionMeta:
-        # add an instance cache if not disabled
-        cls_dict.setdefault("cache_instances", True)
-        cls_dict["_instances"] = {} if cls_dict["cache_instances"] else None
-
-        return super().__new__(metacls, cls_name, bases, cls_dict)
-
-    def __call__(cls, *args, **kwargs) -> TaskArrayFunction:
-        # when not caching instances, return right away
-        if not cls.cache_instances:
-            return super().__call__(*args, **kwargs)
-
-        # build the cache key from the inst_dict in kwargs
-        key = freeze((cls, kwargs.get("inst_dict", {})))
-        if key not in cls._instances:
-            cls._instances[key] = super().__call__(*args, **kwargs)
-
-        return cls._instances[key]
+    def _get_inst_cache_key(cls, args: tuple, kwargs: dict) -> Hashable:
+        return freeze((cls, kwargs.get("inst_dict", {})))
 
 
 class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
