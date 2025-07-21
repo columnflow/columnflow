@@ -1504,7 +1504,7 @@ class ConfigTask(AnalysisTask):
 
     @property
     def config_repr(self) -> str:
-        return "__".join(config_inst.name for config_inst in self.config_insts)
+        return "__".join(config_inst.name for config_inst in sorted(self.config_insts, key=lambda c: c.id))
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
