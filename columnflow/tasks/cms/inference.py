@@ -125,7 +125,7 @@ class CreateDatacards(SerializeInferenceModelBase):
                     for d in ["up", "down"]:
                         shift_hists[(param_obj.name, d)] = h_proc[{
                             "shift": hist.loc(f"{shift_source}_{d}" if shift_source else "nominal"),
-                        }                        ]
+                        }]
 
         # forward objects to the datacard writer
         outputs = self.output()
