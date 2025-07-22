@@ -1465,16 +1465,26 @@ class ConfigTask(AnalysisTask):
         inst_or_params: ConfigTask | dict[str, Any],
     ) -> law.util.InsertiableDict:
         keys = super().get_config_lookup_keys(inst_or_params)
-
-        # add the config name in front of the task family
-        config = (
-            inst_or_params.get("config")
-            if isinstance(inst_or_params, dict)
-            else getattr(inst_or_params, "config", None)
-        )
-        if config not in {law.NO_STR, None, ""}:
-            prefix = "cfg"
-            keys.insert_before("task", prefix, f"{prefix}_{config}")
+        if cls.has_single_config():
+            # add the config name in front of the task family
+            config = (
+                inst_or_params.get("config")
+                if isinstance(inst_or_params, dict)
+                else getattr(inst_or_params, "config", None)
+            )
+            if config not in {law.NO_STR, None, ""}:
+                prefix = "cfg"
+                keys.insert_before("task", prefix, f"{prefix}_{config}")
+        else:
+            # add the config names in front of the task family
+            configs = (
+                inst_or_params.get("configs")
+                if isinstance(inst_or_params, dict)
+                else getattr(inst_or_params, "configs", None)
+            )
+            if configs not in {law.NO_STR, None, ""}:
+                prefix = "cfgs"
+                keys.insert_before("task", prefix, [f"{prefix}_{config}" for config in configs])
 
         return keys
 

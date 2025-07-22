@@ -64,9 +64,9 @@ class CreateDatacards(SerializeInferenceModelBase):
         for config_inst in input_hists.keys():
             config_data = cat_obj.config_data.get(config_inst.name)
 
-            # determine leaf categories to gather
-            category_inst = config_inst.get_category(config_data.category)
-            leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+            # # determine leaf categories to gather
+            # category_inst = config_inst.get_category(config_data.category)
+            # leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
             # start the transformation
             proc_objs = list(cat_obj.processes)
@@ -90,14 +90,14 @@ class CreateDatacards(SerializeInferenceModelBase):
                     )
                     continue
 
-                # select relevant categories
-                h_proc = h_proc[{
-                    "category": [
-                        hist.loc(c.name)
-                        for c in leaf_category_insts
-                        if c.name in h_proc.axes["category"]
-                    ],
-                }][{"category": sum}]
+                # # select relevant categories
+                # h_proc = h_proc[{
+                #     "category": [
+                #         hist.loc(c.name)
+                #         for c in leaf_category_insts
+                #         if c.name in h_proc.axes["category"]
+                #     ],
+                # }][{"category": sum}]
 
                 # create the nominal hist
                 datacard_hists[cat_obj.name].setdefault(proc_obj.name, {}).setdefault(config_inst.name, {})

@@ -239,6 +239,20 @@ class SerializeInferenceModelBase(
                         ],
                     }]
 
+                    # ###### ADDED ##########
+                    # determine leaf categories to gather
+                    category_inst = config_inst.get_category(config_data.category)
+                    leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+                    # select relevant categories
+                    h = h[{
+                        "category": [
+                            hist.loc(c.name)
+                            for c in leaf_category_insts
+                            if c.name in h.axes["category"]
+                        ],
+                    }][{"category": sum}]
+                    # ###### ADDED DONE #########
+
                     # axis reductions
                     h = h[{"process": sum}]
 
