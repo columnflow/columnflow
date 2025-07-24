@@ -67,7 +67,7 @@ def get_stitching_datasets(self: Producer) -> list[od.Dataset]:
 def get_br_from_inclusive_dataset(
     self: Producer,
     inclusive_dataset: od.Dataset,
-    stats: dict,
+    dataset_selection_stats: dict[str, dict[str, float]],
 ) -> dict[int, float]:
     """
     Helper function to compute the branching ratios from the inclusive sample. This is done with ratios of event weights
@@ -77,7 +77,7 @@ def get_br_from_inclusive_dataset(
     proc_ds_map = {
         d.processes.get_first().id: d
         for d in self.config_inst.datasets
-        if d.name in stats.keys()
+        if d.name in dataset_selection_stats.keys()
     }
     inclusive_proc = inclusive_dataset.processes.get_first()
     N = lambda x: sn.Number(x, np.sqrt(x))  # alias for Number with counting error
@@ -92,11 +92,11 @@ def get_br_from_inclusive_dataset(
         dataset_name = proc_ds_map[proc.id].name
 
         # get the mc weights for the "mother" dataset and add an entry for the process
-        sum_mc_weight: float = stats[dataset_name]["sum_mc_weight"]
-        sum_mc_weight_per_process: dict[str, float] = stats[dataset_name]["sum_mc_weight_per_process"]
+        sum_mc_weight: float = dataset_selection_stats[dataset_name]["sum_mc_weight"]
+        sum_mc_weight_per_process: dict[str, float] = dataset_selection_stats[dataset_name]["sum_mc_weight_per_process"]
         # use the number of events to compute the error on the branching ratio
-        num_events: int = stats[dataset_name]["num_events"]
-        num_events_per_process: dict[str, int] = stats[dataset_name]["num_events_per_process"]
+        num_events: int = dataset_selection_stats[dataset_name]["num_events"]
+        num_events_per_process: dict[str, int] = dataset_selection_stats[dataset_name]["num_events_per_process"]
 
         # loop over all child processes
         for child_proc in child_procs:
@@ -166,6 +166,16 @@ def get_br_from_inclusive_dataset(
     return branching_ratios
 
 
+def update_dataset_selection_stats(
+    self: Producer,
+    dataset_selection_stats: dict[str, dict[str, float]],
+) -> dict[str, dict[str, float]]:
+    """
+    Hook to optionally update the per-dataset selection stats.
+    """
+    return dataset_selection_stats
+
+
 @producer(
     uses={"process_id", "mc_weight"},
     # name of the output column
@@ -178,6 +188,7 @@ def get_br_from_inclusive_dataset(
     get_stitching_datasets=get_stitching_datasets,
     get_inclusive_dataset=get_inclusive_dataset,
     get_br_from_inclusive_dataset=get_br_from_inclusive_dataset,
+    update_dataset_selection_stats=update_dataset_selection_stats,
     # only run on mc
     mc_only=True,
 )
@@ -278,21 +289,26 @@ def normalization_weights_setup(
             weights per process.
     """
     # load the selection stats
-    selection_stats = {
+    dataset_selection_stats = {
         dataset: task.cached_value(
             key=f"selection_stats_{dataset}",
             func=lambda: inp["stats"].load(formatter="json"),
         )
         for dataset, inp in inputs["selection_stats"].items()
     }
+
+    # optional hook to amend the per-dataset selection stats
+    if callable(self.update_dataset_selection_stats):
+        dataset_selection_stats = self.update_dataset_selection_stats(dataset_selection_stats)
+
     # if necessary, merge the selection stats across datasets
-    if len(selection_stats) > 1:
+    if len(dataset_selection_stats) > 1:
         from columnflow.tasks.selection import MergeSelectionStats
         merged_selection_stats = defaultdict(float)
-        for stats in selection_stats.values():
+        for stats in dataset_selection_stats.values():
             MergeSelectionStats.merge_counts(merged_selection_stats, stats)
     else:
-        merged_selection_stats = selection_stats[self.dataset_inst.name]
+        merged_selection_stats = dataset_selection_stats[self.dataset_inst.name]
 
     # determine all proceses at any depth in the stitching datasets
     process_insts = {
@@ -333,7 +349,7 @@ def normalization_weights_setup(
         else:
             branching_ratios = self.get_br_from_inclusive_dataset(
                 inclusive_dataset=inclusive_dataset,
-                stats=selection_stats,
+                dataset_selection_stats=dataset_selection_stats,
             )
             if not branching_ratios:
                 raise Exception(
@@ -343,7 +359,7 @@ def normalization_weights_setup(
         # compute the weight the inclusive dataset would have on its own without stitching
         inclusive_xsec = inclusive_proc.get_xsec(self.config_inst.campaign.ecm).nominal
         self.inclusive_weight = (
-            lumi * inclusive_xsec / selection_stats[inclusive_dataset.name]["sum_mc_weight"]
+            lumi * inclusive_xsec / dataset_selection_stats[inclusive_dataset.name]["sum_mc_weight"]
             if self.dataset_inst == inclusive_dataset
             else 0
         )
