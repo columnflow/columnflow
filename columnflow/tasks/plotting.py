@@ -505,9 +505,9 @@ class PlotVariablesBaseMultiShifts(
         if self.is_branch() and self.bypass_branch_requirements:
             return reqs
 
-        req_cls = lambda dataset_name: (
+        req_cls = lambda dataset_name, config_inst: (
             self.reqs.MergeShiftedHistograms
-            if self.config_inst.get_dataset(dataset_name).is_mc
+            if config_inst.get_dataset(dataset_name).is_mc
             else self.reqs.MergeHistograms
         )
 
@@ -516,7 +516,7 @@ class PlotVariablesBaseMultiShifts(
             for d in datasets:
                 if d not in config_inst.datasets:
                     continue
-                reqs[config_inst.name][d] = req_cls(d).req(
+                reqs[config_inst.name][d] = req_cls(d, config_inst).req(
                     self,
                     config=config_inst.name,
                     dataset=d,
