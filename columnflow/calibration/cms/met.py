@@ -122,7 +122,8 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         "variation": "nom",
         "met_pt": ak.values_astype(met.pt[mask], np.float32),
         "met_phi": ak.values_astype(met.phi[mask], np.float32),
-        "npvGood": ak.values_astype(events.PV.npvs, np.float32),
+        "npvGood": ak.values_astype(events.PV.npvsGood, np.float32),
+        "npvs": ak.values_astype(events.PV.npvs, np.float32),  # needed for old-style corrections
         "run": ak.values_astype(events.run, np.float32),
     }
 
