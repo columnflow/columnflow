@@ -1,7 +1,7 @@
 # version 14
 
 luigi~=3.6.0
-scinum~=2.2.0
+scinum~=2.2.1
 six~=1.17.0
 pyyaml~=6.0.2
 typing_extensions~=4.13.0
