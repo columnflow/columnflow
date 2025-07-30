@@ -50,14 +50,11 @@ cf_remove_tmp() {
         esac
     fi
 
-
-        local shell_is_zsh=$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )
-        local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
-        local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
-
+    # define the search pattern
     local pattern="luigi-tmp-*"
     [ "${mode}" = "all" ] && pattern="*"
 
+    # ask for confirmation
     prompt="Are you sure you want to delete all files in path \"${tmp_dir}\" matching \"${pattern}\"? (y/n) "
     read -rp "${prompt}" confirm
     case "${confirm}" in
