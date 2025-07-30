@@ -43,7 +43,7 @@ class MetPhiConfig:
 
 
 @calibrator(
-    uses={"run", "PV.npvs"},
+    uses={"run", "PV.npvs", "PV.npvsGood"},
     # function to determine the correction file
     get_met_file=(lambda self, external_files: external_files.met_phi_corr),
     # function to determine met correction config
