@@ -254,6 +254,8 @@ def update_dataset_selection_stats(
     weight_name="normalization_weight",
     # which luminosity to apply, uses the value stored in the config when None
     luminosity=None,
+    # whether to normalize weights per dataset to the mean weight
+    normalize_weights_per_dataset=True,
     # whether to allow stitching datasets
     allow_stitching=False,
     get_xsecs_from_inclusive_datasets=False,
@@ -385,11 +387,30 @@ def normalization_weights_setup(
     """
     # load the selection stats
     dataset_selection_stats = {
-        dataset: task.cached_value(
+        dataset: copy.deepcopy(task.cached_value(
             key=f"selection_stats_{dataset}",
             func=lambda: inp["stats"].load(formatter="json"),
-        )
+        ))
         for dataset, inp in inputs["selection_stats"].items()
+    }
+
+    # optionally normalize weights per dataset to their mean, to potentially align different numeric domains
+    norm_factor = 1.0
+    if self.normalize_weights_per_dataset:
+        for dataset, stats in dataset_selection_stats.items():
+            dataset_mean_weight = (
+                sum(stats["sum_mc_weight_per_process"].values()) /
+                sum(stats["num_events_per_process"].values())
+            )
+            for process_id_str in stats["sum_mc_weight_per_process"]:
+                stats["sum_mc_weight_per_process"][process_id_str] /= dataset_mean_weight
+            if dataset == self.dataset_inst.name:
+                norm_factor = 1.0 / dataset_mean_weight
+
+    # drop unused stats
+    dataset_selection_stats = {
+        dataset: {field: stats[field] for field in ["num_events_per_process", "sum_mc_weight_per_process"]}
+        for dataset, stats in dataset_selection_stats.items()
     }
 
     # separately treat stats for extracting BRs and sum of mc weights
@@ -451,7 +472,7 @@ def normalization_weights_setup(
         inclusive_sum_weights = sum(
             dataset_selection_stats[self.inclusive_dataset.name]["sum_mc_weight_per_process"].values(),
         )
-        self.inclusive_weight = inclusive_xsec * lumi / inclusive_sum_weights
+        self.inclusive_weight = norm_factor * inclusive_xsec * lumi / inclusive_sum_weights
 
     # fill weights into the lut, depending on whether stitching is allowed / needed or not
     do_stitch = (
@@ -475,7 +496,7 @@ def normalization_weights_setup(
         # fill the process weight table
         for process_inst, br in branching_ratios.items():
             sum_weights = merged_selection_stats_sum_weights["sum_mc_weight_per_process"][str(process_inst.id)]
-            process_weight_table[process_inst.id, 0] = br * inclusive_xsec * lumi / sum_weights
+            process_weight_table[process_inst.id, 0] = norm_factor * br * inclusive_xsec * lumi / sum_weights
     else:
         # fill the process weight table with per-process cross sections
         for process_inst in process_insts:
@@ -486,7 +507,7 @@ def normalization_weights_setup(
                 )
             xsec = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
             sum_weights = merged_selection_stats_sum_weights["sum_mc_weight_per_process"][str(process_inst.id)]
-            process_weight_table[process_inst.id, 0] = xsec * lumi / sum_weights
+            process_weight_table[process_inst.id, 0] = norm_factor * xsec * lumi / sum_weights
 
     # store lookup table and known process ids
     self.process_weight_table = process_weight_table
