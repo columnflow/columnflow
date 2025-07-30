@@ -196,6 +196,12 @@ def get_br_from_inclusive_datasets(
         br = sn.Number(process_sum_weights / dataset_sum_weights, rel_unc * 1j)
         return br
 
+    def path_repr(br_path: tuple[sn.Number, ...], dag_path: tuple[Node, ...]) -> str:
+        return "\n-> ".join(
+            f"{(node.dataset_inst or node.process_inst).name} (br = {br.str(format=3)})"
+            for br, node in zip(br_path, dag_path)
+        )
+
     process_brs = {}
     for process_inst, dag in process_dags.items():
         brs = []
@@ -210,18 +216,24 @@ def get_br_from_inclusive_datasets(
                 if sub_br is not None:
                     queue.append((sub_node, br * sub_br, br_path + (sub_br,), dag_path + (sub_node,)))
         # select the most certain one
-        best_br, best_br_path, best_dag_path = min(brs, key=lambda tpl: tpl[0](sn.UP, unc=True, factor=True))
+        brs.sort(key=lambda tpl: tpl[0](sn.UP, unc=True, factor=True))
+        best_br, best_br_path, best_dag_path = brs[0]
         process_brs[process_inst] = best_br.nominal
         # show a warning in case the relative uncertainty is large
         if (rel_unc := best_br(sn.UP, unc=True, factor=True)) > 0.1:
-            path_str = "\n-> ".join(
-                f"{(node.dataset_inst or node.process_inst).name} (br = {br.str(format=3)})"
-                for br, node in zip(best_br_path, best_dag_path)
-            )
             logger.warning(
                 f"large error on the branching ratio of {rel_unc * 100:.2f}% for process '{process_inst.name}' "
-                f"({process_inst.id}), calculated along\n   {path_str}",
+                f"({process_inst.id}), calculated along\n   {path_repr(best_br_path, best_dag_path)}",
             )
+        # in case there were multuple values, check their compatibility with the best one
+        for i, (br, br_path, dag_path) in enumerate(brs[1:], 2):
+            pull = abs(best_br.n - br.n) / (best_br.u(direction="up")**2 + br.u(direction="up")**2)**0.5
+            if pull > 2:
+                logger.warning(
+                    "detected a rather large statistical pull between the best branching ratio and the one on "
+                    f"position {i} of {pull:.2f}\n  best path: {path_repr(best_br_path, best_dag_path)}\n  "
+                    f"path {i}   : {path_repr(br_path, dag_path)}",
+                )
 
     return process_brs
 
