@@ -696,8 +696,6 @@ def dy_njet_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         inputs_gen = [variable_map_gen[inp.name] for inp in self.dy_corrector.inputs]
         dy_weight_gen = self.dy_corrector.evaluate(*inputs_gen)
 
-        print(f"DY Njet weight: {dy_weight_gen}")
-
         # save the weights in a new column
         events = set_ak_column(events, column_name, dy_weight_gen, value_type=np.float32)
 
