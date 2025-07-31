@@ -214,6 +214,7 @@ def get_br_from_inclusive_datasets(
             for sub_node in node.next:
                 sub_br = get_single_br(node.dataset_inst, sub_node.process_inst)
                 if sub_br is not None:
+                    # TODO: check that uncertainty sources are set correctly, so that the error prop works here
                     queue.append((sub_node, br * sub_br, br_path + (sub_br,), dag_path + (sub_node,)))
         # select the most certain one
         brs.sort(key=lambda tpl: tpl[0](sn.UP, unc=True, factor=True))
@@ -255,7 +256,7 @@ def update_dataset_selection_stats(
     # which luminosity to apply, uses the value stored in the config when None
     luminosity=None,
     # whether to normalize weights per dataset to the mean weight
-    normalize_weights_per_dataset=True,
+    normalize_weights_per_dataset=False,
     # whether to allow stitching datasets
     allow_stitching=False,
     get_xsecs_from_inclusive_datasets=False,
