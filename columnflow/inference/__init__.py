@@ -13,9 +13,11 @@ import law
 import order as od
 import yaml
 
-from columnflow.types import Generator, Callable, TextIO, Sequence, Any
-from columnflow.util import DerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url
-
+from columnflow.types import Generator, Callable, TextIO, Sequence, Any, Hashable, Type, T
+from columnflow.util import (
+    CachedDerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url,
+    freeze,
+)
 
 logger = law.logger.get_logger(__name__)
 
@@ -189,7 +191,13 @@ class FlowStrategy(enum.Enum):
         return self.value
 
 
-class InferenceModel(Derivable):
+class InferenceModelMeta(CachedDerivableMeta):
+
+    def _get_inst_cache_key(cls, args: tuple, kwargs: dict) -> Hashable:
+        return freeze((cls, kwargs.get("inst_dict", {})))
+
+
+class InferenceModel(Derivable, metaclass=InferenceModelMeta):
     """
     Interface to statistical inference models with connections to config objects (such as py:class:`order.Config` or
     :py:class:`order.Dataset`).
@@ -322,11 +330,11 @@ class InferenceModel(Derivable):
 
     @classmethod
     def inference_model(
-        cls,
+        cls: T,
         func: Callable | None = None,
         bases: tuple[type] = (),
         **kwargs,
-    ) -> DerivableMeta | Callable:
+    ) -> Type[T] | Callable:
         """
         Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
         *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs*
@@ -336,7 +344,7 @@ class InferenceModel(Derivable):
         :param bases: Optional tuple of base classes for the new subclass.
         :returns: The new subclass or a decorator function.
         """
-        def decorator(func: Callable) -> DerivableMeta:
+        def decorator(func: Callable) -> Type[T]:
             # create the class dict
             cls_dict = {
                 **kwargs,

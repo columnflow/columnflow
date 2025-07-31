@@ -24,6 +24,8 @@ cf_remove_tmp() {
     fi
 
     # get the directory
+    local prompt
+    local confirm
     local tmp_dir="$( law config target.tmp_dir )"
     local ret="$?"
     if [ "${ret}" != "0" ]; then
@@ -35,14 +37,27 @@ cf_remove_tmp() {
     elif [ ! -d "${tmp_dir}" ]; then
         >&2 echo "'law config target.tmp_dir' is not a directory"
         return "3"
+    elif [ -z "${LAW_TARGET_TMP_DIR}" ] && [ "$( cd "${tmp_dir}" && pwd )" = "${PWD}" ]; then
+        prompt="'law config target.tmp_dir' reports that the tmp directory is set to the current working directory '${PWD}'. Continue? (y/n) "
+        read -rp "${prompt}" confirm
+        case "${confirm}" in
+        [Yy])
+            ;;
+        *)
+            >&2 echo "canceled"
+            return "4"
+            ;;
+        esac
     fi
 
+    # define the search pattern
     local pattern="luigi-tmp-*"
     [ "${mode}" = "all" ] && pattern="*"
 
+    # ask for confirmation
     prompt="Are you sure you want to delete all files in path \"${tmp_dir}\" matching \"${pattern}\"? (y/n) "
-    read -rp "$prompt" confirm
-    case "$confirm" in
+    read -rp "${prompt}" confirm
+    case "${confirm}" in
     [Yy])
         # remove all files and directories in tmp_dir owned by the user
         echo "deleting files..."

@@ -29,7 +29,7 @@ import law
 import luigi
 
 from columnflow import env_is_dev, env_is_remote, docs_url, github_url
-from columnflow.types import Callable, Any, Sequence, Union, ModuleType
+from columnflow.types import Callable, Any, Sequence, Union, ModuleType, Type, T, Hashable
 
 
 #: Placeholder for an unset value.
@@ -930,6 +930,31 @@ class DerivableMeta(abc.ABCMeta):
         otherwise.
         """
         return isinstance(other, DerivableMeta) and issubclass(other, cls)
+
+
+class CachedDerivableMeta(DerivableMeta):
+
+    def __new__(metacls, cls_name: str, bases: tuple, cls_dict: dict) -> CachedDerivableMeta:
+        # add an instance cache if not disabled
+        cls_dict.setdefault("cache_instances", True)
+        cls_dict["_instances"] = {} if cls_dict["cache_instances"] else None
+
+        return super().__new__(metacls, cls_name, bases, cls_dict)
+
+    def __call__(cls: Type[T], *args, **kwargs) -> T:
+        # when not caching instances, return right away
+        if not cls.cache_instances:
+            return super().__call__(*args, **kwargs)
+
+        # build the cache key from the inst_dict in kwargs
+        key = cls._get_inst_cache_key(args, kwargs)
+        if key not in cls._instances:
+            cls._instances[key] = super().__call__(*args, **kwargs)
+
+        return cls._instances[key]
+
+    def _get_inst_cache_key(cls, args: tuple, kwargs: dict) -> Hashable:
+        raise NotImplementedError("__get_inst_cache_key method must be implemented by the derived meta class")
 
 
 class Derivable(object, metaclass=DerivableMeta):
