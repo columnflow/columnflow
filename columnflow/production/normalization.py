@@ -91,17 +91,35 @@ def get_br_from_inclusive_datasets(
                 dataset_processes[dataset_inst].add(process_inst)
 
     # step 3: per process, structure the assigned datasets and corresponding processes in DAGs, from more inclusive down
-    #         to more exclusive phase spaces; there should usually just be a single DAG per process, but in case of
-    #         complex overlap between datasets, there might be multiple options across which BRs can be computed; this
-    #         is resolved in step 4
+    #         to more exclusive phase spaces; usually each DAG can contain multiple paths to compute the BR of a single
+    #         process; this is resolved in step 4
     @dataclasses.dataclass
     class Node:
         process_inst: od.Process
         dataset_inst: od.Dataset | None = None
         next: set[Node] = dataclasses.field(default_factory=set)
 
-        def __hash__(self):
+        def __hash__(self) -> int:
             return hash((self.process_inst, self.dataset_inst))
+
+        def str_lines(self) -> list[str]:
+            lines = [
+                f"{self.__class__.__name__}(",
+                f"  process={self.process_inst.name}({self.process_inst.id})",
+                f"  dataset={self.dataset_inst.name if self.dataset_inst else 'None'}",
+            ]
+            if self.next:
+                lines.append("  next={")
+                for n in self.next:
+                    lines.extend(f"    {line}" for line in n.str_lines())
+                lines.append("  }")
+            else:
+                lines.append(r"  next={}")
+            lines.append(")")
+            return lines
+
+        def __str__(self) -> str:
+            return "\n".join(self.str_lines())
 
     process_dags = {}
     for process_inst, dataset_insts in process_datasets.items():
@@ -111,38 +129,17 @@ def get_br_from_inclusive_datasets(
         for d_incl, d_excl in itertools.permutations(dataset_insts, 2):
             if d_incl.processes.get_first().has_process(d_excl.processes.get_first(), deep=True):
                 sub_datasets.setdefault(d_incl, set()).add(d_excl)
-        # then, reduce to pairs describing a "maximum spanning tree" (via transitive edge pruning)
-        pruned_relations = []
-        for d_incl, d_excls in sub_datasets.items():
-            for d_excl in d_excls:
-                queue = collections.deque([d_incl])
-                visited = set([d_incl])
-                found = False
-                while queue and not found:
-                    _d_incl = queue.popleft()
-                    for _d_excl in sub_datasets.get(_d_incl, []):
-                        if _d_excl == d_excl:
-                            # skip the direct edge
-                            if _d_incl == d_incl:
-                                continue
-                            # otherwise declare found
-                            found = True
-                            break
-                        if _d_excl not in visited:
-                            visited.add(_d_excl)
-                            queue.append(_d_excl)
-                if not found:
-                    pruned_relations.append((d_incl, d_excl))
-        # finally, expand to a DAG structure
+        # then, expand to a DAG structure
         nodes = {}
         excl_nodes = set()
-        for d_incl, d_excl in pruned_relations:
-            if d_incl not in nodes:
-                nodes[d_incl] = Node(d_incl.processes.get_first(), d_incl)
-            if d_excl not in nodes:
-                nodes[d_excl] = Node(d_excl.processes.get_first(), d_excl)
-            nodes[d_incl].next.add(nodes[d_excl])
-            excl_nodes.add(nodes[d_excl])
+        for d_incl, d_excls in sub_datasets.items():
+            for d_excl in d_excls:
+                if d_incl not in nodes:
+                    nodes[d_incl] = Node(d_incl.processes.get_first(), d_incl)
+                if d_excl not in nodes:
+                    nodes[d_excl] = Node(d_excl.processes.get_first(), d_excl)
+                nodes[d_incl].next.add(nodes[d_excl])
+                excl_nodes.add(nodes[d_excl])
         # mark the root node as the head of the DAG
         dag = (set(nodes.values()) - excl_nodes).pop()
         # add another node to leaves that only contains the process instance
@@ -159,14 +156,14 @@ def get_br_from_inclusive_datasets(
     #         most precise path; again, there should usually be just a single path, but multiple ones are possible when
     #         datasets have complex overlap
     def get_single_br(dataset_inst: od.Dataset, process_inst: od.Process) -> sn.Number | None:
-        # process_inst might refer to a mid-layer process, so check which low-layer processes it is made of
+        # process_inst might refer to a mid-layer process, so check which lowest-layer processes it is made of
         lowest_process_ids = (
             [process_inst.id]
             if process_inst in process_insts
             else [
-                low_process_inst.id
-                for low_process_inst in process_insts
-                if process_inst.has_process(low_process_inst, deep=True)
+                int(process_id_str)
+                for process_id_str in dataset_selection_stats[dataset_inst.name]["sum_mc_weight_per_process"]
+                if process_inst.has_process(int(process_id_str), deep=True)
             ]
         )
         # extract stats
@@ -187,19 +184,21 @@ def get_br_from_inclusive_datasets(
                 f"'{','.join(map(str, lowest_process_ids))}' in selection stats of dataset {dataset_inst.name}",
             )
             return None
-        # compute the ratio of events, assuming uncorrelated poisson counting errors, then get its relative error
+        # compute the ratio of events, assuming correlated poisson counting errors since numbers come from the same
+        # dataset, then compute the relative uncertainty
         num_ratio = (
-            sn.Number(process_num_events, {"nom": process_num_events**0.5}) /
-            sn.Number(dataset_num_events, {"denom": dataset_num_events**0.5})
-        ).combine_uncertainties()
+            sn.Number(process_num_events, process_num_events**0.5) /
+            sn.Number(dataset_num_events, dataset_num_events**0.5)
+        )
         rel_unc = num_ratio(sn.UP, unc=True, factor=True)
-        # compute the branching ratio, using the same relative uncertainty
-        br = sn.Number(process_sum_weights / dataset_sum_weights, rel_unc * 1j)
+        # compute the branching ratio, using the same relative uncertainty and store using the dataset name to mark its
+        # limited statistics as the source of uncertainty which is important for consistent error propagation
+        br = sn.Number(process_sum_weights / dataset_sum_weights, {f"{dataset_inst.name}_stats": rel_unc * 1j})
         return br
 
     def path_repr(br_path: tuple[sn.Number, ...], dag_path: tuple[Node, ...]) -> str:
-        return "\n-> ".join(
-            f"{(node.dataset_inst or node.process_inst).name} (br = {br.str(format=3)})"
+        return "  X  ".join(
+            f"{node.process_inst.name} (br = {br.combine_uncertainties().str(format=3)})"
             for br, node in zip(br_path, dag_path)
         )
 
@@ -216,8 +215,9 @@ def get_br_from_inclusive_datasets(
             for sub_node in node.next:
                 sub_br = get_single_br(node.dataset_inst, sub_node.process_inst)
                 if sub_br is not None:
-                    # TODO: check that uncertainty sources are set correctly, so that the error prop works here
                     queue.append((sub_node, br * sub_br, br_path + (sub_br,), dag_path + (sub_node,)))
+        # combine all uncertainties
+        brs = [(br.combine_uncertainties(), *paths) for br, *paths in brs]
         # select the most certain one
         brs.sort(key=lambda tpl: tpl[0](sn.UP, unc=True, factor=True))
         best_br, best_br_path, best_dag_path = brs[0]
@@ -229,18 +229,21 @@ def get_br_from_inclusive_datasets(
                 f"large error on the branching ratio of {rel_unc * 100:.2f}% for process '{process_inst.name}' "
                 f"({process_inst.id}), calculated along\n   {path_repr(best_br_path, best_dag_path)}",
             )
-        # in case there were multuple values, check their compatibility with the best one
+        # in case there were multiple values, check their compatibility with the best one and warn if they diverge
         for i, (br, br_path, dag_path) in enumerate(brs[1:], 2):
+            abs_diff = abs(best_br.n - br.n)
+            rel_diff = abs_diff / best_br.n
             pull = abs(best_br.n - br.n) / (best_br.u(direction="up")**2 + br.u(direction="up")**2)**0.5
-            if pull > 2:
+            if rel_diff > 0.1 and pull > 3:
                 logger.warning(
-                    "detected a rather large statistical pull between the best branching ratio and the one on "
-                    f"position {i} of {pull:.2f}\n  best path: {path_repr(best_br_path, best_dag_path)}\n  "
-                    f"path {i}   : {path_repr(br_path, dag_path)}",
+                    f"detected diverging branching ratios between the best and the one on position {i} for process "
+                    f"'{process_inst.name}' (abs_diff={abs_diff:.4f}, rel_diff={rel_diff:.4f}, pull={pull:.2f} ):"
+                    f"\nbest path: {best_br.str(format=3)} from {path_repr(best_br_path, best_dag_path)}"
+                    f"\npath {i}   : {br.str(format=3)} from {path_repr(br_path, dag_path)}",
                 )
 
     if log_brs:
-        import tabulate
+        from tabulate import tabulate
         header = ["process name", "process id", "branching ratio", "uncertainty (%)"]
         rows = [
             [
@@ -249,7 +252,7 @@ def get_br_from_inclusive_datasets(
             ]
             for process_inst in sorted(process_brs_log)
         ]
-        logger.info(f"extracted branching ratios:\n{tabulate.tabulate(rows, header)}")
+        logger.info(f"extracted branching ratios from process occurrence in datasets:\n{tabulate(rows, header)}")
 
     return process_brs
 
@@ -270,8 +273,8 @@ def update_dataset_selection_stats(
     weight_name="normalization_weight",
     # which luminosity to apply, uses the value stored in the config when None
     luminosity=None,
-    # whether to normalize weights per dataset to the mean weight
-    normalize_weights_per_dataset=False,
+    # whether to normalize weights per dataset to the mean weight first (to cancel out numeric differences)
+    normalize_weights_per_dataset=True,
     # whether to allow stitching datasets
     allow_stitching=False,
     get_xsecs_from_inclusive_datasets=False,
