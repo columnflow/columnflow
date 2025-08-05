@@ -69,6 +69,7 @@ def get_br_from_inclusive_datasets(
     process_insts: Sequence[od.Process] | set[od.Process],
     dataset_selection_stats: dict[str, dict[str, float | dict[str, float]]],
     merged_selection_stats: dict[str, float | dict[str, float]],
+    log_brs: bool = False,
 ) -> dict[od.Process, float]:
     """
     Helper function to compute the branching ratios from sum of weights of inclusive samples.
@@ -203,6 +204,7 @@ def get_br_from_inclusive_datasets(
         )
 
     process_brs = {}
+    process_brs_log = {}
     for process_inst, dag in process_dags.items():
         brs = []
         queue = collections.deque([(dag, (br := sn.Number(1.0, 0.0)), (br,), (dag,))])
@@ -220,6 +222,7 @@ def get_br_from_inclusive_datasets(
         brs.sort(key=lambda tpl: tpl[0](sn.UP, unc=True, factor=True))
         best_br, best_br_path, best_dag_path = brs[0]
         process_brs[process_inst] = best_br.nominal
+        process_brs_log[process_inst] = (best_br.nominal, best_br(sn.UP, unc=True, factor=True))  # value and % unc
         # show a warning in case the relative uncertainty is large
         if (rel_unc := best_br(sn.UP, unc=True, factor=True)) > 0.1:
             logger.warning(
@@ -235,6 +238,18 @@ def get_br_from_inclusive_datasets(
                     f"position {i} of {pull:.2f}\n  best path: {path_repr(best_br_path, best_dag_path)}\n  "
                     f"path {i}   : {path_repr(br_path, dag_path)}",
                 )
+
+    if log_brs:
+        import tabulate
+        header = ["process name", "process id", "branching ratio", "uncertainty (%)"]
+        rows = [
+            [
+                process_inst.name, process_inst.id, process_brs_log[process_inst][0],
+                f"{process_brs_log[process_inst][1] * 100:.4f}",
+            ]
+            for process_inst in sorted(process_brs_log)
+        ]
+        logger.info(f"extracted branching ratios:\n{tabulate.tabulate(rows, header)}")
 
     return process_brs
 
