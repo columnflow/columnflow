@@ -227,7 +227,7 @@ def get_br_from_inclusive_datasets(
         if (rel_unc := best_br(sn.UP, unc=True, factor=True)) > 0.1:
             logger.warning(
                 f"large error on the branching ratio of {rel_unc * 100:.2f}% for process '{process_inst.name}' "
-                f"({process_inst.id}), calculated along\n   {path_repr(best_br_path, best_dag_path)}",
+                f"({process_inst.id}), calculated along\n  {path_repr(best_br_path, best_dag_path)}",
             )
         # in case there were multiple values, check their compatibility with the best one and warn if they diverge
         for i, (br, br_path, dag_path) in enumerate(brs[1:], 2):
@@ -440,7 +440,7 @@ def normalization_weights_setup(
         for update_func in update_funcs:
             if callable(update_func):
                 stats = update_func(stats)
-            break
+                break
         # merge
         if len(stats) > 1:
             from columnflow.tasks.selection import MergeSelectionStats
