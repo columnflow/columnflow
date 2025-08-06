@@ -479,6 +479,17 @@ def normalization_weights_setup(
     # setup the event weight lookup table
     process_weight_table = sp.sparse.lil_matrix((max(process_ids) + 1, 1), dtype=np.float32)
 
+    def fill_weight_table(process_inst: od.Process, xsec: float, sum_weights: float) -> None:
+        if sum_weights == 0:
+            logger.warning(
+                f"zero sum of weights found for computing normalization weight for process '{process_inst.name}' "
+                f"({process_inst.id}) in dataset '{self.dataset_inst.name}', going to use weight of 0.0",
+            )
+            weight = 0.0
+        else:
+            weight = norm_factor * xsec * lumi / sum_weights
+        process_weight_table[process_inst.id, 0] = weight
+
     # get the luminosity
     lumi = float(self.config_inst.x.luminosity if self.luminosity is None else self.luminosity)
 
@@ -515,7 +526,7 @@ def normalization_weights_setup(
         # fill the process weight table
         for process_inst, br in branching_ratios.items():
             sum_weights = merged_selection_stats_sum_weights["sum_mc_weight_per_process"][str(process_inst.id)]
-            process_weight_table[process_inst.id, 0] = norm_factor * br * inclusive_xsec * lumi / sum_weights
+            fill_weight_table(process_inst, br * inclusive_xsec, sum_weights)
     else:
         # fill the process weight table with per-process cross sections
         for process_inst in process_insts:
@@ -526,7 +537,7 @@ def normalization_weights_setup(
                 )
             xsec = process_inst.get_xsec(self.config_inst.campaign.ecm).nominal
             sum_weights = merged_selection_stats_sum_weights["sum_mc_weight_per_process"][str(process_inst.id)]
-            process_weight_table[process_inst.id, 0] = norm_factor * xsec * lumi / sum_weights
+            fill_weight_table(process_inst, xsec, sum_weights)
 
     # store lookup table and known process ids
     self.process_weight_table = process_weight_table
