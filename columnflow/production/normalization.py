@@ -29,7 +29,7 @@ ak = maybe_import("awkward")
 logger = law.logger.get_logger(__name__)
 
 
-def get_stitching_datasets(self: Producer) -> tuple[od.Dataset, list[od.Dataset]]:
+def get_stitching_datasets(self: Producer, debug: bool = False) -> tuple[od.Dataset, list[od.Dataset]]:
     """
     Helper function to obtain information about stitching datasets:
 
@@ -47,19 +47,27 @@ def get_stitching_datasets(self: Producer) -> tuple[od.Dataset, list[od.Dataset]
     }
 
     # determine the inclusive dataset
-    process_map = {d.processes.get_first(): d for d in required_datasets}
-    process_inst = self.dataset_inst.processes.get_first()
     inclusive_dataset = None
-    while process_inst:
-        if process_inst in process_map:
-            inclusive_dataset = process_map[process_inst]
-        process_inst = process_inst.parent_processes.get_first(default=None)
+    for dataset_inst in required_datasets:
+        for other_dataset_inst in required_datasets:
+            if dataset_inst == other_dataset_inst:
+                continue
+            # check if the other dataset is a sub-dataset of the current one by comparing their leading process
+            if not dataset_inst.has_process(other_dataset_inst.processes.get_first(), deep=True):
+                break
+        else:
+            # if we did not break, the dataset is the inclusive one
+            inclusive_dataset = dataset_inst
+            break
     if not inclusive_dataset:
         raise Exception("inclusive dataset not found")
-    # cross-check if there are processes in the required datasets that are not covered by the inclusive dataset
-    unmatched_processes = {p for p in process_map if not inclusive_dataset.has_process(p, deep=True)}
-    if unmatched_processes:
-        raise Exception(f"processes {unmatched_processes} not found in inclusive dataset")
+
+    if debug:
+        logger.info(
+            f"determined info for stitching content of dataset '{self.dataset_inst.name}':\n"
+            f"  - inclusive dataset: {inclusive_dataset.name}\n"
+            f"  - required datasets: {', '.join(d.name for d in required_datasets)}",
+        )
 
     return inclusive_dataset, list(required_datasets)
 
@@ -69,7 +77,7 @@ def get_br_from_inclusive_datasets(
     process_insts: Sequence[od.Process] | set[od.Process],
     dataset_selection_stats: dict[str, dict[str, float | dict[str, float]]],
     merged_selection_stats: dict[str, float | dict[str, float]],
-    log_brs: bool = False,
+    debug: bool = False,
 ) -> dict[od.Process, float]:
     """
     Helper function to compute the branching ratios from sum of weights of inclusive samples.
@@ -203,7 +211,7 @@ def get_br_from_inclusive_datasets(
         )
 
     process_brs = {}
-    process_brs_log = {}
+    process_brs_debug = {}
     for process_inst, dag in process_dags.items():
         brs = []
         queue = collections.deque([(dag, (br := sn.Number(1.0, 0.0)), (br,), (dag,))])
@@ -222,7 +230,7 @@ def get_br_from_inclusive_datasets(
         brs.sort(key=lambda tpl: tpl[0](sn.UP, unc=True, factor=True))
         best_br, best_br_path, best_dag_path = brs[0]
         process_brs[process_inst] = best_br.nominal
-        process_brs_log[process_inst] = (best_br.nominal, best_br(sn.UP, unc=True, factor=True))  # value and % unc
+        process_brs_debug[process_inst] = (best_br.nominal, best_br(sn.UP, unc=True, factor=True))  # value and % unc
         # show a warning in case the relative uncertainty is large
         if (rel_unc := best_br(sn.UP, unc=True, factor=True)) > 0.1:
             logger.warning(
@@ -242,15 +250,15 @@ def get_br_from_inclusive_datasets(
                     f"\npath {i}   : {br.str(format=3)} from {path_repr(br_path, dag_path)}",
                 )
 
-    if log_brs:
+    if debug:
         from tabulate import tabulate
         header = ["process name", "process id", "branching ratio", "uncertainty (%)"]
         rows = [
             [
-                process_inst.name, process_inst.id, process_brs_log[process_inst][0],
-                f"{process_brs_log[process_inst][1] * 100:.4f}",
+                process_inst.name, process_inst.id, process_brs_debug[process_inst][0],
+                f"{process_brs_debug[process_inst][1] * 100:.4f}",
             ]
-            for process_inst in sorted(process_brs_log)
+            for process_inst in sorted(process_brs_debug)
         ]
         logger.info(f"extracted branching ratios from process occurrence in datasets:\n{tabulate(rows, header)}")
 
@@ -404,6 +412,10 @@ def normalization_weights_setup(
             weights per process.
         - py: attr: `known_process_ids`: A set of all process ids that are known by the lookup table.
     """
+    # optionally run the dataset lookup again in debug mode
+    if getattr(task, "branch", None) == 0:
+        self.get_stitching_datasets(debug=True)
+
     # load the selection stats
     dataset_selection_stats = {
         dataset: copy.deepcopy(task.cached_value(
@@ -521,6 +533,7 @@ def normalization_weights_setup(
             process_insts,
             dataset_selection_stats_br,
             merged_selection_stats_br,
+            debug=getattr(task, "branch", None) == 0,
         )
 
         # fill the process weight table
