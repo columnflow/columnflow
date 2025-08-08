@@ -7,6 +7,7 @@ pyarrow==19.0.1
 dask-awkward==2025.3.0
 correctionlib==2.6.4
 coffea==2024.11.0
+boost-histogram==1.6.0
 
 # minimum versions for general packages
 zstandard~=0.23.0
