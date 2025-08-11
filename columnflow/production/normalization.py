@@ -412,8 +412,14 @@ def normalization_weights_setup(
             weights per process.
         - py: attr: `known_process_ids`: A set of all process ids that are known by the lookup table.
     """
-    # optionally run the dataset lookup again in debug mode
-    if getattr(task, "branch", None) == 0:
+    # optionally run the dataset lookup again in debug mode when stitching
+    do_stitch = (
+        self.allow_stitching and
+        self.get_xsecs_from_inclusive_datasets and
+        len(self.required_datasets) > 1
+    )
+    is_first_branch = getattr(task, "branch", None) == 0
+    if do_stitch and is_first_branch:
         self.get_stitching_datasets(debug=True)
 
     # load the selection stats
@@ -517,11 +523,6 @@ def normalization_weights_setup(
         self.inclusive_weight = norm_factor * inclusive_xsec * lumi / inclusive_sum_weights
 
     # fill weights into the lut, depending on whether stitching is allowed / needed or not
-    do_stitch = (
-        self.allow_stitching and
-        self.get_xsecs_from_inclusive_datasets and
-        len(self.required_datasets) > 1
-    )
     if do_stitch:
         logger.debug(
             f"using inclusive dataset '{self.inclusive_dataset.name}' and process '{inclusive_proc.name}' for cross "
@@ -533,7 +534,7 @@ def normalization_weights_setup(
             process_insts,
             dataset_selection_stats_br,
             merged_selection_stats_br,
-            debug=getattr(task, "branch", None) == 0,
+            debug=is_first_branch,
         )
 
         # fill the process weight table
