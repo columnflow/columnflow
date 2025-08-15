@@ -345,6 +345,9 @@ def plot_all(
     # general mplhep style
     plt.style.use(mplhep.style.CMS)
 
+    # use non-interactive Agg backend for plotting
+    mpl.use("Agg")
+
     # setup figure and axes
     rax = None
     grid_spec = {"left": 0.15, "right": 0.95, "top": 0.95, "bottom": 0.1}
