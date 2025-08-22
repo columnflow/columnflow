@@ -123,12 +123,12 @@ class CreateDatacards(SerializeInferenceModelBase):
                             shift_hists[(param_obj.name, d)] = h_proc[{
                                 "shift": hist.loc(config_inst.get_shift(f"{shift_source}_{d}").name),
                             }]
-                    else:
-                        # when the parameter does not exist for this config, fill histogram with nominal value
-                        for d in ["up", "down"]:
-                            shift_hists[(param_obj.name, d)] = h_proc[{
-                                "shift": hist.loc("nominal"),
-                            }]
+                    # else:
+                    #     # when the parameter does not exist for this config, fill histogram with nominal value
+                    #     for d in ["up", "down"]:
+                    #         shift_hists[(param_obj.name, d)] = h_proc[{
+                    #             "shift": hist.loc("nominal"),
+                    #         }]
 
         # forward objects to the datacard writer
         outputs = self.output()
