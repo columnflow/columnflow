@@ -173,7 +173,7 @@ class UniteColumns(_UniteColumns):
                 self, sorted_chunks, output["events"], local=True, writer_opts=self.get_parquet_writer_opts(),
             )
         else:  # root
-            law.root.hadd_task(self, sorted_chunks, output["events"], local=True)
+            law.root.hadd_task(self, sorted_chunks, output["events"], local=True, hadd_args=["-O", "-f501"])
 
 
 # overwrite class defaults
