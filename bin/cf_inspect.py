@@ -13,8 +13,6 @@ import json
 import pickle
 
 import awkward as ak
-import coffea.nanoevents
-import uproot
 
 from columnflow.util import ipython_shell
 from columnflow.types import Any
@@ -34,10 +32,27 @@ def _load_parquet(fname: str) -> ak.Array:
     return ak.from_parquet(fname)
 
 
-def _load_nano_root(fname: str) -> ak.Array:
+def _load_nano_root(fname: str, treepath: str | None = None) -> ak.Array:
+    import uproot
+    import coffea.nanoevents
+
     source = uproot.open(fname)
+
+    # get the default treepath
+    if treepath is None:
+        for treepath in source.keys():
+            treepath = treepath.split(";", 1)[0]
+            obj = source[treepath]
+            if isinstance(obj, uproot.TTree):
+                break
+        else:
+            print(f"no default treepath determined in {fname}")
+            treepath = None
+
     return coffea.nanoevents.NanoEventsFactory.from_root(
         source,
+        treepath=treepath,
+        delayed=False,
         runtime_cache=None,
         persistent_cache=None,
     ).events()
