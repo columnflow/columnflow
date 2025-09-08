@@ -364,7 +364,7 @@ def normalization_weights_init(self: Producer, **kwargs) -> None:
             self.weight_name_incl = f"{self.weight_name}_inclusive"
             self.produces.add(self.weight_name_incl)
     else:
-        self.inclusive_dataset = [self.dataset_inst]
+        self.inclusive_dataset = self.dataset_inst
         self.required_datasets = [self.dataset_inst]
 
 
