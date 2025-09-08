@@ -105,8 +105,7 @@ class UniteColumns(_UniteColumns):
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
-            sorted_ak_to_root,
+            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet, sorted_ak_to_root,
         )
 
         # prepare inputs and outputs
@@ -174,7 +173,7 @@ class UniteColumns(_UniteColumns):
                 self, sorted_chunks, output["events"], local=True, writer_opts=self.get_parquet_writer_opts(),
             )
         else:  # root
-            law.root.hadd_task(self, sorted_chunks, output["events"], local=True)
+            law.root.hadd_task(self, sorted_chunks, output["events"], local=True, hadd_args=["-O", "-f501"])
 
 
 # overwrite class defaults

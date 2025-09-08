@@ -13,49 +13,63 @@ import json
 import pickle
 
 import awkward as ak
-import coffea.nanoevents
-import uproot
 
 from columnflow.util import ipython_shell
 from columnflow.types import Any
 
 
-def _load_json(fname: str) -> Any:
+def _load_json(fname: str, **kwargs) -> Any:
     with open(fname, "r") as fobj:
         return json.load(fobj)
 
 
-def _load_pickle(fname: str) -> Any:
+def _load_pickle(fname: str, **kwargs) -> Any:
     with open(fname, "rb") as fobj:
         return pickle.load(fobj)
 
 
-def _load_parquet(fname: str) -> ak.Array:
+def _load_parquet(fname: str, **kwargs) -> ak.Array:
     return ak.from_parquet(fname)
 
 
-def _load_nano_root(fname: str) -> ak.Array:
+def _load_nano_root(fname: str, treepath: str | None = None, **kwargs) -> ak.Array:
+    import uproot
+    import coffea.nanoevents
+
     source = uproot.open(fname)
+
+    # get the default treepath
+    if treepath is None:
+        for treepath in ["events", "Events"] + list(source.keys()):
+            treepath = treepath.split(";", 1)[0]
+            if treepath in source and isinstance(source[treepath], uproot.TTree):
+                print(f"using treepath '{treepath}' in root file {fname}")
+                break
+        else:
+            raise ValueError(f"no default treepath determined in {fname}")
+
     return coffea.nanoevents.NanoEventsFactory.from_root(
         source,
+        treepath=treepath,
+        delayed=False,
         runtime_cache=None,
         persistent_cache=None,
     ).events()
 
 
-def load(fname: str) -> Any:
+def load(fname: str, **kwargs) -> Any:
     """
     Load file contents based on file extension.
     """
     basename, ext = os.path.splitext(fname)
     if ext == ".pickle":
-        return _load_pickle(fname)
+        return _load_pickle(fname, **kwargs)
     if ext == ".parquet":
-        return _load_parquet(fname)
+        return _load_parquet(fname, **kwargs)
     if ext == ".root":
-        return _load_nano_root(fname)
+        return _load_nano_root(fname, **kwargs)
     if ext == ".json":
-        return _load_json(fname)
+        return _load_json(fname, **kwargs)
     raise NotImplementedError(f"no loader implemented for extension '{ext}'")
 
 
@@ -90,12 +104,16 @@ if __name__ == "__main__":
     ap.add_argument("files", metavar="FILE", nargs="+", help="one or more supported files")
     ap.add_argument("--events", "-e", action="store_true", help="assume files to contain event info")
     ap.add_argument("--hists", "-h", action="store_true", help="assume files to contain histograms")
+    ap.add_argument("--treepath", "-t", type=str, help="name of the tree in ROOT files")
     ap.add_argument("--list", "-l", action="store_true", help="list contents of the loaded file")
     ap.add_argument("--help", action="help", help="show this help message and exit")
 
     args = ap.parse_args()
 
-    objects = [load(fname) for fname in args.files]
+    load_kwargs = {
+        "treepath": args.treepath,
+    }
+    objects = [load(fname, **load_kwargs) for fname in args.files]
     if len(objects) == 1:
         objects = objects[0]
     print("file content loaded into variable 'objects'")
