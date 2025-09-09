@@ -1375,14 +1375,17 @@ class ConfigTask(AnalysisTask):
     resolution_task_cls = None
 
     @classmethod
-    def req_params(cls, inst: law.Task, *args, **kwargs) -> dict[str, Any]:
-        params = super().req_params(inst, *args, **kwargs)
-
+    def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
         # manually add known shifts between workflows and branches
-        if isinstance(inst, law.BaseWorkflow) and inst.__class__ == cls and getattr(inst, "known_shifts", None):
-            params["known_shifts"] = inst.known_shifts
+        if (
+            "known_shifts" not in kwargs and
+            isinstance(inst, law.BaseWorkflow) and
+            inst.__class__ == cls and
+            getattr(inst, "known_shifts", None)
+        ):
+            kwargs["known_shifts"] = inst.known_shifts
 
-        return params
+        return super().req_params(inst, **kwargs)
 
     @classmethod
     def _multi_sequence_repr(
