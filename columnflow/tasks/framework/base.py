@@ -80,6 +80,9 @@ class TaskShifts:
     local: set[str] = field(default_factory=set)
     upstream: set[str] = field(default_factory=set)
 
+    def __hash__(self) -> int:
+        return hash((frozenset(self.local), frozenset(self.upstream)))
+
 
 class BaseTask(law.Task):
 
