@@ -99,6 +99,9 @@ def plot_variable_stack(
         shape_norm,
         yscale,
     )
+    # additional, plot function specific changes
+    if shape_norm:
+        default_style_config["ax_cfg"]["ylabel"] = "Normalized entries"
     style_config = law.util.merge_dicts(
         default_style_config,
         process_style_config,
@@ -107,11 +110,49 @@ def plot_variable_stack(
         deep=True,
     )
 
-    # additional, plot function specific changes
-    if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
-
     return plot_all(plot_config, style_config, **kwargs)
+
+
+def plot_variable_efficiency(
+    hists: OrderedDict,
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
+    shift_insts: list[od.Shift] | None,
+    style_config: dict | None = None,
+    shape_norm: bool = True,
+    cumsum_reverse: bool = True,
+    **kwargs,
+):
+    """
+    This plot function allows users to plot the efficiency of a cut on a variable as a function of the cut value.
+    Per default, each bin shows the efficiency of requiring value >= bin edge (cumsum_reverse=True).
+    Setting cumsum_reverse=False will instead show the efficiency of requiring value <= bin edge.
+    """
+    for proc_inst, proc_hist in hists.items():
+        if cumsum_reverse:
+            proc_hist.values()[...] = np.cumsum(proc_hist.values()[..., ::-1], axis=-1)[..., ::-1]
+            shape_norm_func = kwargs.get("shape_norm_func", lambda h, shape_norm: h.values()[0] if shape_norm else 1)
+        else:
+            proc_hist.values()[...] = np.cumsum(proc_hist.values(), axis=-1)
+            shape_norm_func = kwargs.get("shape_norm_func", lambda h, shape_norm: h.values()[-1] if shape_norm else 1)
+
+    default_style_config = {
+        "ax_cfg": {"ylabel": "Efficiency" if shape_norm else "Cumulative entries"},
+    }
+    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+
+    return plot_variable_stack(
+        hists,
+        config_inst,
+        category_inst,
+        variable_insts,
+        shift_insts,
+        shape_norm=shape_norm,
+        shape_norm_func=shape_norm_func,
+        style_config=style_config,
+        **kwargs,
+    )
 
 
 def plot_variable_variants(
@@ -274,6 +315,8 @@ def plot_shifted_variable(
     default_style_config["rax_cfg"]["ylabel"] = "Ratio"
     if legend_title:
         default_style_config["legend_cfg"]["title"] = legend_title
+    if shape_norm:
+        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
     style_config = law.util.merge_dicts(
         default_style_config,
         process_style_config,
@@ -281,8 +324,6 @@ def plot_shifted_variable(
         style_config,
         deep=True,
     )
-    if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
 
     return plot_all(plot_config, style_config, **kwargs)
 

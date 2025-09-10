@@ -541,9 +541,13 @@ def prepare_stack_plot_config(
     # setup plotting configs
     plot_config = OrderedDict()
 
+    # take first (non-underflow) bin
+    # shape_norm_func = kwargs.get("shape_norm_func", lambda h, shape_norm: h.values()[0] if shape_norm else 1)
+    shape_norm_func = kwargs.get("shape_norm_func", lambda h, shape_norm: sum(h.values()) if shape_norm else 1)
+
     # draw stack
     if h_mc_stack is not None:
-        mc_norm = sum(h_mc.values()) if shape_norm else 1
+        mc_norm = shape_norm_func(h_mc, shape_norm)
         plot_config["mc_stack"] = {
             "method": "draw_stack",
             "hist": h_mc_stack,
@@ -558,7 +562,7 @@ def prepare_stack_plot_config(
 
     # draw lines
     for i, h in enumerate(line_hists):
-        line_norm = sum(h.values()) if shape_norm else 1
+        line_norm = shape_norm_func(h, shape_norm)
         plot_config[f"line_{i}"] = plot_cfg = {
             "method": "draw_hist",
             "hist": h,
@@ -582,7 +586,7 @@ def prepare_stack_plot_config(
 
     # draw statistical error for stack
     if h_mc_stack is not None and not hide_stat_errors:
-        mc_norm = sum(h_mc.values()) if shape_norm else 1
+        mc_norm = shape_norm_func(h_mc, shape_norm)
         plot_config["mc_stat_unc"] = {
             "method": "draw_stat_error_bands",
             "hist": h_mc,
@@ -592,7 +596,7 @@ def prepare_stack_plot_config(
 
     # draw systematic error for stack
     if h_mc_stack is not None and mc_syst_hists:
-        mc_norm = sum(h_mc.values()) if shape_norm else 1
+        mc_norm = shape_norm_func(h_mc, shape_norm)
         plot_config["mc_syst_unc"] = {
             "method": "draw_syst_error_bands",
             "hist": h_mc,
@@ -611,7 +615,7 @@ def prepare_stack_plot_config(
 
     # draw data
     if data_hists:
-        data_norm = sum(h_data.values()) if shape_norm else 1
+        data_norm = shape_norm_func(h_data, shape_norm)
         plot_config["data"] = plot_cfg = {
             "method": "draw_errorbars",
             "hist": h_data,
@@ -908,7 +912,7 @@ def blind_sensitive_bins(
 
     # set data points in masked region to zero
     for proc, h in data.items():
-        h.values()[..., mask] = 0
+        h.values()[..., mask] = -999
         h.variances()[..., mask] = 0
 
     # merge all histograms
@@ -1047,6 +1051,9 @@ def calculate_stat_error(
         variances = hist.view().variance if error_type == "poisson_weighted" else None
         values = hist.view().value
         confidence_interval = poisson_interval(values, variances)
+
+        # negative values are considerd as blinded bins -> set confidence interval to 0
+        confidence_interval[:, values < 0] = 0
 
         if error_type == "poisson_weighted":
             # might happen if some bins are empty, see https://github.com/scikit-hep/hist/blob/5edbc25503f2cb8193cc5ff1eb71e1d8fa877e3e/src/hist/intervals.py#L74  # noqa: E501
