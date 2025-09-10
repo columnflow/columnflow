@@ -130,7 +130,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "dy_weight_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/external_files/DY_pTll_weights_v2.json.gz",  # noqa
+            "dy_weight_sf": "/afs/cern.ch/work/m/mrieger/public/hbt/external_files/custom_dy_files/hbt_corrections.json.gz",  # noqa
         })
 
     *get_dy_weight_file* can be adapted in a subclass in case it is stored differently in the external files.
@@ -140,10 +140,10 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.dy_weight_config = DrellYanConfig(
-            era="2022preEE",
-            order="NLO",
-            correction="DY_pTll_reweighting",
-            unc_correction="DY_pTll_reweighting_N_uncertainty",
+            era=dy_era,
+            correction="dy_weight",
+            systs=[],
+            njets=True,
         )
 
     *get_dy_weight_config* can be adapted in a subclass in case it is stored differently in the config.
