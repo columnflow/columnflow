@@ -24,18 +24,17 @@ logger = law.logger.get_logger(__name__)
 @dataclass
 class DrellYanConfig:
     era: str
-    order: str
     correction: str
-    unc_correction: str
+    unc_correction: str | None = None
+    order: str | None = None
+    njets: bool = False
+    systs: list[str] | None = None
 
     def __post_init__(self) -> None:
-        if (
-            not self.era or
-            not self.order or
-            not self.correction or
-            not self.unc_correction
-        ):
-            raise ValueError("incomplete dy_weight_config: missing era, order, correction or unc_correction")
+        if not self.era or not self.correction:
+            raise ValueError(f"{self.__class__.__name__}: missing era or correction")
+        if self.unc_correction and not self.order:
+            raise ValueError(f"{self.__class__.__name__}: when unc_correction is defined, order must be set")
 
 
 @producer(
@@ -149,49 +148,65 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     *get_dy_weight_config* can be adapted in a subclass in case it is stored differently in the config.
     """
-
     # map the input variable names from the corrector to our columns
     variable_map = {
         "era": self.dy_config.era,
-        "order": self.dy_config.order,
         "ptll": events.gen_dilepton_pt,
     }
 
-    # initializing the list of weight variations
-    weights_list = [("dy_weight", "nom")]
+    # optionals
+    if self.dy_config.order:
+        variable_map["order"] = self.dy_config.order
+    if self.dy_config.njets:
+        variable_map["njets"] = ak.num(events.Jet, axis=1)
 
-    # appending the respective number of uncertainties to the weight list
-    for i in range(self.n_unc):
-        for shift in ("up", "down"):
-            tmp_tuple = (f"dy_weight{i + 1}_{shift}", f"{shift}{i + 1}")
-            weights_list.append(tmp_tuple)
+    # initializing the list of weight variations (called syst in the dy files)
+    systs = [("nom", "")]
+
+    # add specific uncertainties or additional systs
+    if self.dy_config.unc_correction:
+        for i in range(self.n_unc):
+            for direction in ["up", "down"]:
+                systs.append((f"{direction}{i + 1}", f"_{direction}{i + 1}"))
+    elif self.dy_config.systs:
+        for syst in self.dy_config.systs:
+            systs.append((syst, f"_{syst}"))
 
     # preparing the input variables for the corrector
-    for column_name, syst in weights_list:
-        variable_map_syst = {**variable_map, "syst": syst}
+    for syst, postfix in systs:
+        _variable_map = {**variable_map, "syst": syst}
 
         # evaluating dy weights given a certain era, ptll array and sytematic shift
-        inputs = [variable_map_syst[inp.name] for inp in self.dy_corrector.inputs]
+        inputs = [_variable_map[inp.name] for inp in self.dy_corrector.inputs]
         dy_weight = self.dy_corrector.evaluate(*inputs)
 
         # save the weights in a new column
-        events = set_ak_column(events, column_name, dy_weight, value_type=np.float32)
+        events = set_ak_column(events, f"dy_weight{postfix}", dy_weight, value_type=np.float32)
 
     return events
 
 
 @dy_weights.init
 def dy_weights_init(self: Producer) -> None:
-    # the number of weights in partial run 3 is always 10
     if self.config_inst.campaign.x.year not in {2022, 2023}:
         raise NotImplementedError(
             f"campaign year {self.config_inst.campaign.x.year} is not yet supported by {self.cls_name}",
         )
-    self.n_unc = 10
 
-    # register dynamically produced weight columns
-    for i in range(self.n_unc):
-        self.produces.add(f"dy_weight{i + 1}_{{up,down}}")
+    # declare additional used columns
+    self.dy_config: DrellYanConfig = self.get_dy_weight_config()
+    if self.dy_config.njets:
+        self.uses.add("Jet.pt")
+
+    # declare additional produced columns
+    if self.dy_config.unc_correction:
+        # the number should always be 10
+        self.n_unc = 10
+        for i in range(self.n_unc):
+            self.produces.add(f"dy_weight{i + 1}_{{up,down}}")
+    elif self.dy_config.systs:
+        for syst in self.dy_config.systs:
+            self.produces.add(f"dy_weight_{syst}")
 
 
 @dy_weights.requires
@@ -215,31 +230,26 @@ def dy_weights_setup(
     reader_targets: law.util.InsertableDict,
 ) -> None:
     """
-    Loads the Drell-Yan weight calculator from the external files bundle and saves them in the
-    py:attr:`dy_corrector` attribute for simpler access in the actual callable. The number of uncertainties
-    is calculated, per era, by another correcter in the external file and is saved in the
-    py:attr:`dy_unc_corrector` attribute.
+    Loads the Drell-Yan weight calculator from the external files bundle and saves them in the py:attr:`dy_corrector`
+    attribute for simpler access in the actual callable. The number of uncertainties is calculated, per era, by another
+    correcter in the external file and is saved in the py:attr:`dy_unc_corrector` attribute.
     """
     bundle = reqs["external_files"]
 
     # import all correctors from the external file
     correction_set = load_correction_set(self.get_dy_weight_file(bundle.files))
 
-    # check number of fetched correctors
-    if len(correction_set.keys()) != 2:
-        raise Exception("Expected exactly two types of Drell-Yan correction")
-
-    # create the weight and uncertainty correctors
-    self.dy_config: DrellYanConfig = self.get_dy_weight_config()
+    # create the weight corrector
     self.dy_corrector = correction_set[self.dy_config.correction]
-    self.dy_unc_corrector = correction_set[self.dy_config.unc_correction]
 
-    dy_n_unc = int(self.dy_unc_corrector.evaluate(self.dy_config.order))
-
-    if dy_n_unc != self.n_unc:
-        raise ValueError(
-            f"Expected {self.n_unc} uncertainties, got {dy_n_unc}",
-        )
+    # create the uncertainty corrector
+    if self.dy_config.unc_correction:
+        self.dy_unc_corrector = correction_set[self.dy_config.unc_correction]
+        dy_n_unc = int(self.dy_unc_corrector.evaluate(self.dy_config.order))
+        if dy_n_unc != self.n_unc:
+            raise ValueError(
+                f"Expected {self.n_unc} uncertainties, got {dy_n_unc}",
+            )
 
 
 @producer(
