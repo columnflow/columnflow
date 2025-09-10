@@ -13,10 +13,14 @@ from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.inference import SerializeInferenceModelBase
 from columnflow.tasks.histograms import MergeHistograms
 
+from columnflow.inference.cms.datacard import DatacardHists, ShiftHists, DatacardWriter
+
 
 class CreateDatacards(SerializeInferenceModelBase):
 
     resolution_task_cls = MergeHistograms
+
+    datacard_writer_cls = DatacardWriter
 
     def output(self):
         hooks_repr = self.hist_hooks_repr
@@ -39,7 +43,6 @@ class CreateDatacards(SerializeInferenceModelBase):
     @law.decorator.safe_output
     def run(self):
         import hist
-        from columnflow.inference.cms.datacard import DatacardHists, ShiftHists, DatacardWriter
 
         # prepare inputs
         inputs = self.input()
@@ -129,7 +132,7 @@ class CreateDatacards(SerializeInferenceModelBase):
 
         # forward objects to the datacard writer
         outputs = self.output()
-        writer = DatacardWriter(self.inference_model_inst, datacard_hists)
+        writer = self.datacard_writer_cls(self.inference_model_inst, datacard_hists)
         with outputs["card"].localize("w") as tmp_card, outputs["shapes"].localize("w") as tmp_shapes:
             writer.write(tmp_card.abspath, tmp_shapes.abspath, shapes_path_ref=outputs["shapes"].basename)
 

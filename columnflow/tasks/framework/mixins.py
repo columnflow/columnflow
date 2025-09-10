@@ -1211,21 +1211,8 @@ class MLModelMixinBase(ConfigTask):
 
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
-        """
-        Get the required parameters for the task, preferring the ``--ml-model`` set on task-level
-        via CLI.
-
-        This method first checks if the ``--ml-model`` parameter is set at the task-level via the command line. If it
-        is, this parameter is preferred and added to the '_prefer_cli' key in the kwargs dictionary. The method then
-        calls the 'req_params' method of the superclass with the updated kwargs.
-
-        :param inst: The current task instance.
-        :param kwargs: Additional keyword arguments that may contain parameters for the task.
-        :return: A dictionary of parameters required for the task.
-        """
         # prefer --ml-model set on task-level via cli
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"ml_model"}
-
         return super().req_params(inst, **kwargs)
 
     @classmethod
@@ -1588,7 +1575,6 @@ class MLModelsMixin(ConfigTask):
     def req_params(cls, inst: law.Task, **kwargs) -> dict:
         # prefer --ml-models set on task-level via cli
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"ml_models"}
-
         return super().req_params(inst, **kwargs)
 
     @property
@@ -1852,10 +1838,9 @@ class InferenceModelClassMixin(ConfigTask):
         return params
 
     @classmethod
-    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+    def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
         # prefer --inference-model set on task-level via cli
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"inference_model"}
-
         return super().req_params(inst, **kwargs)
 
     @property
