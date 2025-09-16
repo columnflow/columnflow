@@ -1635,11 +1635,6 @@ class ArrayFunction(Derivable):
     """
 
     # class-level attributes as defaults
-    call_func = None
-    pre_init_func = None
-    init_func = None
-    skip_func = None
-
     uses = set()
     produces = set()
     check_used_columns = True
@@ -1731,15 +1726,20 @@ class ArrayFunction(Derivable):
         return cls.IOFlagged(cls, cls.IOFlag.PRODUCES)
 
     @classmethod
-    def call(cls, func: Callable[[Any, ...], Any]) -> None:
+    def pre_init(cls, func: Callable[[], None]) -> None:
         """
-        Decorator to wrap a function *func* that should be registered as :py:meth:`call_func`
-        which defines the main callable for processing chunks of data. The function should accept
-        arbitrary arguments and can return arbitrary objects.
+        Decorator to wrap a function *func* that should be registered as :py:meth:`pre_init_func`
+        which is invoked prior to any dependency creation. The function should not accept arguments.
 
         The decorator does not return the wrapped function.
         """
-        cls.call_func = func
+        cls.pre_init_func = func
+
+    def pre_init_func(self) -> None:
+        """
+        Default pre-init function.
+        """
+        return
 
     @classmethod
     def init(cls, func: Callable[[], None]) -> None:
@@ -1752,16 +1752,11 @@ class ArrayFunction(Derivable):
         """
         cls.init_func = func
 
-    @classmethod
-    def pre_init(cls, func: Callable[[], None]) -> None:
+    def init_func(self) -> None:
         """
-        Decorator to wrap a function *func* that should be registered as :py:meth:`pre_init_func`
-        which is invoked prior to any dependency creation. The function should not accept positional
-        arguments.
-
-        The decorator does not return the wrapped function.
+        Default init function.
         """
-        cls.pre_init_func = func
+        return
 
     @classmethod
     def skip(cls, func: Callable[[], bool]) -> None:
@@ -1774,12 +1769,35 @@ class ArrayFunction(Derivable):
         """
         cls.skip_func = func
 
+    def skip_func(self) -> None:
+        """
+        Default skip function.
+        """
+        return
+
+    @classmethod
+    def call(cls, func: Callable[[Any, ...], Any]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`call_func`
+        which defines the main callable for processing chunks of data. The function should accept
+        arbitrary arguments and can return arbitrary objects.
+
+        The decorator does not return the wrapped function.
+        """
+        cls.call_func = func
+
+    def call_func(self, *args, **kwargs) -> Any:
+        """
+        Default call function.
+        """
+        return
+
     def __init__(
         self,
-        call_func: Callable | None = law.no_value,
-        pre_init_func: Callable | None = law.no_value,
-        init_func: Callable | None = law.no_value,
-        skip_func: Callable | None = law.no_value,
+        pre_init_func: Callable | law.NoValue | None = law.no_value,
+        init_func: Callable | law.NoValue | None = law.no_value,
+        skip_func: Callable | law.NoValue | None = law.no_value,
+        call_func: Callable | law.NoValue | None = law.no_value,
         check_used_columns: bool | None = None,
         check_produced_columns: bool | None = None,
         instance_cache: dict | None = None,
@@ -1790,14 +1808,14 @@ class ArrayFunction(Derivable):
         super().__init__()
 
         # add class-level attributes as defaults for unset arguments (no_value)
-        if call_func == law.no_value:
-            call_func = self.__class__.call_func
         if pre_init_func == law.no_value:
             pre_init_func = self.__class__.pre_init_func
         if init_func == law.no_value:
             init_func = self.__class__.init_func
         if skip_func == law.no_value:
             skip_func = self.__class__.skip_func
+        if call_func == law.no_value:
+            call_func = self.__class__.call_func
         if check_used_columns is not None:
             self.check_used_columns = check_used_columns
         if check_produced_columns is not None:
@@ -1806,14 +1824,14 @@ class ArrayFunction(Derivable):
             self.log_runtime = log_runtime
 
         # when a custom funcs are passed, bind them to this instance
-        if call_func:
-            self.call_func = call_func.__get__(self, self.__class__)
         if pre_init_func:
             self.pre_init_func = pre_init_func.__get__(self, self.__class__)
         if init_func:
             self.init_func = init_func.__get__(self, self.__class__)
         if skip_func:
             self.skip_func = skip_func.__get__(self, self.__class__)
+        if call_func:
+            self.call_func = call_func.__get__(self, self.__class__)
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
@@ -2402,10 +2420,6 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
     """
 
     # class-level attributes as defaults
-    post_init_func = None
-    requires_func = None
-    setup_func = None
-    teardown_func = None
     sandbox = None
     call_force = None
     max_chunk_size = None
@@ -2459,6 +2473,12 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         """
         cls.post_init_func = func
 
+    def post_init_func(self, task: law.Task) -> None:
+        """
+        Default post-init function.
+        """
+        return
+
     @classmethod
     def requires(cls, func: Callable[[dict], None]) -> None:
         """
@@ -2481,6 +2501,12 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         """
         cls.requires_func = func
 
+    def requires_func(self, task: law.Task, reqs: dict[str, DotDict[str, Any]]) -> None:
+        """
+        Default requires function.
+        """
+        return
+
     @classmethod
     def setup(cls, func: Callable[[dict], None]) -> None:
         """
@@ -2499,6 +2525,18 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         """
         cls.setup_func = func
 
+    def setup_func(
+        self,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]],
+        inputs: dict[str, Any],
+        reader_targets: law.util.InsertableDict,
+    ) -> None:
+        """
+        Default setup function.
+        """
+        return
+
     @classmethod
     def teardown(cls, func: Callable[[dict], None]) -> None:
         """
@@ -2511,6 +2549,12 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         The decorator does not return the wrapped function.
         """
         cls.teardown_func = func
+
+    def teardown_func(self, task: law.Task) -> None:
+        """
+        Default teardown function.
+        """
+        return
 
     def __init__(
         self,

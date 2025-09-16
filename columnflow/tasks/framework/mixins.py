@@ -209,9 +209,9 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         self.calibrator_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
-    def teardown_calibrator_inst(self) -> None:
+    def teardown_calibrator_inst(self, **kwargs) -> None:
         if self.calibrator_inst:
-            self.calibrator_inst.run_teardown(task=self)
+            self.calibrator_inst.run_teardown(task=self, **kwargs)
 
     @property
     def calibrator_repr(self) -> str:
@@ -596,9 +596,9 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         self.selector_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
-    def teardown_selector_inst(self) -> None:
+    def teardown_selector_inst(self, **kwargs) -> None:
         if self.selector_inst:
-            self.selector_inst.run_teardown(task=self)
+            self.selector_inst.run_teardown(task=self, **kwargs)
 
     @property
     def selector_repr(self) -> str:
@@ -794,9 +794,9 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
         self.reducer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
-    def teardown_reducer_inst(self) -> None:
+    def teardown_reducer_inst(self, **kwargs) -> None:
         if self.reducer_inst:
-            self.reducer_inst.run_teardown(task=self)
+            self.reducer_inst.run_teardown(task=self, **kwargs)
 
     @property
     def reducer_repr(self) -> str:
@@ -970,9 +970,9 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         self.producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
-    def teardown_producer_inst(self) -> None:
+    def teardown_producer_inst(self, **kwargs) -> None:
         if self.producer_inst:
-            self.producer_inst.run_teardown(task=self)
+            self.producer_inst.run_teardown(task=self, **kwargs)
 
     @property
     def producer_repr(self) -> str:
@@ -1211,21 +1211,8 @@ class MLModelMixinBase(ConfigTask):
 
     @classmethod
     def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
-        """
-        Get the required parameters for the task, preferring the ``--ml-model`` set on task-level
-        via CLI.
-
-        This method first checks if the ``--ml-model`` parameter is set at the task-level via the command line. If it
-        is, this parameter is preferred and added to the '_prefer_cli' key in the kwargs dictionary. The method then
-        calls the 'req_params' method of the superclass with the updated kwargs.
-
-        :param inst: The current task instance.
-        :param kwargs: Additional keyword arguments that may contain parameters for the task.
-        :return: A dictionary of parameters required for the task.
-        """
         # prefer --ml-model set on task-level via cli
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"ml_model"}
-
         return super().req_params(inst, **kwargs)
 
     @classmethod
@@ -1498,9 +1485,9 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
             self.preparation_producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
-    def teardown_preparation_producer_inst(self) -> None:
+    def teardown_preparation_producer_inst(self, **kwargs) -> None:
         if self.preparation_producer_inst:
-            self.preparation_producer_inst.run_teardown(task=self)
+            self.preparation_producer_inst.run_teardown(task=self, **kwargs)
 
     @classmethod
     def resolve_instances(cls, params: dict[str, Any], shifts: TaskShifts) -> dict[str, Any]:
@@ -1588,7 +1575,6 @@ class MLModelsMixin(ConfigTask):
     def req_params(cls, inst: law.Task, **kwargs) -> dict:
         # prefer --ml-models set on task-level via cli
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"ml_models"}
-
         return super().req_params(inst, **kwargs)
 
     @property
@@ -1815,9 +1801,9 @@ class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
         self.hist_producer_inst.run_post_init(task=self, **kwargs)
         super()._array_function_post_init(**kwargs)
 
-    def teardown_hist_producer_inst(self) -> None:
+    def teardown_hist_producer_inst(self, **kwargs) -> None:
         if self.hist_producer_inst:
-            self.hist_producer_inst.run_teardown(task=self)
+            self.hist_producer_inst.run_teardown(task=self, **kwargs)
 
     @property
     def hist_producer_repr(self) -> str:
@@ -1852,10 +1838,9 @@ class InferenceModelClassMixin(ConfigTask):
         return params
 
     @classmethod
-    def req_params(cls, inst: law.Task, **kwargs) -> dict:
+    def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
         # prefer --inference-model set on task-level via cli
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"inference_model"}
-
         return super().req_params(inst, **kwargs)
 
     @property
