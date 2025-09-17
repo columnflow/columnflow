@@ -2694,7 +2694,7 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
             if isinstance(shift, od.Shift):
                 shifts.add(shift.name)
             elif isinstance(shift, str):
-                shifts.add(shift)
+                shifts.update(law.util.brace_expand(shift))
         _cache.add(self)
 
         # add shifts of all dependent objects
