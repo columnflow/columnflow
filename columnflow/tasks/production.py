@@ -204,6 +204,7 @@ class ProduceColumnsWrapper(_ProduceColumnsWrapperBase):
     producers = law.CSVParameter(
         default=(),
         description="names of producers to use; if empty, the default producer is used",
+        brace_expand=True,
     )
 
     def __init__(self, *args, **kwargs):
