@@ -236,7 +236,10 @@ class PlotVariablesBase(_PlotVariablesBase):
                     )
 
             # update histograms using custom hooks
-            hists = self.invoke_hist_hooks(hists)
+            hists = self.invoke_hist_hooks(
+                hists,
+                hook_kwargs={"category_name": self.branch_data.category, "variable_name": self.branch_data.variable},
+            )
 
             # merge configs
             if len(self.config_insts) != 1:
