@@ -572,35 +572,6 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
             ("shift_source", str(shift_source) if shift_source else None),
         ])
 
-    @classmethod
-    def require_shapes_for_parameter(self, param_obj: dict) -> bool:
-        """
-        Function to check if for a certain parameter object *param_obj* varied
-        shapes are needed.
-
-        :param param_obj: The parameter object to check.
-        :returns: *True* if varied shapes are needed, *False* otherwise.
-        """
-        if param_obj.type.is_shape:
-            # the shape might be build from a rate, in which case input shapes are not required
-            if param_obj.transformations.any_from_rate:
-                return False
-            # in any other case, shapes are required
-            return True
-
-        if param_obj.type.is_rate:
-            # when the rate effect is extracted from shapes, they are required
-            if param_obj.transformations.any_from_shape:
-                return True
-            # in any other case, shapes are not required
-            return False
-
-        # other cases are not supported
-        raise Exception(
-            f"shape requirement cannot be evaluated for parameter '{param_obj.name}' with type " +
-            f"'{param_obj.type}' and transformations {param_obj.transformations}",
-        )
-
     def __init__(self, config_insts: list[od.Config]) -> None:
         super().__init__()
 
