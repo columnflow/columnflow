@@ -2531,6 +2531,7 @@ class HistHookMixin(ConfigTask):
     def invoke_hist_hooks(
         self,
         hists: dict[od.Config, dict[od.Process, Any]],
+        hook_kwargs: dict | None = None,
     ) -> dict[od.Config, dict[od.Process, Any]]:
         """
         Invoke hooks to modify histograms before further processing such as plotting.
@@ -2552,7 +2553,7 @@ class HistHookMixin(ConfigTask):
 
             # invoke it
             self.publish_message(f"invoking hist hook '{hook}'")
-            hists = func(self, hists)
+            hists = func(self, hists, **(hook_kwargs or {}))
 
         return hists
 
