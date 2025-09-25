@@ -417,10 +417,12 @@ class MergeHistograms(_MergeHistograms):
         )
 
     def output(self):
-        return {"hists": law.SiblingFileCollection({
-            variable_name: self.target(f"hist__var_{variable_name}.pickle")
-            for variable_name in self.variables
-        })}
+        return {
+            "hists": law.SiblingFileCollection({
+                variable_name: self.target(f"hist__var_{variable_name}.pickle")
+                for variable_name in self.variables
+            }),
+        }
 
     @law.decorator.notify
     @law.decorator.log
@@ -503,9 +505,10 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # add nominal and both directions per shift source
-        for shift in ["nominal"] + self.shifts:
-            reqs[shift] = self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+        if not self.pilot:
+            # add nominal and both directions per shift source
+            for shift in ["nominal"] + self.shifts:
+                reqs[shift] = self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
 
         return reqs
 
@@ -531,17 +534,16 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
         outputs = self.output()["hists"].targets
 
         for variable_name, outp in self.iter_progress(outputs.items(), len(outputs)):
-            self.publish_message(f"merging histograms for '{variable_name}'")
+            with self.publish_step(f"merging histograms for '{variable_name}' ..."):
+                # load hists
+                variable_hists = [
+                    coll["hists"].targets[variable_name].load(formatter="pickle")
+                    for coll in inputs.values()
+                ]
 
-            # load hists
-            variable_hists = [
-                coll["hists"].targets[variable_name].load(formatter="pickle")
-                for coll in inputs.values()
-            ]
-
-            # merge and write the output
-            merged = sum(variable_hists[1:], variable_hists[0].copy())
-            outp.dump(merged, formatter="pickle")
+                # merge and write the output
+                merged = sum(variable_hists[1:], variable_hists[0].copy())
+                outp.dump(merged, formatter="pickle")
 
 
 MergeShiftedHistogramsWrapper = wrapper_factory(
