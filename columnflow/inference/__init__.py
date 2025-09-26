@@ -1306,8 +1306,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
             for process in _processes:
                 process.parameters.append(_copy.deepcopy(parameter))
 
-        # add to groups
-        if group:
+        # add to groups if it was added to at least one process
+        if group and processes and any(_processes for _processes in processes.values()):
             self.add_parameter_to_group(parameter.name, group)
 
         return parameter
