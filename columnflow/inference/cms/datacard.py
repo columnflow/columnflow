@@ -260,6 +260,9 @@ class DatacardWriter(object):
                     type_str = "lnU"
                 blocks.tabular_parameters.append([param_name, type_str, effects])
 
+        # alphabetical, case-insensitive order by name
+        blocks.tabular_parameters.sort(key=lambda line: line[0].lower())
+
         if blocks.tabular_parameters:
             empty_lines.add("tabular_parameters")
 

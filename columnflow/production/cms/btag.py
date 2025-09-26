@@ -248,18 +248,17 @@ def btag_weights(
         events = add_weight("central", None, self.weight_name)
         for syst_name, col_name in self.btag_uncs.items():
             for direction in ["up", "down"]:
-                name = col_name.format(year=self.config_inst.campaign.x.year)
                 events = add_weight(
                     syst_name,
                     direction,
-                    f"{self.weight_name}_{name}_{direction}",
+                    f"{self.weight_name}_{col_name}_{direction}",
                 )
                 if syst_name in ["cferr1", "cferr2"]:
                     # for c flavor uncertainties, multiply the uncertainty with the nominal btag weight
                     events = set_ak_column(
                         events,
-                        f"{self.weight_name}_{name}_{direction}",
-                        events[self.weight_name] * events[f"{self.weight_name}_{name}_{direction}"],
+                        f"{self.weight_name}_{col_name}_{direction}",
+                        events[self.weight_name] * events[f"{self.weight_name}_{col_name}_{direction}"],
                         value_type=np.float32,
                     )
     elif self.shift_is_known_jec_source:
@@ -287,7 +286,7 @@ def btag_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
 
     # NOTE: we currently setup the produced columns only during the post_init. This means
     # that the `produces` of this Producer will be empty during task initialization, meaning
-    # that this Producer would be skipped if one would directly request it on command line
+    # that this Producer would be skipped if one would directly request it on the command line
 
     # gather info
     self.btag_config = self.get_btag_config()
@@ -303,14 +302,14 @@ def btag_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
         self.jec_source and btag_sf_jec_source in self.btag_config.jec_sources
     )
 
-    # save names of method-intrinsic uncertainties
+    # names of method-intrinsic uncertainties, mapped to how they are namend in produced columns
     self.btag_uncs = {
         "hf": "hf",
         "lf": "lf",
-        "hfstats1": "hfstats1_{year}",
-        "hfstats2": "hfstats2_{year}",
-        "lfstats1": "lfstats1_{year}",
-        "lfstats2": "lfstats2_{year}",
+        "hfstats1": "hfstats1",
+        "hfstats2": "hfstats2",
+        "lfstats1": "lfstats1",
+        "lfstats2": "lfstats2",
         "cferr1": "cferr1",
         "cferr2": "cferr2",
     }
@@ -321,9 +320,7 @@ def btag_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
         self.produces.add(self.weight_name)
         # all varied columns
         for col_name in self.btag_uncs.values():
-            name = col_name.format(year=self.config_inst.campaign.x.year)
-            for direction in ["up", "down"]:
-                self.produces.add(f"{self.weight_name}_{name}_{direction}")
+            self.produces.add(f"{self.weight_name}_{col_name}_{{up,down}}")
     elif self.shift_is_known_jec_source:
         # jec varied column
         self.produces.add(f"{self.weight_name}_jec_{self.jec_source}_{shift_inst.direction}")
