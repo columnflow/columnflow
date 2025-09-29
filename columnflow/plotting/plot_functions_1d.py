@@ -27,6 +27,7 @@ from columnflow.plotting.plot_util import (
     get_position,
     get_profile_variations,
     blind_sensitive_bins,
+    remove_negative_contributions,
     join_labels,
 )
 from columnflow.hist_util import add_missing_shifts
@@ -64,6 +65,11 @@ def plot_variable_stack(
     blinding_threshold = kwargs.get("blinding_threshold", None)
     if blinding_threshold:
         hists = blind_sensitive_bins(hists, config_inst, blinding_threshold)
+
+    # remove negative contributions per process if requested
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
+
     # process scaling
     hists = apply_process_scaling(hists)
     # density scaling per bin
@@ -175,6 +181,8 @@ def plot_variable_variants(
 
     variable_inst = variable_insts[0]
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     if density:
         hists = apply_density(hists, density)
 
@@ -245,6 +253,8 @@ def plot_shifted_variable(
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)
@@ -449,6 +459,8 @@ def plot_profile(
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)
