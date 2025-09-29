@@ -526,7 +526,28 @@ class DatacardWriter(object):
                     # apply optional transformations
                     integral = lambda h: h.sum().value
                     for trafo in param_obj.transformations:
-                        if trafo == ParameterTransformation.centralize:
+                        if trafo == ParameterTransformation.ratify:
+                            n, d, u = integral(h_nom), integral(h_down), integral(h_up)
+                            ratio_up = safe_div(u, n)
+                            ratio_down = safe_div(d, n)
+                            h_down = h_nom.copy() * ratio_down
+                            h_up = h_nom.copy() * ratio_up
+
+                        elif trafo == ParameterTransformation.envelope_if_one_sided:
+                            n, d, u = integral(h_nom), integral(h_down), integral(h_up)
+                            if (n - d) * (n - u) > 0:
+                                # one-sided effect, use the larger variation
+                                if abs(n - d) > abs(n - u):
+                                    # use the down variation with effect flipped
+                                    h_up = 2 * h_nom.copy() - h_down.view()
+                                    # TODO: better estimate of the variance
+                                    h_up.view().variance = h_down.variances()
+                                else:
+                                    # use the up variation with effect flipped
+                                    h_down = 2 * h_nom.copy() - h_up.view()
+                                    h_down.view().variance = h_up.variances()
+
+                        elif trafo == ParameterTransformation.centralize:
                             # get the absolute spread based on integrals
                             n, d, u = integral(h_nom), integral(h_down), integral(h_up)
                             if not (min(d, n) <= n <= max(d, n)):
