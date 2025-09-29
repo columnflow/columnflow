@@ -268,6 +268,9 @@ class SerializeInferenceModelBase(
                 h = h[{"process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]]}]
                 h = h[{"process": sum}]
 
+                # additional custom reductions
+                h = self.modify_process_hist(process_inst, h)
+
                 # store it
                 if process_inst in hists:
                     hists[process_inst] += h
@@ -275,3 +278,13 @@ class SerializeInferenceModelBase(
                     hists[process_inst] = h
 
         return hists
+
+    def modify_process_hist(self, process_inst: od.Process, h: hist.Hist) -> hist.Hist:
+        """
+        Hook to modify a process histogram after it has been loaded. This can be helpful to reduce memory early on.
+
+        :param process_inst: The process instance the histogram belongs to.
+        :param histo: The histogram to modify.
+        :return: The modified histogram.
+        """
+        return h
