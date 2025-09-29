@@ -95,7 +95,6 @@ class ParameterTransformation(enum.Enum):
     normalize = "normalize"
     effect_from_shape = "effect_from_shape"
     effect_from_rate = "effect_from_rate"
-    ratify = "ratify"
     envelope_if_one_sided = "envelope_if_one_sided"
 
     def __str__(self: ParameterTransformation) -> str:
