@@ -314,6 +314,15 @@ def apply_variable_settings(
     return hists, variable_style_config
 
 
+def remove_negative_contributions(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hist.Hist]:
+    for proc_inst, h in list(hists.items()):
+        h = h.copy()
+        h.view().value[h.view().value < 0] = 0
+        h.view().variance[h.view().variance < 0] = 0
+        hists[proc_inst] = h
+    return hists
+
+
 def use_flow_bins(
     h_in: hist.Hist,
     axis_name: str | int,
