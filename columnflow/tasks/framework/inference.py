@@ -6,6 +6,8 @@ Base tasks for writing serialized statistical inference models.
 
 from __future__ import annotations
 
+import pickle
+
 import law
 import order as od
 
@@ -15,7 +17,7 @@ from columnflow.tasks.framework.mixins import (
     InferenceModelMixin, HistHookMixin, MLModelsMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
-from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
+from columnflow.tasks.histograms import MergeShiftedHistograms
 from columnflow.util import dev_sandbox, DotDict, maybe_import
 from columnflow.config_util import get_datasets_from_process
 
@@ -42,7 +44,6 @@ class SerializeInferenceModelBase(
     # upstream requirements
     reqs = Requirements(
         RemoteWorkflow.reqs,
-        MergeHistograms=MergeHistograms,
         MergeShiftedHistograms=MergeShiftedHistograms,
     )
 
@@ -106,153 +107,184 @@ class SerializeInferenceModelBase(
             )
         ]
 
-    def create_branch_map(self):
-        return list(self.inference_model_inst.categories)
-
-    def _requires_cat_obj(self, cat_obj: DotDict, merge_variables: bool = False, **req_kwargs):
-        """
-        Helper to create the requirements for a single category object.
-
-        :param cat_obj: category object from an InferenceModel
-        :param merge_variables: whether to merge the variables from all requested category objects
-        :return: requirements for the category object
-        """
-        reqs = {}
-        for config_inst in self.config_insts:
-            if not (config_data := cat_obj.config_data.get(config_inst.name)):
-                continue
-
-            if merge_variables:
-                variables = tuple(
-                    _cat_obj.config_data.get(config_inst.name).variable
-                    for _cat_obj in self.branch_map.values()
-                )
-            else:
-                variables = (config_data.variable,)
-
-            # add merged shifted histograms for mc
-            reqs[config_inst.name] = {
-                proc_obj.name: {
-                    dataset: self.reqs.MergeShiftedHistograms.req_different_branching(
-                        self,
-                        config=config_inst.name,
-                        dataset=dataset,
-                        shift_sources=tuple(
-                            param_obj.config_data[config_inst.name].shift_source
-                            for param_obj in proc_obj.parameters
-                            if (
-                                config_inst.name in param_obj.config_data and
-                                self.inference_model_inst.require_shapes_for_parameter(param_obj)
-                            )
-                        ),
-                        variables=variables,
-                        **req_kwargs,
-                    )
-                    for dataset in self.get_mc_datasets(config_inst, proc_obj)
-                }
-                for proc_obj in cat_obj.processes
-                if config_inst.name in proc_obj.config_data and not proc_obj.is_dynamic
+    @law.workflow_property(cache=True)
+    def combined_config_data(self) -> dict[od.ConfigInst, dict[str, dict | set]]:
+        # prepare data extracted from the inference model
+        config_data = {
+            config_inst: {
+                # all variables used in this config in any datacard category
+                "variables": set(),
+                # plain set of names of real data datasets
+                "data_datasets": set(),
+                # per name of mc dataset, the set of shift sources and the name of the datacard process object
+                "mc_datasets": {},
             }
-            # add merged histograms for data, but only if
-            # - data in that category is not faked from mc, or
-            # - at least one process object is dynamic (that usually means data-driven)
-            if (
-                (not cat_obj.data_from_processes or any(proc_obj.is_dynamic for proc_obj in cat_obj.processes)) and
-                (data_datasets := self.get_data_datasets(config_inst, cat_obj))
-            ):
-                reqs[config_inst.name]["data"] = {
-                    dataset: self.reqs.MergeHistograms.req_different_branching(
-                        self,
-                        config=config_inst.name,
-                        dataset=dataset,
-                        variables=variables,
-                        **req_kwargs,
-                    )
-                    for dataset in data_datasets
-                }
+            for config_inst in self.config_insts
+        }
+
+        # iterate over all model categories
+        for cat_obj in self.inference_model_inst.categories:
+            # keep track of per-category information for consistency checks
+            variables = set()
+            categories = set()
+
+            # iterate over configs relevant for this category
+            config_insts = [config_inst for config_inst in self.config_insts if config_inst.name in cat_obj.config_data]
+            for config_inst in config_insts:
+                data = config_data[config_inst]
+
+                # variables
+                data["variables"].add(cat_obj.config_data[config_inst.name].variable)
+
+                # data datasets, but only if
+                #   - data in that category is not faked from mc processes, or
+                #   - at least one process object is dynamic (that usually means data-driven)
+                if not cat_obj.data_from_processes or any(proc_obj.is_dynamic for proc_obj in cat_obj.processes):
+                    data["data_datasets"].update(self.get_data_datasets(config_inst, cat_obj))
+
+                # mc datasets over all process objects
+                #   - the process is not dynamic
+                for proc_obj in cat_obj.processes:
+                    mc_datasets = self.get_mc_datasets(config_inst, proc_obj)
+                    for dataset_name in mc_datasets:
+                        if dataset_name not in data["mc_datasets"]:
+                            data["mc_datasets"][dataset_name] = {
+                                "proc_name": proc_obj.name,
+                                "shift_sources": set(),
+                            }
+                        elif data["mc_datasets"][dataset_name]["proc_name"] != proc_obj.name:
+                            raise ValueError(
+                                f"dataset '{dataset_name}' was already assigned to datacard process "
+                                f"'{data['mc_datasets'][dataset_name]['proc_name']}' and cannot be re-assigned to "
+                                f"'{proc_obj.name}' in config '{config_inst.name}'",
+                            )
+
+                    # shift sources
+                    for param_obj in proc_obj.parameters:
+                        if config_inst.name not in param_obj.config_data:
+                            continue
+                        # only add if a shift is required for this parameter
+                        if param_obj.type.is_shape or any(trafo.from_shape for trafo in param_obj.transformations):
+                            shift_source = param_obj.config_data[config_inst.name].shift_source
+                            for mc_dataset in mc_datasets:
+                                data["mc_datasets"][mc_dataset]["shift_sources"].add(shift_source)
+
+                # for consistency checks later
+                variables.add(cat_obj.config_data[config_inst.name].variable)
+                categories.add(cat_obj.config_data[config_inst.name].category)
+
+            # consistency checks: the config-based variable and category names must be identical
+            if len(variables) != 1:
+                raise ValueError(
+                    f"found diverging variables to be used in datacard category '{cat_obj.name}' across configs "
+                    f"{', '.join(c.name for c in config_insts)}: {variables}",
+                )
+            if len(categories) != 1:
+                raise ValueError(
+                    f"found diverging categories to be used in datacard category '{cat_obj.name}' across configs "
+                    f"{', '.join(c.name for c in config_insts)}: {categories}",
+                )
+
+        return config_data
+
+    def create_branch_map(self):
+        # dummy branch map
+        return {0: None}
+
+    def _hist_requirements(self, **kwargs):
+        # gather data from inference model to define requirements in the structure
+        # config_name -> dataset_name -> MergeHistogramsTask
+        reqs = {}
+        for config_inst, data in self.combined_config_data.items():
+            reqs[config_inst.name] = {}
+            # mc datasets
+            for dataset_name in sorted(data["mc_datasets"]):
+                reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
+                    self,
+                    config=config_inst.name,
+                    dataset=dataset_name,
+                    shift_sources=tuple(sorted(data["mc_datasets"][dataset_name]["shift_sources"])),
+                    variables=tuple(sorted(data["variables"])),
+                    **kwargs,
+                )
+            # data datasets
+            for dataset_name in sorted(data["data_datasets"]):
+                reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
+                    self,
+                    config=config_inst.name,
+                    dataset=dataset_name,
+                    shift_sources=(),
+                    variables=tuple(sorted(data["variables"])),
+                    **kwargs,
+                )
 
         return reqs
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-
-        reqs["merged_hists"] = hist_reqs = {}
-        for cat_obj in self.branch_map.values():
-            cat_reqs = self._requires_cat_obj(cat_obj, merge_variables=True)
-            for config_name, proc_reqs in cat_reqs.items():
-                hist_reqs.setdefault(config_name, {})
-                for proc_name, dataset_reqs in proc_reqs.items():
-                    hist_reqs[config_name].setdefault(proc_name, {})
-                    for dataset_name, task in dataset_reqs.items():
-                        hist_reqs[config_name][proc_name].setdefault(dataset_name, set()).add(task)
+        reqs["merged_hists"] = self._hist_requirements()
         return reqs
 
     def requires(self):
-        cat_obj = self.branch_data
-        return self._requires_cat_obj(cat_obj, branch=-1, workflow="local")
+        return self._hist_requirements(branch=-1, workflow="local")
 
     def load_process_hists(
         self,
-        inputs: dict,
-        cat_obj: DotDict,
         config_inst: od.Config,
-    ) -> dict[od.Process, hist.Hist]:
-        # loop over all configs required by the datacard category and gather histograms
-        config_data = cat_obj.config_data.get(config_inst.name)
-
-        # collect histograms per config process
+        dataset_names: list[str],
+        variable: str,
+        inputs: dict,
+    ) -> dict[str, dict[od.Process, hist.Hist]]:
+        # collect histograms per variable and process
         hists: dict[od.Process, hist.Hist] = {}
-        with self.publish_step(
-            f"extracting {config_data.variable} in {config_data.category} for config {config_inst.name}...",
-        ):
-            for proc_obj_name, inp in inputs[config_inst.name].items():
-                if proc_obj_name == "data":
+
+        with self.publish_step(f"extracting '{variable}' for config {config_inst.name} ..."):
+            for dataset_name in dataset_names:
+                dataset_inst = config_inst.get_dataset(dataset_name)
+                process_inst = dataset_inst.processes.get_first()
+
+                # for real data, fallback to the main data process
+                if process_inst.is_data:
                     process_inst = config_inst.get_process("data")
-                else:
-                    proc_obj = self.inference_model_inst.get_process(proc_obj_name, category=cat_obj.name)
-                    process_inst = config_inst.get_process(proc_obj.config_data[config_inst.name].process)
+
+                # gather all subprocesses for a full query later
                 sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
-                # loop over per-dataset inputs and extract histograms containing the process
-                h_proc = None
-                for dataset_name, _inp in inp.items():
-                    dataset_inst = config_inst.get_dataset(dataset_name)
+                # open the histogram and work on a copy
+                inp = inputs[dataset_name]["collection"][0]["hists"][variable]
+                try:
+                    h = inp.load(formatter="pickle").copy()
+                except pickle.UnpicklingError as e:
+                    raise Exception(
+                        f"failed to load '{variable}' histogram for dataset '{dataset_name}' in config "
+                        f"'{config_inst.name}' from {inp.abspath}",
+                    ) from e
 
-                    # skip when the dataset is already known to not contain any sub process
-                    if not any(map(dataset_inst.has_process, sub_process_insts)):
-                        self.logger.warning(
-                            f"dataset '{dataset_name}' does not contain process '{process_inst.name}' or any of "
-                            "its subprocesses which indicates a misconfiguration in the inference model "
-                            f"'{self.inference_model}'",
-                        )
-                        continue
+                # there must be at least one matching sub process
+                if not any(p.name in h.axes["process"] for p in sub_process_insts):
+                    raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
 
-                    # open the histogram and work on a copy
-                    h = _inp["collection"][0]["hists"][config_data.variable].load(formatter="pickle").copy()
+                # select and reduce over relevant processes
+                h = h[{"process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]]}]
+                h = h[{"process": sum}]
 
-                    # axis selections
-                    h = h[{
-                        "process": [
-                            hist.loc(p.name)
-                            for p in sub_process_insts
-                            if p.name in h.axes["process"]
-                        ],
-                    }]
+                # additional custom reductions
+                h = self.modify_process_hist(process_inst, h)
 
-                    # axis reductions
-                    h = h[{"process": sum}]
-
-                    # add the histogram for this dataset
-                    if h_proc is None:
-                        h_proc = h
-                    else:
-                        h_proc += h
-
-                # there must be a histogram
-                if h_proc is None:
-                    raise Exception(f"no histograms found for process '{process_inst.name}'")
-
-                # save histograms mapped to processes
-                hists[process_inst] = h_proc
+                # store it
+                if process_inst in hists:
+                    hists[process_inst] += h
+                else:
+                    hists[process_inst] = h
 
         return hists
+
+    def modify_process_hist(self, process_inst: od.Process, h: hist.Hist) -> hist.Hist:
+        """
+        Hook to modify a process histogram after it has been loaded. This can be helpful to reduce memory early on.
+
+        :param process_inst: The process instance the histogram belongs to.
+        :param histo: The histogram to modify.
+        :return: The modified histogram.
+        """
+        return h
