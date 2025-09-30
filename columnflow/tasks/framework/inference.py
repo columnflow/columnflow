@@ -164,7 +164,10 @@ class SerializeInferenceModelBase(
                         if config_inst.name not in param_obj.config_data:
                             continue
                         # only add if a shift is required for this parameter
-                        if param_obj.type.is_shape or any(trafo.from_shape for trafo in param_obj.transformations):
+                        if (
+                            (param_obj.type.is_shape and not param_obj.transformations.any_from_rate) or
+                            (param_obj.type.is_rate and param_obj.transformations.any_from_shape)
+                        ):
                             shift_source = param_obj.config_data[config_inst.name].shift_source
                             for mc_dataset in mc_datasets:
                                 data["mc_datasets"][mc_dataset]["shift_sources"].add(shift_source)
