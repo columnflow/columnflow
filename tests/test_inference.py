@@ -106,7 +106,7 @@ class TestInferenceModel(unittest.TestCase):
         # Test data
         name = "test_parameter"
         type = ParameterType.rate_gauss
-        transformations = [ParameterTransformation.centralize, ParameterTransformation.symmetrize]
+        transformations = [ParameterTransformation.symmetrize]
         config_name = "test_config"
         config_shift_source = "test_shift_source"
         effect = 1.5

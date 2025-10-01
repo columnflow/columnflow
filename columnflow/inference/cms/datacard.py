@@ -41,10 +41,101 @@ class DatacardWriter(object):
 
         At the moment, all shapes are written into the same root file and a shape line with wildcards for both bin and
         process resolution is created.
+
+    As per the definition in :py:class:`ParameterTransformation`, the following parameter effect transormations are
+    implemented with the following details.
+
+        - :py:attr:`ParameterTransformation.effect_from_rate`: Creates shape variations from a rate-style effect.
+            Shape-type parameters only.
+        - :py:attr:`ParameterTransformation.effect_from_shape`: Converts the integral effect of shape variations to an
+            asymmetric rate-style effect. Rate-type parameters only.
+        - :py:attr:`ParameterTransformation.effect_from_shape_if_small`: Same as above with a default threshold of 2%.
+            Configurable via *effect_from_shape_if_small_threshold*. The parameter should initially be of rate-type, but
+            in case the threshold is not met, the effect is interpreted as shape-type.
+        - :py:attr:`ParameterTransformation.symmetrize`: Changes up and down variations of either rate effects and
+            shapes to symmetrize them around the nominal value. For rate-type parameters, this has no effect if the
+            effect strength was provided by a single value. There is no conversion into a single value and consequently,
+            the result is always a two-valued effect.
+        - :py:attr:`ParameterTransformation.asymmetrize`: Converts single-valued to two-valued effects for rate-style
+            parameters.
+        - :py:attr:`ParameterTransformation.asymmetrize_if_large`: Same as above, with a default threshold of 20%.
+            Configurable via *asymmetrize_if_large_threshold*.
+        - :py:attr:`ParameterTransformation.normalize`: Normalizes shape variations such that their integrals match that
+            of the nominal shape.
+        - :py:attr:`ParameterTransformation.envelope`: Takes the bin-wise maximum in each direction of the up and down
+            variations of shape-type parameters and constructs new shapes.
+        - :py:attr:`ParameterTransformation.envelope_if_one_sided`: Same as above, but only in bins where up and down
+            contributions are one-sided.
+        - :py:attr:`ParameterTransformation.envelope_enforce_two_sided`: Same as :py:attr:`envelope`, but it enforces
+            that the up (down) variation of the constructed envelope is always above (below) the nominal one.
+
+    .. note::
+
+        If used, the transformations :py:attr:`ParameterTransformation.effect_from_rate`,
+        :py:attr:`ParameterTransformation.effect_from_shape`, and
+        :py:attr:`ParameterTransformation.effect_from_shape_if_small` must be the first element in the sequence of
+        transformations to be applied. The remaining transformations are applied in order based on the outcome of the
+        effect conversion.
     """
 
     # minimum separator between columns
     col_sep = "  "
+
+    # specific sets of transformations
+    first_index_trafos = {
+        ParameterTransformation.effect_from_rate,
+        ParameterTransformation.effect_from_shape,
+        ParameterTransformation.effect_from_shape_if_small,
+    }
+    shape_only_trafos = {
+        ParameterTransformation.effect_from_rate,
+        ParameterTransformation.normalize,
+        ParameterTransformation.envelope,
+        ParameterTransformation.envelope_if_one_sided,
+        ParameterTransformation.envelope_enforce_two_sided,
+    }
+    rate_only_trafos = {
+        ParameterTransformation.effect_from_shape,
+        ParameterTransformation.effect_from_shape_if_small,
+        ParameterTransformation.asymmetrize,
+        ParameterTransformation.asymmetrize_if_large,
+    }
+
+    @classmethod
+    def validate_model(cls, inference_model_inst: InferenceModel, silent: bool = False) -> bool:
+        # perform parameter checks one after another, collect errors along the way
+        errors: list[str] = []
+        for cat_name, proc_name, param_obj in inference_model_inst.iter_parameters():
+            # check the transformations
+            _errors: list[str] = []
+            for i, trafo in enumerate(param_obj.transformations):
+                if i != 0 and trafo in cls.first_index_trafos:
+                    _errors.append(
+                        f"parameter transformation '{trafo}' must be the first one to apply, but found at index {i}",
+                    )
+                if not param_obj.type.is_shape and trafo in cls.shape_only_trafos:
+                    _errors.append(
+                        f"parameter transformation '{trafo}' only applies to shape-type parameters, but found type "
+                        f"'{param_obj.type}'",
+                    )
+                if not param_obj.type.is_rate and trafo in cls.rate_only_trafos:
+                    _errors.append(
+                        f"parameter transformation '{trafo}' only applies to rate-type parameters, but found type "
+                        f"'{param_obj.type}'",
+                    )
+            errors.extend(
+                f"for parameter '{param_obj}' in process '{proc_name}' in category '{cat_name}': {err}"
+                for err in _errors
+            )
+
+        # handle errors
+        if errors:
+            if silent:
+                return False
+            errors_repr = "\n  - ".join(errors)
+            raise ValueError(f"inference model invalid, reasons:\n  - {errors_repr}")
+
+        return True
 
     def __init__(
         self,
@@ -52,6 +143,8 @@ class DatacardWriter(object):
         histograms: DatacardHists,
         rate_precision: int = 4,
         effect_precision: int = 4,
+        effect_from_shape_if_small_threshold: float = 0.02,
+        asymmetrize_if_large_threshold: float = 0.2,
     ) -> None:
         super().__init__()
 
@@ -60,6 +153,11 @@ class DatacardWriter(object):
         self.histograms = histograms
         self.rate_precision = rate_precision
         self.effect_precision = effect_precision
+        self.effect_from_shape_if_small_threshold = effect_from_shape_if_small_threshold
+        self.asymmetrize_if_large_threshold = asymmetrize_if_large_threshold
+
+        # validate the inference model
+        self.validate_model(self.inference_model_inst)
 
     def write(
         self,
@@ -152,10 +250,10 @@ class DatacardWriter(object):
         # tabular-style parameters
         blocks.tabular_parameters = []
         for param_name in self.inference_model_inst.get_parameters(flat=True):
-            param_obj = None
+            types = set()
             effects = []
             for cat_name, proc_name in flat_rates:
-                _param_obj = self.inference_model_inst.get_parameter(
+                param_obj = self.inference_model_inst.get_parameter(
                     param_name,
                     category=cat_name,
                     process=proc_name,
@@ -163,43 +261,43 @@ class DatacardWriter(object):
                 )
 
                 # skip line-style parameters as they are handled separately below
-                if _param_obj and _param_obj.type == ParameterType.rate_unconstrained:
+                if param_obj and param_obj.type == ParameterType.rate_unconstrained:
                     continue
 
                 # empty effect
-                if _param_obj is None:
+                if param_obj is None:
                     effects.append("-")
                     continue
 
-                # compare with previous param_obj
-                if param_obj is None:
-                    param_obj = _param_obj
-                elif _param_obj.type != param_obj.type:
+                # compare with previously seen types as combine cannot mix arbitrary parameter types acting differently
+                # on different processes
+                types.add(param_obj.type)
+                if len(types) > 1 and types != {ParameterType.rate_gauss, ParameterType.shape}:
                     raise ValueError(
-                        f"misconfigured parameter '{param_name}' with type '{_param_obj.type}' that was previously "
-                        f"seen with incompatible type '{param_obj.type}'",
+                        f"misconfigured parameter '{param_name}' with type '{param_obj.type}' that was previously "
+                        f"seen with incompatible type(s) '{types - {param_obj.type}}'",
                     )
 
                 # get the effect
-                effect = _param_obj.effect
+                effect = param_obj.effect
 
                 # rounding helper depending on the effect precision
                 effect_precision = (
                     self.effect_precision
-                    if _param_obj.effect_precision <= 0
-                    else _param_obj.effect_precision
+                    if param_obj.effect_precision <= 0
+                    else param_obj.effect_precision
                 )
                 rnd = lambda f: round(f, effect_precision)
 
                 # update and transform effects
-                if _param_obj.type.is_rate:
-                    # obtain from shape effects when requested
-                    if _param_obj.transformations.any_from_shape:
-                        effect = shape_effects[cat_name][proc_name][param_name]
-
+                if param_obj.type.is_rate:
                     # apply transformations one by one
-                    for trafo in _param_obj.transformations:
-                        if trafo == ParameterTransformation.centralize:
+                    for trafo in param_obj.transformations:
+                        if trafo.from_shape:
+                            # take effect from shape variations
+                            effect = shape_effects[cat_name][proc_name][param_name]
+
+                        elif trafo == ParameterTransformation.symmetrize:
                             # skip symmetric effects
                             if not isinstance(effect, tuple) and len(effect) != 2:
                                 continue
@@ -210,36 +308,31 @@ class DatacardWriter(object):
                             diff = 0.5 * (d + u) - 1.0
                             effect = (effect[0] - diff, effect[1] - diff)
 
-                        elif trafo == ParameterTransformation.symmetrize:
-                            # skip symmetric effects
-                            if not isinstance(effect, tuple) and len(effect) != 2:
-                                continue
-                            # skip one sided effects
-                            if not (min(effect) <= 1 <= max(effect)):
-                                continue
-                            d, u = effect
-                            effect = 0.5 * (u - d) + 1.0
-
-                        elif trafo == ParameterTransformation.asymmetrize or (
-                            trafo == ParameterTransformation.asymmetrize_if_large and
-                            isinstance(effect, float) and
-                            abs(effect - 1.0) >= 0.2
+                        elif (
+                            trafo == ParameterTransformation.asymmetrize or
+                            (
+                                trafo == ParameterTransformation.asymmetrize_if_large and
+                                isinstance(effect, float) and
+                                abs(effect - 1.0) >= self.asymmetrize_if_large_threshold
+                            )
                         ):
                             # skip asymmetric effects
                             if not isinstance(effect, float):
                                 continue
                             effect = (2.0 - effect, effect)
 
-                elif _param_obj.type.is_shape:
-                    # when the shape was constructed from a rate, reset the effect to 1
-                    if _param_obj.transformations.any_from_rate:
-                        effect = 1.0
+                elif param_obj.type.is_shape:
+                    # apply transformations one by one
+                    for trafo in param_obj.transformations:
+                        if trafo.from_rate:
+                            # when the shape was constructed from a rate, reset the effect to 1
+                            effect = 1.0
 
                 # encode the effect
                 if isinstance(effect, (int, float)):
                     if effect == 0.0:
                         effects.append("-")
-                    elif effect == 1.0 and _param_obj.type.is_shape:
+                    elif effect == 1.0 and param_obj.type.is_shape:
                         effects.append("1")
                     else:
                         effects.append(str(rnd(effect)))
@@ -252,12 +345,22 @@ class DatacardWriter(object):
                     )
 
             # add the tabular line
-            if param_obj and effects:
-                type_str = "shape"
-                if param_obj.type == ParameterType.rate_gauss:
-                    type_str = "lnN"
-                elif param_obj.type == ParameterType.rate_uniform:
-                    type_str = "lnU"
+            if types and effects:
+                type_str = None
+                if len(types) == 1:
+                    _type = list(types)[0]
+                    if _type == ParameterType.rate_gauss:
+                        type_str = "lnN"
+                    elif _type == ParameterType.rate_uniform:
+                        type_str = "lnU"
+                    elif _type == ParameterType.shape:
+                        type_str = "shape"
+                elif types == {ParameterType.rate_gauss, ParameterType.shape}:
+                    # when mixing lnN and shape effects, combine expects the "?" type and makes the actual decision
+                    # dependend on the presence of shape variations in the accompanying shape files
+                    type_str = "?"
+                if not type_str:
+                    raise ValueError(f"misconfigured parameter '{param_name}' with incompatible type(s) '{types}'")
                 blocks.tabular_parameters.append([param_name, type_str, effects])
 
         # alphabetical, case-insensitive order by name
@@ -477,27 +580,52 @@ class DatacardWriter(object):
                         )
                     return sum(map(get, hists[1:]), get(hists[0]).copy())
 
+                # helper to extract sum of hists, apply scale, handle flow and fill empty bins
+                def load(
+                    hist_name: str,
+                    hist_key: Hashable,
+                    fallback_key: Hashable | None = None,
+                    scale: float = 1.0,
+                ) -> hist.Hist:
+                    h = sum_hists(hist_key, fallback_key) * scale
+                    handle_flow(cat_obj, h, hist_name)
+                    fill_empty(cat_obj, h)
+                    return h
+
                 # get the process scale (usually 1)
                 proc_obj = self.inference_model_inst.get_process(proc_name, category=cat_name)
                 scale = proc_obj.scale
 
                 # nominal shape
-                h_nom = sum_hists("nominal") * scale
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
-                fill_empty(cat_obj, h_nom)
-                handle_flow(cat_obj, h_nom, nom_name)
+                h_nom = load(nom_name, "nominal", scale=scale)
                 out_file[nom_name] = h_nom
                 _rates[proc_name] = h_nom.sum().value
+                integral = lambda h: h.sum().value
 
                 # prepare effects
                 __effects = _effects[proc_name] = OrderedDict()
 
-                # go through all parameters and check if varied shapes need to be processed
+                # go through all parameters and potentially handle varied shapes
                 for _, _, param_obj in self.inference_model_inst.iter_parameters(category=cat_name, process=proc_name):
+                    down_name = syst_pattern.format(
+                        category=cat_name,
+                        process=proc_name,
+                        parameter=param_obj.name,
+                        direction="Down",
+                    )
+                    up_name = syst_pattern.format(
+                        category=cat_name,
+                        process=proc_name,
+                        parameter=param_obj.name,
+                        direction="Up",
+                    )
+
                     # read or create the varied histograms, or skip the parameter
                     if param_obj.type.is_shape:
                         # the source of the shape depends on the transformation
                         if param_obj.transformations.any_from_rate:
+                            # create the shape from the nominal one and an integral rate effect
                             if isinstance(param_obj.effect, float):
                                 f_down, f_up = 2.0 - param_obj.effect, param_obj.effect
                             elif isinstance(param_obj.effect, tuple) and len(param_obj.effect) == 2:
@@ -510,43 +638,46 @@ class DatacardWriter(object):
                             h_down = h_nom.copy() * f_down
                             h_up = h_nom.copy() * f_up
                         else:
-                            # just extract the shapes
-                            h_down = sum_hists((param_obj.name, "down"), "nominal") * scale
-                            h_up = sum_hists((param_obj.name, "up"), "nominal") * scale
+                            # just extract the shapes from the inputs
+                            h_down = load(down_name, (param_obj.name, "down"), "nominal", scale=scale)
+                            h_up = load(up_name, (param_obj.name, "up"), "nominal", scale=scale)
 
                     elif param_obj.type.is_rate:
                         if param_obj.transformations.any_from_shape:
                             # just extract the shapes
-                            h_down = sum_hists((param_obj.name, "down"), "nominal") * scale
-                            h_up = sum_hists((param_obj.name, "up"), "nominal") * scale
+                            h_down = load(down_name, (param_obj.name, "down"), "nominal", scale=scale)
+                            h_up = load(up_name, (param_obj.name, "up"), "nominal", scale=scale)
+
+                            # in case the transformation is effect_from_shape_if_small, and any of the two relative
+                            # integral effects are above the required "small" threshold, convert the parameter to
+                            # shape-type and drop all transformations that do not apply to shapes
+                            if param_obj.transformations[0] == ParameterTransformation.effect_from_shape_if_small:
+                                n, d, u = integral(h_nom), integral(h_down), integral(h_up)
+                                rel_diff_d = safe_div(abs(n - d), n)
+                                rel_diff_u = safe_div(abs(u - n), n)
+                                if min(rel_diff_d, rel_diff_u) > self.effect_from_shape_if_small_threshold:
+                                    param_obj.type = ParameterType.shape
+                                    param_obj.transformations = type(param_obj.transformations)(
+                                        trafo for trafo in param_obj.transformations[1:]
+                                        if trafo not in self.rate_only_trafos
+                                    )
                         else:
-                            # skip the parameter
                             continue
 
-                    # apply optional transformations
-                    integral = lambda h: h.sum().value
-                    for trafo in param_obj.transformations:
-                        if trafo == ParameterTransformation.envelope_if_one_sided:
-                            n, d, u = integral(h_nom), integral(h_down), integral(h_up)
-                            if (n - d) * (n - u) > 0:
-                                # one-sided effect, use the larger variation
-                                if abs(n - d) > abs(n - u):
-                                    # use the down variation with effect flipped
-                                    h_up = 2 * h_nom.copy() - h_down.view()
-                                    # TODO: better estimate of the variance
-                                    h_up.view().variance = h_down.variances()
-                                else:
-                                    # use the up variation with effect flipped
-                                    h_down = 2 * h_nom.copy() - h_up.view()
-                                    h_down.view().variance = h_up.variances()
+                    else:
+                        # other effect type that is not handled yet
+                        logger.warning(f"datacard parameter '{param_obj.name}' has unsupported type '{param_obj.type}'")
+                        continue
 
-                        elif trafo == ParameterTransformation.centralize:
+                    # apply optional transformations one by one
+                    for trafo in param_obj.transformations:
+                        if trafo == ParameterTransformation.symmetrize:
                             # get the absolute spread based on integrals
                             n, d, u = integral(h_nom), integral(h_down), integral(h_up)
+                            # skip one sided effects
                             if not (min(d, n) <= n <= max(d, n)):
-                                # skip one sided effects
                                 logger.info(
-                                    f"skipping shape centralization of parameter '{param_obj.name}' for process "
+                                    f"skipping shape symmetrization of parameter '{param_obj.name}' for process "
                                     f"'{proc_name}' in category '{cat_name}' as effect is one-sided",
                                 )
                                 continue
@@ -557,41 +688,63 @@ class DatacardWriter(object):
 
                         elif trafo == ParameterTransformation.normalize:
                             # normale varied hists to the nominal integral
-                            h_down *= safe_div(integral(h_nom), integral(h_down))
-                            h_up *= safe_div(integral(h_nom), integral(h_up))
+                            n, d, u = integral(h_nom), integral(h_down), integral(h_up)
+                            h_down *= safe_div(n, d)
+                            h_up *= safe_div(n, u)
 
-                        else:
-                            # no other transormation is applied at this point
-                            continue
+                        elif trafo in {ParameterTransformation.envelope, ParameterTransformation.envelope_if_one_sided}:
+                            d, u = integral(h_down), integral(h_up)
+                            v_nom = h_nom.view()
+                            v_down = h_down.view()
+                            v_up = h_up.view()
+                            # compute masks denoting at which locations a variation is abs larger than the other
+                            diffs_up = v_up.value - v_nom.value
+                            diffs_down = v_down.value - v_nom.value
+                            up_mask = abs(diffs_up) > abs(diffs_down)
+                            down_mask = abs(diffs_down) > abs(diffs_up)
+                            # when only checking one-sided, remove True's from the masks where variations are two-sided
+                            if trafo == ParameterTransformation.envelope_if_one_sided:
+                                one_sided = (diffs_up * diffs_down) > 0
+                                up_mask &= one_sided
+                                down_mask &= one_sided
+                            # fill values from the larger variation
+                            v_up.value[down_mask] = v_nom.value[down_mask] - diffs_down[down_mask]
+                            v_up.variance[down_mask] = v_down.variance[down_mask]
+                            v_down.value[up_mask] = v_nom.value[up_mask] - diffs_up[up_mask]
+                            v_down.variance[up_mask] = v_up.variance[up_mask]
 
-                    # empty bins are always filled
+                        elif trafo == ParameterTransformation.envelope_enforce_two_sided:
+                            # envelope creation with enforced two-sidedness
+                            v_nom = h_nom.view()
+                            v_down = h_down.view()
+                            v_up = h_up.view()
+                            # compute masks denoting at which locations a variation is abs larger than the other
+                            abs_diffs_up = abs(v_up.value - v_nom.value)
+                            abs_diffs_down = abs(v_down.value - v_nom.value)
+                            up_mask = abs_diffs_up >= abs_diffs_down
+                            down_mask = ~up_mask
+                            # fill values from the absolute larger variation
+                            v_up.value[up_mask] = v_nom.value[up_mask] + abs_diffs_up[up_mask]
+                            v_up.value[down_mask] = v_nom.value[down_mask] + abs_diffs_down[down_mask]
+                            v_up.variance[down_mask] = v_down.variance[down_mask]
+                            v_down.value[down_mask] = v_nom.value[down_mask] - abs_diffs_down[down_mask]
+                            v_down.value[up_mask] = v_nom.value[up_mask] - abs_diffs_up[up_mask]
+                            v_down.variance[up_mask] = v_up.variance[up_mask]
+
+                    # fill empty bins again after all transformations
                     fill_empty(cat_obj, h_down)
                     fill_empty(cat_obj, h_up)
-
-                    # save them when they represent real shapes
-                    if param_obj.type.is_shape:
-                        down_name = syst_pattern.format(
-                            category=cat_name,
-                            process=proc_name,
-                            parameter=param_obj.name,
-                            direction="Down",
-                        )
-                        up_name = syst_pattern.format(
-                            category=cat_name,
-                            process=proc_name,
-                            parameter=param_obj.name,
-                            direction="Up",
-                        )
-                        handle_flow(cat_obj, h_down, down_name)
-                        handle_flow(cat_obj, h_up, up_name)
-                        out_file[down_name] = h_down
-                        out_file[up_name] = h_up
 
                     # save the effect
                     __effects[param_obj.name] = (
                         safe_div(integral(h_down), integral(h_nom)),
                         safe_div(integral(h_up), integral(h_nom)),
                     )
+
+                    # save them to file if they have shape-type
+                    if param_obj.type.is_shape:
+                        out_file[down_name] = h_down
+                        out_file[up_name] = h_up
 
             # data handling, first checking if data should be faked, then if real data exists
             if cat_obj.data_from_processes:

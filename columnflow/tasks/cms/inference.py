@@ -179,10 +179,11 @@ class CreateDatacards(SerializeInferenceModelBase):
                         # create histograms per shape shift
                         for param_obj in proc_obj.parameters:
                             # skip the parameter when varied hists are not needed
-                            if (
-                                not param_obj.type.is_shape and
-                                not any(trafo.from_shape for trafo in param_obj.transformations)
-                            ):
+                            need_shapes = (
+                                (param_obj.type.is_shape and not param_obj.transformations.any_from_rate) or
+                                (param_obj.type.is_rate and param_obj.transformations.any_from_shape)
+                            )
+                            if not need_shapes:
                                 continue
                             # store the varied hists
                             shift_source = (
