@@ -69,7 +69,13 @@ class CreateDatacards(SerializeInferenceModelBase):
                 data = self.combined_config_data[config_inst]
                 input_hists[config_inst] = self.load_process_hists(
                     config_inst,
-                    list(data["mc_datasets"]) + list(data["data_datasets"]),
+                    {
+                        dataset_name: list(data["mc_datasets"][dataset_name]["proc_names"])
+                        for dataset_name in data["mc_datasets"]
+                    } | {
+                        dataset_name: ["data"]
+                        for dataset_name in data["data_datasets"]
+                    },
                     variable,
                     inputs[config_inst.name],
                 )
@@ -127,43 +133,33 @@ class CreateDatacards(SerializeInferenceModelBase):
                                     f"dynamic datacard process object misses 'process' entry in config data for "
                                     f"'{config_inst.name}': {proc_obj}",
                                 )
-                            process_insts = [config_inst.get_process(process_name)]
+                            process_inst = config_inst.get_process(process_name)
                         else:
-                            process_insts = [
-                                config_inst.get_dataset(dataset_name).processes.get_first()
-                                for dataset_name in proc_obj.config_data[config_inst.name].mc_datasets
-                            ]
+                            process_inst = config_inst.get_process(
+                                proc_obj.name
+                                if proc_obj.name == "data"
+                                else proc_obj.config_data[config_inst.name].process,
+                            )
 
-                        # collect per-process histograms
-                        h_procs = []
-                        for process_inst in process_insts:
-                            # extract the histogram for the process
-                            # (removed from hists to eagerly cleanup memory)
-                            h_proc = _input_hists[config_inst].pop(process_inst, None)
-                            if h_proc is None:
-                                self.logger.error(
-                                    f"found no histogram to model datacard process '{proc_obj.name}', please check your "
-                                    f"inference model '{self.inference_model}'",
-                                )
-                                continue
-
-                            # select relevant categories
-                            h_proc = h_proc[{
-                                "category": [
-                                    hist.loc(c.name)
-                                    for c in leaf_category_insts
-                                    if c.name in h_proc.axes["category"]
-                                ],
-                            }]
-                            h_proc = h_proc[{"category": sum}]
-
-                            h_procs.append(h_proc)
-
-                        if h_procs is None:
+                        # extract the histogram for the process
+                        # (removed from hists to eagerly cleanup memory)
+                        h_proc = _input_hists[config_inst].get(process_inst, None)
+                        if h_proc is None:
+                            self.logger.error(
+                                f"found no histogram to model datacard process '{proc_obj.name}', please check your "
+                                f"inference model '{self.inference_model}'",
+                            )
                             continue
 
-                        # combine them
-                        h_proc = sum(h_procs[1:], h_procs[0].copy())
+                        # select relevant categories
+                        h_proc = h_proc[{
+                            "category": [
+                                hist.loc(c.name)
+                                for c in leaf_category_insts
+                                if c.name in h_proc.axes["category"]
+                            ],
+                        }]
+                        h_proc = h_proc[{"category": sum}]
 
                         # create the nominal hist
                         datacard_hists[cat_obj.name].setdefault(proc_obj.name, {}).setdefault(config_inst.name, {})

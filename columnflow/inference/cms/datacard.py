@@ -49,9 +49,13 @@ class DatacardWriter(object):
             Shape-type parameters only.
         - :py:attr:`ParameterTransformation.effect_from_shape`: Converts the integral effect of shape variations to an
             asymmetric rate-style effect. Rate-type parameters only.
-        - :py:attr:`ParameterTransformation.effect_from_shape_if_small`: Same as above with a default threshold of 2%.
-            Configurable via *effect_from_shape_if_small_threshold*. The parameter should initially be of rate-type, but
-            in case the threshold is not met, the effect is interpreted as shape-type.
+        - :py:attr:`ParameterTransformation.effect_from_shape_if_flat`: Same as above but only applies to cases where
+            both shape variations are reasonably flat. The flatness per varied shape is determined by two criteria that
+            both must be met: 1. the maximum relative outlier of bin contents with respect to their mean (defaults to
+            20%, configurable via *effect_from_shape_if_flat_max_outlier*), 2. the deviation / dispersion of bin
+            contents, i.e., the square root of the variance of bin contents, relative to their mean (defaults to 10%,
+            configurable via *effect_from_shape_if_flat_max_deviation*). The parameter should initially be of rate-type,
+            but in case the criteria are not met, the effect is interpreted as shape-type.
         - :py:attr:`ParameterTransformation.symmetrize`: Changes up and down variations of either rate effects and
             shapes to symmetrize them around the nominal value. For rate-type parameters, this has no effect if the
             effect strength was provided by a single value. There is no conversion into a single value and consequently,
@@ -79,7 +83,7 @@ class DatacardWriter(object):
 
         If used, the transformations :py:attr:`ParameterTransformation.effect_from_rate`,
         :py:attr:`ParameterTransformation.effect_from_shape`, and
-        :py:attr:`ParameterTransformation.effect_from_shape_if_small` must be the first element in the sequence of
+        :py:attr:`ParameterTransformation.effect_from_shape_if_flat` must be the first element in the sequence of
         transformations to be applied. The remaining transformations are applied in order based on the outcome of the
         effect conversion.
     """
@@ -91,7 +95,7 @@ class DatacardWriter(object):
     first_index_trafos = {
         ParameterTransformation.effect_from_rate,
         ParameterTransformation.effect_from_shape,
-        ParameterTransformation.effect_from_shape_if_small,
+        ParameterTransformation.effect_from_shape_if_flat,
     }
     shape_only_trafos = {
         ParameterTransformation.effect_from_rate,
@@ -102,7 +106,7 @@ class DatacardWriter(object):
     }
     rate_only_trafos = {
         ParameterTransformation.effect_from_shape,
-        ParameterTransformation.effect_from_shape_if_small,
+        ParameterTransformation.effect_from_shape_if_flat,
         ParameterTransformation.asymmetrize,
         ParameterTransformation.asymmetrize_if_large,
         ParameterTransformation.flip_smaller_if_one_sided,
@@ -151,7 +155,8 @@ class DatacardWriter(object):
         histograms: DatacardHists,
         rate_precision: int = 4,
         effect_precision: int = 4,
-        effect_from_shape_if_small_threshold: float = 0.02,
+        effect_from_shape_if_flat_max_outlier: float = 0.2,
+        effect_from_shape_if_flat_max_deviation: float = 0.1,
         asymmetrize_if_large_threshold: float = 0.2,
     ) -> None:
         super().__init__()
@@ -161,7 +166,8 @@ class DatacardWriter(object):
         self.histograms = histograms
         self.rate_precision = rate_precision
         self.effect_precision = effect_precision
-        self.effect_from_shape_if_small_threshold = effect_from_shape_if_small_threshold
+        self.effect_from_shape_if_flat_max_outlier = effect_from_shape_if_flat_max_outlier
+        self.effect_from_shape_if_flat_max_deviation = effect_from_shape_if_flat_max_deviation
         self.asymmetrize_if_large_threshold = asymmetrize_if_large_threshold
 
         # validate the inference model
@@ -336,18 +342,20 @@ class DatacardWriter(object):
                             # skip symmetric effects
                             if not isinstance(effect, tuple) or len(effect) != 2:
                                 continue
+                            flip_larger = trafo == ParameterTransformation.flip_larger_if_one_sided
+                            flip_smaller = trafo == ParameterTransformation.flip_smaller_if_one_sided
                             # check sidedness and determine which of the two effect values to flip, identified by index
                             if max(effect) < 1.0:
                                 # both below nominal
                                 flip_index = int(
-                                    (effect[1] > effect[0] and ParameterTransformation.flip_smaller_if_one_sided) or
-                                    (effect[1] < effect[0] and ParameterTransformation.flip_larger_if_one_sided),
+                                    (effect[1] > effect[0] and flip_larger) or
+                                    (effect[1] < effect[0] and flip_smaller),
                                 )
                             elif min(effect) > 1.0:
                                 # both above nominal
                                 flip_index = int(
-                                    (effect[1] > effect[0] and ParameterTransformation.flip_larger_if_one_sided) or
-                                    (effect[1] < effect[0] and ParameterTransformation.flip_smaller_if_one_sided),
+                                    (effect[1] > effect[0] and flip_smaller) or
+                                    (effect[1] < effect[0] and flip_larger),
                                 )
                             else:
                                 # skip one-sided effects
@@ -684,19 +692,27 @@ class DatacardWriter(object):
                             h_down = load(down_name, (param_obj.name, "down"), "nominal", scale=scale)
                             h_up = load(up_name, (param_obj.name, "up"), "nominal", scale=scale)
 
-                            # in case the transformation is effect_from_shape_if_small, and any of the two relative
-                            # integral effects are above the required "small" threshold, convert the parameter to
-                            # shape-type and drop all transformations that do not apply to shapes
-                            if param_obj.transformations[0] == ParameterTransformation.effect_from_shape_if_small:
-                                n, d, u = integral(h_nom), integral(h_down), integral(h_up)
-                                rel_diff_d = safe_div(abs(n - d), n)
-                                rel_diff_u = safe_div(abs(u - n), n)
-                                if min(rel_diff_d, rel_diff_u) > self.effect_from_shape_if_small_threshold:
-                                    param_obj.type = ParameterType.shape
-                                    param_obj.transformations = type(param_obj.transformations)(
-                                        trafo for trafo in param_obj.transformations[1:]
-                                        if trafo not in self.rate_only_trafos
+                            # in case the transformation is effect_from_shape_if_flat, and any of the two variations
+                            # do not qualify as "flat", convert the parameter to shape-type and drop all transformations
+                            # that do not apply to shapes
+                            if param_obj.transformations[0] == ParameterTransformation.effect_from_shape_if_flat:
+                                # check if flatness criteria are met
+                                for h in [h_down, h_up]:
+                                    values = h.view().value
+                                    mean, std = values.mean(), values.std()
+                                    rel_deviation = safe_div(std, mean)
+                                    max_rel_outlier = safe_div(max(abs(values - mean)), mean)
+                                    is_flat = (
+                                        rel_deviation <= self.effect_from_shape_if_flat_max_deviation and
+                                        max_rel_outlier <= self.effect_from_shape_if_flat_max_outlier
                                     )
+                                    if not is_flat:
+                                        param_obj.type = ParameterType.shape
+                                        param_obj.transformations = type(param_obj.transformations)(
+                                            trafo for trafo in param_obj.transformations[1:]
+                                            if trafo not in self.rate_only_trafos
+                                        )
+                                        break
                         else:
                             continue
 

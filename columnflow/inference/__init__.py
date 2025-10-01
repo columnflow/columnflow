@@ -88,8 +88,9 @@ class ParameterTransformation(enum.Enum):
         usually attributed to rate-type parameters. Only applies to shape-type parameters.
     :cvar effect_from_shape: Derive the effect of a rate-type parameter using the overall, integral effect of shape
         variations. Only applies to rate-type parameters.
-    :cvar effect_from_shape_if_small: Same as :py:attr:`effect_from_shape`, but depending on a threshold on the size of
-        the effect which can be subject to the serialization routine. Only applies to rate-type parameters.
+    :cvar effect_from_shape_if_flat: Same as :py:attr:`effect_from_shape`, but applies only if both shape variations are
+        reasonably flat. The definition of "reasonably flat" can be subject to the serialization routine. Only applies
+        to rate-type parameters.
     :cvar symmetrize: The overall (integral) effect of up and down variations is measured and centralized, updating the
         variations such that they are equidistant to the nominal one. Can apply to both rate- and shape-type parameters.
     :cvar asymmetrize: The symmetric effect on a rate-type parameter (usually given as a single value) is converted into
@@ -114,7 +115,7 @@ class ParameterTransformation(enum.Enum):
     none = "none"
     effect_from_rate = "effect_from_rate"
     effect_from_shape = "effect_from_shape"
-    effect_from_shape_if_small = "effect_from_shape_if_small"
+    effect_from_shape_if_flat = "effect_from_shape_if_flat"
     symmetrize = "symmetrize"
     asymmetrize = "asymmetrize"
     asymmetrize_if_large = "asymmetrize_if_large"
@@ -142,7 +143,7 @@ class ParameterTransformation(enum.Enum):
         """
         return self in {
             self.effect_from_shape,
-            self.effect_from_shape_if_small,
+            self.effect_from_shape_if_flat,
         }
 
     @property
@@ -224,7 +225,9 @@ class FlowStrategy(enum.Enum):
 class InferenceModelMeta(CachedDerivableMeta):
 
     def _get_inst_cache_key(cls, args: tuple, kwargs: dict) -> Hashable:
-        return freeze((cls, kwargs.get("inst_dict", {})))
+        config_insts = args[0]
+        config_names = tuple(sorted(config_inst.name for config_inst in config_insts))
+        return freeze((cls, config_names, kwargs.get("inst_dict", {})))
 
 
 class InferenceModel(Derivable, metaclass=InferenceModelMeta):
