@@ -224,7 +224,9 @@ class FlowStrategy(enum.Enum):
 class InferenceModelMeta(CachedDerivableMeta):
 
     def _get_inst_cache_key(cls, args: tuple, kwargs: dict) -> Hashable:
-        return freeze((cls, kwargs.get("inst_dict", {})))
+        config_insts = args[0]
+        config_names = tuple(sorted(config_inst.name for config_inst in config_insts))
+        return freeze((cls, config_names, kwargs.get("inst_dict", {})))
 
 
 class InferenceModel(Derivable, metaclass=InferenceModelMeta):
