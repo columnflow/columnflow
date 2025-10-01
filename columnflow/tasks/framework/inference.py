@@ -274,11 +274,18 @@ class SerializeInferenceModelBase(
                         raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
 
                     # select and reduce over relevant processes
-                    h_proc = h[{"process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]]}]
+                    h_proc = h[{
+                        "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
+                    }]
                     h_proc = h_proc[{"process": sum}]
 
                     # additional custom reductions
-                    h_proc = self.modify_process_hist(process_inst, h_proc)
+                    h_proc = self.modify_process_hist(
+                        config_inst=config_inst,
+                        process_inst=process_inst,
+                        variable=variable,
+                        h=h_proc,
+                    )
 
                     # store it
                     if process_inst in hists:
@@ -288,12 +295,19 @@ class SerializeInferenceModelBase(
 
         return hists
 
-    def modify_process_hist(self, process_inst: od.Process, h: hist.Hist) -> hist.Hist:
+    def modify_process_hist(
+        self,
+        config_inst: od.Config,
+        process_inst: od.Process,
+        variable: str,
+        h: hist.Hist,
+    ) -> hist.Hist:
         """
         Hook to modify a process histogram after it has been loaded. This can be helpful to reduce memory early on.
 
+        :param config_inst: The config instance the histogram belongs to.
         :param process_inst: The process instance the histogram belongs to.
-        :param histo: The histogram to modify.
+        :param h: The histogram to modify.
         :return: The modified histogram.
         """
         return h
