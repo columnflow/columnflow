@@ -149,15 +149,20 @@ class SerializeInferenceModelBase(
                     for dataset_name in mc_datasets:
                         if dataset_name not in data["mc_datasets"]:
                             data["mc_datasets"][dataset_name] = {
-                                "proc_name": proc_obj.name,
+                                "proc_names": {proc_obj.name},
+                                "cfg_proc_names": {proc_obj.config_data[config_inst.name].process},
                                 "shift_sources": set(),
                             }
-                        elif data["mc_datasets"][dataset_name]["proc_name"] != proc_obj.name:
-                            raise ValueError(
-                                f"dataset '{dataset_name}' was already assigned to datacard process "
-                                f"'{data['mc_datasets'][dataset_name]['proc_name']}' and cannot be re-assigned to "
-                                f"'{proc_obj.name}' in config '{config_inst.name}'",
+                        elif proc_obj.name not in data["mc_datasets"][dataset_name]["proc_names"]:
+                            data["mc_datasets"][dataset_name]["proc_names"].add(proc_obj.name)
+                            data["mc_datasets"][dataset_name]["cfg_proc_names"].add(
+                                proc_obj.config_data[config_inst.name].process,
                             )
+                            # raise ValueError(
+                            #     f"dataset '{dataset_name}' was already assigned to datacard process "
+                            #     f"'{data['mc_datasets'][dataset_name]['proc_name']}' and cannot be re-assigned to "
+                            #     f"'{proc_obj.name}' in config '{config_inst.name}'",
+                            # )
 
                     # shift sources
                     for param_obj in proc_obj.parameters:
@@ -244,14 +249,6 @@ class SerializeInferenceModelBase(
         with self.publish_step(f"extracting '{variable}' for config {config_inst.name} ..."):
             for dataset_name in dataset_names:
                 dataset_inst = config_inst.get_dataset(dataset_name)
-                process_inst = dataset_inst.processes.get_first()
-
-                # for real data, fallback to the main data process
-                if process_inst.is_data:
-                    process_inst = config_inst.get_process("data")
-
-                # gather all subprocesses for a full query later
-                sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
                 # open the histogram and work on a copy
                 inp = inputs[dataset_name]["collection"][0]["hists"][variable]
@@ -263,22 +260,35 @@ class SerializeInferenceModelBase(
                         f"'{config_inst.name}' from {inp.abspath}",
                     ) from e
 
-                # there must be at least one matching sub process
-                if not any(p.name in h.axes["process"] for p in sub_process_insts):
-                    raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
-
-                # select and reduce over relevant processes
-                h = h[{"process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]]}]
-                h = h[{"process": sum}]
-
-                # additional custom reductions
-                h = self.modify_process_hist(process_inst, h)
-
-                # store it
-                if process_inst in hists:
-                    hists[process_inst] += h
+                if dataset_inst.processes.get_first().is_data:
+                    # for real data, fallback to the main data process
+                    process_insts = [config_inst.get_process("data")]
                 else:
-                    hists[process_inst] = h
+                    # for MC, get all processes assigned to this dataset
+                    proc_names = self.combined_config_data[config_inst]["mc_datasets"][dataset_name]["cfg_proc_names"]
+                    process_insts = [config_inst.get_process(name) for name in proc_names]
+
+                # loop over all proceses assigned to this dataset
+                for process_inst in process_insts:
+                    # gather all subprocesses for a full query later
+                    sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
+
+                    # there must be at least one matching sub process
+                    if not any(p.name in h.axes["process"] for p in sub_process_insts):
+                        raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
+
+                    # select and reduce over relevant processes
+                    h_proc = h[{"process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]]}]
+                    h_proc = h_proc[{"process": sum}]
+
+                    # additional custom reductions
+                    h_proc = self.modify_process_hist(process_inst, h_proc)
+
+                    # store it
+                    if process_inst in hists:
+                        hists[process_inst] += h_proc
+                    else:
+                        hists[process_inst] = h_proc
 
         return hists
 
