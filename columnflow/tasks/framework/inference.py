@@ -116,7 +116,7 @@ class SerializeInferenceModelBase(
                 "variables": set(),
                 # plain set of names of real data datasets
                 "data_datasets": set(),
-                # per name of mc dataset, the set of shift sources and the name of the datacard process object
+                # per mc dataset name, the set of shift sources and the names processes to be extracted from them
                 "mc_datasets": {},
             }
             for config_inst in self.config_insts
@@ -149,15 +149,12 @@ class SerializeInferenceModelBase(
                     for dataset_name in mc_datasets:
                         if dataset_name not in data["mc_datasets"]:
                             data["mc_datasets"][dataset_name] = {
-                                "proc_names": {proc_obj.name},
-                                "config_proc_names": {proc_obj.config_data[config_inst.name].process},
                                 "shift_sources": set(),
+                                "proc_names": set(),
                             }
-                        elif proc_obj.name not in data["mc_datasets"][dataset_name]["proc_names"]:
-                            data["mc_datasets"][dataset_name]["proc_names"].add(proc_obj.name)
-                            data["mc_datasets"][dataset_name]["config_proc_names"].add(
-                                proc_obj.config_data[config_inst.name].process,
-                            )
+                        data["mc_datasets"][dataset_name]["proc_names"].add(
+                            proc_obj.config_data[config_inst.name].process,
+                        )
 
                     # shift sources
                     for param_obj in proc_obj.parameters:
@@ -234,8 +231,7 @@ class SerializeInferenceModelBase(
     def load_process_hists(
         self,
         config_inst: od.Config,
-        dataset_names: list[str],
-        mc_datasets_data: dict[str, dict],
+        dataset_processes: dict[str, list[str]],
         variable: str,
         inputs: dict,
     ) -> dict[str, dict[od.Process, hist.Hist]]:
@@ -243,9 +239,7 @@ class SerializeInferenceModelBase(
         hists: dict[od.Process, hist.Hist] = {}
 
         with self.publish_step(f"extracting '{variable}' for config {config_inst.name} ..."):
-            for dataset_name in dataset_names:
-                dataset_inst = config_inst.get_dataset(dataset_name)
-
+            for dataset_name, process_names in dataset_processes.items():
                 # open the histogram and work on a copy
                 inp = inputs[dataset_name]["collection"][0]["hists"][variable]
                 try:
@@ -256,13 +250,8 @@ class SerializeInferenceModelBase(
                         f"'{config_inst.name}' from {inp.abspath}",
                     ) from e
 
-                if dataset_inst.processes.get_first().is_data:
-                    # for real data, fallback to the main data process
-                    process_insts = [config_inst.get_process("data")]
-                else:
-                    # for MC, get all processes assigned to this dataset
-                    proc_names = mc_datasets_data[dataset_name]["config_proc_names"]
-                    process_insts = [config_inst.get_process(name) for name in proc_names]
+                # determine processes to extract
+                process_insts = [config_inst.get_process(name) for name in process_names]
 
                 # loop over all proceses assigned to this dataset
                 for process_inst in process_insts:

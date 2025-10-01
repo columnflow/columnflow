@@ -69,8 +69,13 @@ class CreateDatacards(SerializeInferenceModelBase):
                 data = self.combined_config_data[config_inst]
                 input_hists[config_inst] = self.load_process_hists(
                     config_inst,
-                    list(data["mc_datasets"]) + list(data["data_datasets"]),
-                    data["mc_datasets"],
+                    {
+                        dataset_name: list(data["mc_datasets"][dataset_name]["proc_names"])
+                        for dataset_name in data["mc_datasets"]
+                    } | {
+                        dataset_name: ["data"]
+                        for dataset_name in data["data_datasets"]
+                    },
                     variable,
                     inputs[config_inst.name],
                 )
@@ -130,10 +135,11 @@ class CreateDatacards(SerializeInferenceModelBase):
                                 )
                             process_inst = config_inst.get_process(process_name)
                         else:
-                            if proc_obj.name == "data":
-                                process_inst = config_inst.get_process(proc_obj.name)
-                            else:
-                                process_inst = config_inst.get_process(proc_obj.config_data[config_inst.name].process)
+                            process_inst = config_inst.get_process(
+                                proc_obj.name
+                                if proc_obj.name == "data"
+                                else proc_obj.config_data[config_inst.name].process,
+                            )
 
                         # extract the histogram for the process
                         # (removed from hists to eagerly cleanup memory)
