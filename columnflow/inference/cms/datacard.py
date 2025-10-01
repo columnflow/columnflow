@@ -336,18 +336,20 @@ class DatacardWriter(object):
                             # skip symmetric effects
                             if not isinstance(effect, tuple) or len(effect) != 2:
                                 continue
+                            flip_larger = (trafo == ParameterTransformation.flip_larger_if_one_sided)
+                            flip_smaller = (trafo == ParameterTransformation.flip_smaller_if_one_sided)
                             # check sidedness and determine which of the two effect values to flip, identified by index
                             if max(effect) < 1.0:
                                 # both below nominal
                                 flip_index = int(
-                                    (effect[1] > effect[0] and ParameterTransformation.flip_smaller_if_one_sided) or
-                                    (effect[1] < effect[0] and ParameterTransformation.flip_larger_if_one_sided),
+                                    (effect[1] > effect[0] and flip_larger) or
+                                    (effect[1] < effect[0] and flip_smaller),
                                 )
                             elif min(effect) > 1.0:
                                 # both above nominal
                                 flip_index = int(
-                                    (effect[1] > effect[0] and ParameterTransformation.flip_larger_if_one_sided) or
-                                    (effect[1] < effect[0] and ParameterTransformation.flip_smaller_if_one_sided),
+                                    (effect[1] > effect[0] and flip_smaller) or
+                                    (effect[1] < effect[0] and flip_larger),
                                 )
                             else:
                                 # skip one-sided effects
