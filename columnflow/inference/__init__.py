@@ -104,6 +104,11 @@ class ParameterTransformation(enum.Enum):
         a definition that can be subject to the serialization routine. Only applies to shape-type parameters.
     :cvar envelope_enforce_two_sided: Same as :py:attr:`envelope`, but it enforces that the up (down) variation of the
         constructed envelope is always above (below) the nominal one. Only applies to shape-type parameters.
+    :cvar flip_smaller_if_one_sided: For asymmetric rate effects (usually given by two values) that are found to be
+        one-sided (e.g. after applying :py:attr:`effect_from_shape`), flips the smaller effect to the other side of the
+        nominal value. Only applies to rate-type parameters.
+    :cvar flip_larger_if_one_sided: Same as :py:attr:`flip_smaller_if_one_sided`, but flips the larger effect. Only
+        applies to rate-type parameters.
     """
 
     none = "none"
@@ -117,6 +122,8 @@ class ParameterTransformation(enum.Enum):
     envelope = "envelope"
     envelope_if_one_sided = "envelope_if_one_sided"
     envelope_enforce_two_sided = "envelope_enforce_two_sided"
+    flip_smaller_if_one_sided = "flip_smaller_if_one_sided"
+    flip_larger_if_one_sided = "flip_larger_if_one_sided"
 
     def __str__(self) -> str:
         """
@@ -395,7 +402,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         Returns a dictionary representing the top-level structure of the model.
 
             - *categories*: List of :py:meth:`category_spec` objects.
-            - *parameter_groups*: List of :py:meth:`paramter_group_spec` objects.
+            - *parameter_groups*: List of :py:meth:`parameter_group_spec` objects.
         """
         return DotDict([
             ("categories", []),
