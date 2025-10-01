@@ -68,6 +68,12 @@ class DatacardWriter(object):
             contributions are one-sided.
         - :py:attr:`ParameterTransformation.envelope_enforce_two_sided`: Same as :py:attr:`envelope`, but it enforces
             that the up (down) variation of the constructed envelope is always above (below) the nominal one.
+        - :py:attr:`ParameterTransformation.flip_smaller_if_one_sided`: For asymmetric (two-valued) rate effects that
+            are found to be one-sided (e.g. after :py:attr:`ParameterTransformation.effect_from_shape`), flips the
+            smaller effect to the other side. Rate-type parameters only.
+        - :py:attr:`ParameterTransformation.flip_larger_if_one_sided`: Same as
+            :py:attr:`ParameterTransformation.flip_smaller_if_one_sided`, but flips the larger effect. Rate-type
+            parameters only.
 
     .. note::
 
@@ -99,6 +105,8 @@ class DatacardWriter(object):
         ParameterTransformation.effect_from_shape_if_small,
         ParameterTransformation.asymmetrize,
         ParameterTransformation.asymmetrize_if_large,
+        ParameterTransformation.flip_smaller_if_one_sided,
+        ParameterTransformation.flip_larger_if_one_sided,
     }
 
     @classmethod
@@ -299,7 +307,7 @@ class DatacardWriter(object):
 
                         elif trafo == ParameterTransformation.symmetrize:
                             # skip symmetric effects
-                            if not isinstance(effect, tuple) and len(effect) != 2:
+                            if not isinstance(effect, tuple) or len(effect) != 2:
                                 continue
                             # skip one sided effects
                             if not (min(effect) <= 1 <= max(effect)):
@@ -321,12 +329,40 @@ class DatacardWriter(object):
                                 continue
                             effect = (2.0 - effect, effect)
 
+                        elif trafo in {
+                            ParameterTransformation.flip_smaller_if_one_sided,
+                            ParameterTransformation.flip_larger_if_one_sided,
+                        }:
+                            # skip symmetric effects
+                            if not isinstance(effect, tuple) or len(effect) != 2:
+                                continue
+                            # check sidedness and determine which of the two effect values to flip, identified by index
+                            if max(effect) < 1.0:
+                                # both below nominal
+                                flip_index = int(
+                                    (effect[1] > effect[0] and ParameterTransformation.flip_smaller_if_one_sided) or
+                                    (effect[1] < effect[0] and ParameterTransformation.flip_larger_if_one_sided),
+                                )
+                            elif min(effect) > 1.0:
+                                # both above nominal
+                                flip_index = int(
+                                    (effect[1] > effect[0] and ParameterTransformation.flip_larger_if_one_sided) or
+                                    (effect[1] < effect[0] and ParameterTransformation.flip_smaller_if_one_sided),
+                                )
+                            else:
+                                # skip onde-sided effects
+                                continue
+                            effect = tuple(((2.0 - e) if i == flip_index else e) for i, e in enumerate(effect))
+
                 elif param_obj.type.is_shape:
                     # apply transformations one by one
                     for trafo in param_obj.transformations:
                         if trafo.from_rate:
                             # when the shape was constructed from a rate, reset the effect to 1
                             effect = 1.0
+
+                # custom hook to adjust effect
+                effect = self.modify_parameter_effect(cat_name, proc_name, param_obj, effect)
 
                 # encode the effect
                 if isinstance(effect, (int, float)):
@@ -357,7 +393,7 @@ class DatacardWriter(object):
                         type_str = "shape"
                 elif types == {ParameterType.rate_gauss, ParameterType.shape}:
                     # when mixing lnN and shape effects, combine expects the "?" type and makes the actual decision
-                    # dependend on the presence of shape variations in the accompanying shape files
+                    # dependend on the presence of shape variations in the accompaying shape files
                     type_str = "?"
                 if not type_str:
                     raise ValueError(f"misconfigured parameter '{param_name}' with incompatible type(s) '{types}'")
@@ -731,6 +767,16 @@ class DatacardWriter(object):
                             v_down.value[up_mask] = v_nom.value[up_mask] - abs_diffs_up[up_mask]
                             v_down.variance[up_mask] = v_up.variance[up_mask]
 
+                    # custom hook to adjust shapes
+                    h_nom, h_down, h_up = self.modify_parameter_shape(
+                        cat_name,
+                        proc_name,
+                        param_obj,
+                        h_nom,
+                        h_down,
+                        h_up,
+                    )
+
                     # fill empty bins again after all transformations
                     fill_empty(cat_obj, h_down)
                     fill_empty(cat_obj, h_up)
@@ -845,3 +891,45 @@ class DatacardWriter(object):
         lines = cls.align_lines(rates + parameters)
 
         return lines[:n_rate_lines], lines[n_rate_lines:]
+
+    def modify_parameter_effect(
+        self,
+        category: str,
+        process: str,
+        param_obj: DotDict,
+        effect: float | tuple[float, float],
+    ) -> float | tuple[float, float]:
+        """
+        Custom hook to modify the effect of a parameter on a given category and process before it is encoded into the
+        datacard. By default, this does nothing and simply returns the given effect.
+
+        :param category: The category name.
+        :param process: The process name.
+        :param param_obj: The parameter object, following :py:meth:`columnflow.inference.InferenceModel.parameter_spec`.
+        :param effect: The effect value(s) to be modified.
+        :returns: The modified effect value(s).
+        """
+        return effect
+
+    def modify_parameter_shape(
+        self,
+        category: str,
+        process: str,
+        param_obj: DotDict,
+        h_nom: hist.Hist,
+        h_down: hist.Hist,
+        h_up: hist.Hist,
+    ) -> tuple[hist.Hist, hist.Hist, hist.Hist]:
+        """
+        Custom hook to modify the nominal and varied (down, up) shapes of a parameter on a given category and process
+        before they are saved to the shapes file. By default, this does nothing and simply returns the given histograms.
+
+        :param category: The category name.
+        :param process: The process name.
+        :param param_obj: The parameter object, following :py:meth:`columnflow.inference.InferenceModel.parameter_spec`.
+        :param h_nom: The nominal histogram.
+        :param h_down: The down-varied histogram.
+        :param h_up: The up-varied histogram.
+        :returns: The modified nominal and varied (down, up) histograms.
+        """
+        return h_nom, h_down, h_up
