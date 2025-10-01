@@ -350,7 +350,7 @@ class DatacardWriter(object):
                                     (effect[1] < effect[0] and ParameterTransformation.flip_smaller_if_one_sided),
                                 )
                             else:
-                                # skip onde-sided effects
+                                # skip one-sided effects
                                 continue
                             effect = tuple(((2.0 - e) if i == flip_index else e) for i, e in enumerate(effect))
 
@@ -361,7 +361,7 @@ class DatacardWriter(object):
                             # when the shape was constructed from a rate, reset the effect to 1
                             effect = 1.0
 
-                # custom hook to adjust effect
+                # custom hook to modify the effect
                 effect = self.modify_parameter_effect(cat_name, proc_name, param_obj, effect)
 
                 # encode the effect
@@ -767,7 +767,7 @@ class DatacardWriter(object):
                             v_down.value[up_mask] = v_nom.value[up_mask] - abs_diffs_up[up_mask]
                             v_down.variance[up_mask] = v_up.variance[up_mask]
 
-                    # custom hook to adjust shapes
+                    # custom hook to modify the shapes
                     h_nom, h_down, h_up = self.modify_parameter_shape(
                         cat_name,
                         proc_name,
