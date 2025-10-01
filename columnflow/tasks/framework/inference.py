@@ -150,19 +150,14 @@ class SerializeInferenceModelBase(
                         if dataset_name not in data["mc_datasets"]:
                             data["mc_datasets"][dataset_name] = {
                                 "proc_names": {proc_obj.name},
-                                "cfg_proc_names": {proc_obj.config_data[config_inst.name].process},
+                                "config_proc_names": {proc_obj.config_data[config_inst.name].process},
                                 "shift_sources": set(),
                             }
                         elif proc_obj.name not in data["mc_datasets"][dataset_name]["proc_names"]:
                             data["mc_datasets"][dataset_name]["proc_names"].add(proc_obj.name)
-                            data["mc_datasets"][dataset_name]["cfg_proc_names"].add(
+                            data["mc_datasets"][dataset_name]["config_proc_names"].add(
                                 proc_obj.config_data[config_inst.name].process,
                             )
-                            # raise ValueError(
-                            #     f"dataset '{dataset_name}' was already assigned to datacard process "
-                            #     f"'{data['mc_datasets'][dataset_name]['proc_name']}' and cannot be re-assigned to "
-                            #     f"'{proc_obj.name}' in config '{config_inst.name}'",
-                            # )
 
                     # shift sources
                     for param_obj in proc_obj.parameters:
@@ -240,6 +235,7 @@ class SerializeInferenceModelBase(
         self,
         config_inst: od.Config,
         dataset_names: list[str],
+        mc_datasets_data: dict[str, dict],
         variable: str,
         inputs: dict,
     ) -> dict[str, dict[od.Process, hist.Hist]]:
@@ -265,7 +261,7 @@ class SerializeInferenceModelBase(
                     process_insts = [config_inst.get_process("data")]
                 else:
                     # for MC, get all processes assigned to this dataset
-                    proc_names = self.combined_config_data[config_inst]["mc_datasets"][dataset_name]["cfg_proc_names"]
+                    proc_names = mc_datasets_data[dataset_name]["config_proc_names"]
                     process_insts = [config_inst.get_process(name) for name in proc_names]
 
                 # loop over all proceses assigned to this dataset

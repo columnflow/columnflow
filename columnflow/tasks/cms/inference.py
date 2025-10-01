@@ -70,6 +70,7 @@ class CreateDatacards(SerializeInferenceModelBase):
                 input_hists[config_inst] = self.load_process_hists(
                     config_inst,
                     list(data["mc_datasets"]) + list(data["data_datasets"]),
+                    data["mc_datasets"],
                     variable,
                     inputs[config_inst.name],
                 )
