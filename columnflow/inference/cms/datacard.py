@@ -51,7 +51,7 @@ class DatacardWriter(object):
             asymmetric rate-style effect. Rate-type parameters only.
         - :py:attr:`ParameterTransformation.effect_from_shape_if_flat`: Same as above but only applies to cases where
             both shape variations are reasonably flat. The flatness per varied shape is determined by two criteria that
-            both must be met: 1. the maximum relative deviation of bin contents with respect to their mean (defaults to
+            both must be met: 1. the maximum relative outlier of bin contents with respect to their mean (defaults to
             20%, configurable via *effect_from_shape_if_flat_max_outlier*), 2. the deviation / dispersion of bin
             contents, i.e., the square root of the variance of bin contents, relative to their mean (defaults to 10%,
             configurable via *effect_from_shape_if_flat_max_deviation*). The parameter should initially be of rate-type,
