@@ -530,8 +530,11 @@ cf_setup_software_stack() {
     # Optional environments variables:
     #   CF_REMOTE_ENV
     #       When true-ish, the software stack is sourced but not built.
-    #   CF_CI_ENV
+    #   CF_CI_ENV and CF_RTD_ENV
     #       When true-ish, the "cf" venv is skipped and only the "cf_dev" env is built.
+    #   CF_INTERACTIVE_VENV_FILE
+    #       When set and $CF_CI_ENV is not true-ish, the venv setup of this file is sourced to start the interactive
+    #       shell. When empty, defaults to ${CF_BASE}/sandboxes/cf_dev.sh.
     #   CF_REINSTALL_SOFTWARE
     #       When true-ish, any existing software stack is removed and freshly installed.
     #   CF_CONDA_ARCH
@@ -698,7 +701,7 @@ EOF
             >&2 echo
         }
 
-        # source the production sandbox, potentially skipped in CI and RTD jobs
+        # build the production sandbox, potentially skipped in CI and RTD jobs
         if ! ${CF_CI_ENV} && ! ${CF_RTD_ENV}; then
             ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
             ret="$?"
@@ -709,13 +712,41 @@ EOF
             fi
         fi
 
-        # source the dev sandbox
-        source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
-        ret="$?"
+        # if a custom interactive venv should be used, check the file, but only in local envs
+        if ! ${CF_LOCAL_ENV}; then
+            export CF_INTERACTIVE_VENV_FILE=""
+        fi
+        if [ ! -z "${CF_INTERACTIVE_VENV_FILE}" ] && [ ! -f "${CF_INTERACTIVE_VENV_FILE}" ]; then
+            >&2 echo "the interactive venv setup file ${CF_INTERACTIVE_VENV_FILE} does not exist"
+            return "2"
+        fi
+
+        # build and optionally source the dev sandbox
+        if [ -z "${CF_INTERACTIVE_VENV_FILE}" ]; then
+            # no custom file given, build and source right away
+            source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
+            ret="$?"
+        else
+            # build the dev sandbox in the background
+            ( source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent" )
+            ret="$?"
+        fi
         if [ "${ret}" = "21" ]; then
             show_version_warning "cf_dev"
         elif [ "${ret}" != "0" ]; then
             return "${ret}"
+        fi
+
+        # source the custom interactive venv setup file if given
+        if [ ! -z "${CF_INTERACTIVE_VENV_FILE}" ]; then
+            echo "activating custom interactive venv from $( cf_color magenta "${CF_INTERACTIVE_VENV_FILE}" )"
+            source "${CF_INTERACTIVE_VENV_FILE}" "" "silent"
+            ret="$?"
+            if [ "${ret}" = "21" ]; then
+                show_version_warning "$( basename "${CF_INTERACTIVE_VENV_FILE%.*}" )"
+            elif [ "${ret}" != "0" ]; then
+                return "${ret}"
+            fi
         fi
 
         # initialze submodules
