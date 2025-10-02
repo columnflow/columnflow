@@ -3229,11 +3229,10 @@ class DaskArrayReader(object):
 
 class ChunkedParquetReader(object):
     """
-    Class that wraps a dask_awkward array and handles chunked reading via splitting and merging of
-    materialized partitions. To allow memory efficient caching in case of overlaps between
-    partitions on disk and chunks to be read (possibly with different sizes) this process is
-    implemented as a one-time-only read operation. Hence, in situations where particular chunks need
-    to be read more than once, another instance of this class should be used.
+    Class that wraps a parquet file containing an awkward array and handles chunked reading via splitting and merging of
+    row groups. To allow memory efficient caching in case of overlaps between groups on disk and chunks to be read
+    (possibly with different sizes) this process is implemented as a one-time-only read operation. Hence, in situations
+    where particular chunks need to be read more than once, another instance of this class should be used.
     """
 
     def __init__(self, path: str, open_options: dict | None = None) -> None:
