@@ -492,6 +492,7 @@ def create_category_combinations(
     name_fn: Callable[[Any], str],
     kwargs_fn: Callable[[Any], dict] | None = None,
     skip_existing: bool = True,
+    skip_parents: bool = False,
     skip_fn: Callable[[dict[str, od.Category], str], bool] | None = None,
 ) -> int:
     """
@@ -517,9 +518,12 @@ def create_category_combinations(
     and ``"selection"`` are missing, they are filled with reasonable defaults leading to a auto-generated, deterministic
     id and a list of all parent selection statements.
 
-    If the name of a new category is already known to *config* it is skipped unless *skip_existing* is *False*. In
-    addition, *skip_fn* can be a callable that receives a dictionary mapping group names to categories that represents
-    the combination of categories to be added. In case *skip_fn* returns *True*, the combination is skipped.
+    If the name of a new category is already known to *config* it is skipped unless *skip_existing* is *False*.
+    By default, all intermediate layers of parent categories are created and connected. This step is skipped if
+    *skip_parents* is *True* and only leaf categories are created and connected only to their (existing) root categories
+    in the *categories* dictionary. In addition, *skip_fn* can be a callable that receives a dictionary mapping group
+    names to categories that represents the combination of categories to be added. In case *skip_fn* returns *True*, the
+    combination is skipped.
 
     Example:
 
@@ -550,6 +554,7 @@ def create_category_combinations(
     :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and returns a dictionary of
         keyword arguments that are forwarded to the category constructor.
     :param skip_existing: If *True*, skip the creation of a category when it already exists in *config*.
+    :param skip_parents: If *True*, skip the creation of interpediate parent categories.
     :param skip_fn: Callable that receives a dictionary mapping group names to categories and returns *True* if the
         combination should be skipped.
     :raises TypeError: If *name_fn* is not a callable.
@@ -593,8 +598,11 @@ def create_category_combinations(
     if kwargs_fn and not callable(kwargs_fn):
         raise TypeError(f"when set, kwargs_fn must be a function, but got {kwargs_fn}")
 
-    # start combining, considering one additional groups for combinatorics at a time
+    # start combining, considering one additional group for combinatorics at a time
     for _n_groups in range(2, n_groups + 1):
+        # if skipping parents, only consider the iteration that contains all groups
+        if skip_parents and _n_groups != n_groups:
+            continue
 
         # build all group combinations
         for _group_names in itertools.combinations(group_names, _n_groups):
@@ -636,17 +644,24 @@ def create_category_combinations(
                             )
                     unique_ids_cache.add(kwargs["id"])
 
-                # find direct parents and connect them
-                for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
-                    if len(_parent_group_names) == 1:
-                        parent_cat_name = root_cats[_parent_group_names[0]].name
-                    else:
-                        parent_cat_name = name_fn({
-                            group_name: root_cats[group_name]
-                            for group_name in _parent_group_names
-                        })
-                    parent_cat = config.get_category(parent_cat_name, deep=True)
-                    parent_cat.add_category(cat)
+                # create parent connections
+                if skip_parents:
+                    # connect only to given root categories
+                    for parent_group_name in _group_names:
+                        parent_cat = root_cats[parent_group_name]
+                        parent_cat.add_category(cat)
+                else:
+                    # find all combinations of direct parents and connect them
+                    for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
+                        if len(_parent_group_names) == 1:
+                            parent_cat_name = root_cats[_parent_group_names[0]].name
+                        else:
+                            parent_cat_name = name_fn({
+                                group_name: root_cats[group_name]
+                                for group_name in _parent_group_names
+                            })
+                        parent_cat = config.get_category(parent_cat_name, deep=True)
+                        parent_cat.add_category(cat)
 
     return n_created_categories
 
