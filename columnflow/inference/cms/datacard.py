@@ -400,9 +400,10 @@ class DatacardWriter(object):
                     elif _type == ParameterType.shape:
                         type_str = "shape"
                 elif types == {ParameterType.rate_gauss, ParameterType.shape}:
-                    # when mixing lnN and shape effects, combine expects the "?" type and makes the actual decision
-                    # dependend on the presence of shape variations in the accompaying shape files
-                    type_str = "?"
+                    # when mixing lnN and shape effects, combine expects the "shape?" type and makes the actual decision
+                    # dependend on the presence of shape variations in the accompaying shape files, see
+                    # https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/v10.2.X/part2/settinguptheanalysis/?h=shape%3F#template-shape-uncertainties # noqa
+                    type_str = "shape?"
                 if not type_str:
                     raise ValueError(f"misconfigured parameter '{param_name}' with incompatible type(s) '{types}'")
                 blocks.tabular_parameters.append([param_name, type_str, effects])
