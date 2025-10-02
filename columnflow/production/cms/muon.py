@@ -84,14 +84,14 @@ def muon_weights(
     Optionally, a *muon_mask* can be supplied to compute the scale factor weight based only on a
     subset of muons.
     """
-    # flat absolute eta and pt views
-    abs_eta = flat_np_view(abs(events.Muon["eta"][muon_mask]), axis=1)
+    # flat eta and pt views
+    eta = flat_np_view(events.Muon["eta"][muon_mask], axis=1)
     pt = flat_np_view(events.Muon["pt"][muon_mask], axis=1)
 
     variable_map = {
         "year": self.muon_config.campaign,
-        "abseta": abs_eta,
-        "eta": abs_eta,
+        "eta": eta,
+        "abseta": abs(eta),
         "pt": pt,
     }
 
