@@ -40,12 +40,10 @@ class ParameterType(enum.Enum):
     rate_unconstrained = "rate_unconstrained"
     shape = "shape"
 
-    def __str__(self) -> str:
-        """
-        Returns the string representation of the parameter type.
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}.{self.value}>"
 
-        :returns: The string representation of the parameter type.
-        """
+    def __str__(self) -> str:
         return self.value
 
     @property
@@ -126,12 +124,10 @@ class ParameterTransformation(enum.Enum):
     flip_smaller_if_one_sided = "flip_smaller_if_one_sided"
     flip_larger_if_one_sided = "flip_larger_if_one_sided"
 
-    def __str__(self) -> str:
-        """
-        Returns the string representation of the parameter transformation.
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}.{self.value}>"
 
-        :returns: The string representation of the parameter transformation.
-        """
+    def __str__(self) -> str:
         return self.value
 
     @property
