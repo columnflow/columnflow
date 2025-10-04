@@ -23,7 +23,7 @@ from collections.abc import KeysView, ValuesView  # noqa
 from types import ModuleType, GeneratorType, GenericAlias  # noqa
 from typing import (  # noqa
     Any, Union, TypeVar, ClassVar, Sequence, Callable, Generator, TextIO, Iterable, Hashable,
-    Type,
+    Type, Literal,
 )
 
 from typing_extensions import Annotated, _AnnotatedAlias as AnnotatedType, TypeAlias  # noqa
