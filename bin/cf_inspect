@@ -1,15 +1,25 @@
 #!/bin/sh
 action () {
+    # local variables
     local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
 
+    # check arguments
     [ "$#" -eq 0 ] && {
         echo "ERROR: at least one file must be provided"
         return 1
     }
 
-    cf_sandbox venv_columnar_dev python "${this_dir}/cf_inspect.py" "$@"
+    # determine the sandbox to use
+    local cf_inspect_sandbox="${CF_INSPECT_SANDBOX:-venv_columnar_dev}"
+
+    # run the inspection script, potentially switching to the sandbox if not already in it
+    if [ "${CF_VENV_NAME}" = "${cf_inspect_sandbox}" ]; then
+        python "${this_dir}/cf_inspect.py" "$@"
+    else
+        cf_sandbox "${cf_inspect_sandbox}" python "${this_dir}/cf_inspect.py" "$@"
+    fi
 }
 
 action "$@"

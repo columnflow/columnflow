@@ -733,7 +733,7 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     # whether gen jet matching should be performed relative to the nominal jet pt, or the jec varied values
     gen_jet_matching_nominal=False,
     # regions where stochastic smearing is applied
-    stochastic_smearing_mask=lambda self, jets: ak.ones_like(jets.pt, dtype=np.bool),
+    stochastic_smearing_mask=lambda self, jets: ak.ones_like(jets.pt, dtype=bool),
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
