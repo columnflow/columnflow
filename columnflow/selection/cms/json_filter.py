@@ -122,7 +122,6 @@ def json_filter_setup(
     :param inputs: Additional inputs, currently not used
     :param reader_targets: Additional targets, currently not used
     """
-    import scipy as sp
     import scipy.sparse
 
     bundle = reqs["external_files"]
@@ -135,7 +134,7 @@ def json_filter_setup(
     max_run = max(map(int, json.keys()))
 
     # build lookup table
-    self.run_ls_lookup = sp.sparse.lil_matrix((max_run + 1, max_ls + 1), dtype=bool)
+    self.run_ls_lookup = scipy.sparse.lil_matrix((max_run + 1, max_ls + 1), dtype=bool)
     for run, ls_ranges in json.items():
         run = int(run)
         for ls_range in ls_ranges:

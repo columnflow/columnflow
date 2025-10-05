@@ -486,7 +486,7 @@ def normalization_weights_setup(
         )
 
     # setup the event weight lookup table
-    process_weight_table = scipy.sparse.sparse.lil_matrix((max(process_ids) + 1, 1), dtype=np.float32)
+    process_weight_table = scipy.sparse.lil_matrix((max(process_ids) + 1, 1), dtype=np.float32)
 
     def fill_weight_table(process_inst: od.Process, xsec: float, sum_weights: float) -> None:
         if sum_weights == 0:

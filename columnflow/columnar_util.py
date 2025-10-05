@@ -1232,6 +1232,7 @@ def attach_behavior(
     *keep_fields* has priority, i.e., when it is set, *skip_fields* is not considered.
     """
     import coffea.nanoevents
+    import coffea.nanoevents.methods.nanoaod
 
     if behavior is None:
         behavior = getattr(ak_array, "behavior", None) or coffea.nanoevents.methods.nanoaod.behavior
