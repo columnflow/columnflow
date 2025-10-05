@@ -21,8 +21,6 @@ from columnflow.columnar_util import set_ak_column
 from columnflow.types import Any, Sequence
 
 np = maybe_import("numpy")
-sp = maybe_import("scipy")
-maybe_import("scipy.sparse")
 ak = maybe_import("awkward")
 
 
@@ -413,6 +411,8 @@ def normalization_weights_setup(
             weights per process.
         - py: attr: `known_process_ids`: A set of all process ids that are known by the lookup table.
     """
+    import scipy.sparse
+
     # load the selection stats
     dataset_selection_stats = {
         dataset: copy.deepcopy(task.cached_value(
@@ -486,7 +486,7 @@ def normalization_weights_setup(
         )
 
     # setup the event weight lookup table
-    process_weight_table = sp.sparse.lil_matrix((max(process_ids) + 1, 1), dtype=np.float32)
+    process_weight_table = scipy.sparse.sparse.lil_matrix((max(process_ids) + 1, 1), dtype=np.float32)
 
     def fill_weight_table(process_inst: od.Process, xsec: float, sum_weights: float) -> None:
         if sum_weights == 0:

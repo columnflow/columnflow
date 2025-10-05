@@ -18,10 +18,12 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeShiftedHistograms
-from columnflow.util import dev_sandbox, DotDict, maybe_import
 from columnflow.config_util import get_datasets_from_process
+from columnflow.util import dev_sandbox, DotDict, maybe_import
+from columnflow.types import TYPE_CHECKING
 
-hist = maybe_import("hist")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
 
 
 class SerializeInferenceModelBase(
@@ -235,6 +237,8 @@ class SerializeInferenceModelBase(
         variable: str,
         inputs: dict,
     ) -> dict[str, dict[od.Process, hist.Hist]]:
+        import hist
+
         # collect histograms per variable and process
         hists: dict[od.Process, hist.Hist] = {}
 

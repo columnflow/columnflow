@@ -14,8 +14,6 @@ from columnflow.types import Any
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
-sp = maybe_import("scipy")
-maybe_import("scipy.sparse")
 
 
 def get_lumi_file_default(self, external_files: DotDict) -> str:
@@ -124,6 +122,9 @@ def json_filter_setup(
     :param inputs: Additional inputs, currently not used
     :param reader_targets: Additional targets, currently not used
     """
+    import scipy as sp
+    import scipy.sparse
+
     bundle = reqs["external_files"]
 
     # import the correction sets from the external file

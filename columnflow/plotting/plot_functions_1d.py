@@ -11,8 +11,8 @@ __all__ = []
 from collections import OrderedDict
 
 import law
+import order as od
 
-from columnflow.types import Iterable
 from columnflow.util import maybe_import
 from columnflow.plotting.plot_all import plot_all
 from columnflow.plotting.plot_util import (
@@ -31,14 +31,12 @@ from columnflow.plotting.plot_util import (
     join_labels,
 )
 from columnflow.hist_util import add_missing_shifts
+from columnflow.types import TYPE_CHECKING, Iterable
 
-
-hist = maybe_import("hist")
 np = maybe_import("numpy")
-mpl = maybe_import("matplotlib")
-plt = maybe_import("matplotlib.pyplot")
-mplhep = maybe_import("mplhep")
-od = maybe_import("order")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
+    plt = maybe_import("matplotlib.pyplot")
 
 
 def plot_variable_stack(
@@ -249,6 +247,8 @@ def plot_shifted_variable(
     """
     TODO.
     """
+    import hist
+
     variable_inst = variable_insts[0]
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
@@ -451,6 +451,8 @@ def plot_profile(
     :param base_distribution_yscale: yscale of the base distributions
     :param skip_variations: whether to skip adding the up and down variation of the profile plot
     """
+    import matplotlib.pyplot as plt
+
     if len(variable_insts) != 2:
         raise Exception("The plot_profile function can only be used for 2-dimensional input histograms.")
 
