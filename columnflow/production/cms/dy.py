@@ -16,7 +16,7 @@ from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-vector = maybe_import("vector")
+
 
 logger = law.logger.get_logger(__name__)
 
@@ -301,6 +301,8 @@ def recoil_corrected_met(self: Producer, events: ak.Array, **kwargs) -> ak.Array
 
     *get_dy_recoil_config* can be adapted in a subclass in case it is stored differently in the config.
     """
+    import vector
+
     # steps:
     # 1) Build transverse vectors for MET and the generator-level boson (full and visible).
     # 2) Compute the recoil vector U = MET + vis - full in the transverse plane.

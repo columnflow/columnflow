@@ -91,21 +91,6 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"calibrator"}
         return super().req_params(inst, **kwargs)
 
-    @property
-    def calibrator_repr(self) -> str:
-        """
-        Return a string representation of the calibrator class.
-        """
-        return self.build_repr(self.array_function_cls_repr(self.calibrator))
-
-    def store_parts(self) -> law.util.InsertableDict:
-        """
-        :return: Dictionary with parts that will be translated into an output directory path.
-        """
-        parts = super().store_parts()
-        parts.insert_after(self.config_store_anchor, "calibrator", f"calib__{self.calibrator_repr}")
-        return parts
-
     @classmethod
     def get_config_lookup_keys(
         cls,
@@ -124,6 +109,21 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
             keys[prefix] = f"{prefix}_{calibrator}"
 
         return keys
+
+    @property
+    def calibrator_repr(self) -> str:
+        """
+        Return a string representation of the calibrator class.
+        """
+        return self.build_repr(self.array_function_cls_repr(self.calibrator))
+
+    def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
+        parts = super().store_parts()
+        parts.insert_after(self.config_store_anchor, "calibrator", f"calib__{self.calibrator_repr}")
+        return parts
 
 
 class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
@@ -197,6 +197,23 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
         (shifts.local if cls.invokes_calibrator else shifts.upstream).update(calibrator_shifts)
 
         super().get_known_shifts(params, shifts)
+
+    @classmethod
+    def req_other_calibrator(cls, inst: CalibratorMixin, **kwargs) -> CalibratorMixin:
+        """
+        Same as :py:meth:`req` but overwrites specific arguments for instantiation that simplify requesting a different
+        calibrator instance.
+
+        :param inst: The reference instance to request parameters from.
+        :param kwargs: Additional arguments forwarded to :py:meth:`req`.
+        :return: A new instance of *this* class.
+        """
+        # calibrator_inst and known_shifts must be set to None to by-pass calibrator instance cache lookup and thus,
+        # also full parameter resolution
+        kwargs.setdefault("calibrator_inst", None)
+        kwargs.setdefault("known_shifts", None)
+
+        return cls.req(inst, **kwargs)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -477,6 +494,25 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
         }
         return super().req_params(inst, **kwargs)
 
+    @classmethod
+    def get_config_lookup_keys(
+        cls,
+        inst_or_params: SelectorClassMixin | dict[str, Any],
+    ) -> law.util.InsertiableDict:
+        keys = super().get_config_lookup_keys(inst_or_params)
+
+        # add the selector name
+        selector = (
+            inst_or_params.get("selector")
+            if isinstance(inst_or_params, dict)
+            else getattr(inst_or_params, "selector", None)
+        )
+        if selector not in (law.NO_STR, None, ""):
+            prefix = "sel"
+            keys[prefix] = f"{prefix}_{selector}"
+
+        return keys
+
     @property
     def selector_repr(self) -> str:
         """
@@ -497,25 +533,6 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
         parts = super().store_parts()
         parts.insert_after(self.config_store_anchor, "selector", f"sel__{self.selector_repr}")
         return parts
-
-    @classmethod
-    def get_config_lookup_keys(
-        cls,
-        inst_or_params: SelectorClassMixin | dict[str, Any],
-    ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
-
-        # add the selector name
-        selector = (
-            inst_or_params.get("selector")
-            if isinstance(inst_or_params, dict)
-            else getattr(inst_or_params, "selector", None)
-        )
-        if selector not in (law.NO_STR, None, ""):
-            prefix = "sel"
-            keys[prefix] = f"{prefix}_{selector}"
-
-        return keys
 
 
 class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
@@ -584,6 +601,23 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
         (shifts.local if cls.invokes_selector else shifts.upstream).update(selector_shifts)
 
         super().get_known_shifts(params, shifts)
+
+    @classmethod
+    def req_other_selector(cls, inst: SelectorMixin, **kwargs) -> SelectorMixin:
+        """
+        Same as :py:meth:`req` but overwrites specific arguments for instantiation that simplify requesting a different
+        selector instance.
+
+        :param inst: The reference instance to request parameters from.
+        :param kwargs: Additional arguments forwarded to :py:meth:`req`.
+        :return: A new instance of *this* class.
+        """
+        # selector_inst and known_shifts must be set to None to by-pass selector instance cache lookup and thus, also
+        # full parameter resolution
+        kwargs.setdefault("selector_inst", None)
+        kwargs.setdefault("known_shifts", None)
+
+        return cls.req(inst, **kwargs)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -676,21 +710,6 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"reducer"}
         return super().req_params(inst, **kwargs)
 
-    @property
-    def reducer_repr(self) -> str:
-        """
-        Return a string representation of the reducer class.
-        """
-        return self.build_repr(self.array_function_cls_repr(self.reducer))
-
-    def store_parts(self) -> law.util.InsertableDict:
-        """
-        :return: Dictionary with parts that will be translated into an output directory path.
-        """
-        parts = super().store_parts()
-        parts.insert_after(self.config_store_anchor, "reducer", f"red__{self.reducer_repr}")
-        return parts
-
     @classmethod
     def get_config_lookup_keys(
         cls,
@@ -709,6 +728,21 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
             keys[prefix] = f"{prefix}_{reducer}"
 
         return keys
+
+    @property
+    def reducer_repr(self) -> str:
+        """
+        Return a string representation of the reducer class.
+        """
+        return self.build_repr(self.array_function_cls_repr(self.reducer))
+
+    def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
+        parts = super().store_parts()
+        parts.insert_after(self.config_store_anchor, "reducer", f"red__{self.reducer_repr}")
+        return parts
 
 
 class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
@@ -783,6 +817,23 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
 
         super().get_known_shifts(params, shifts)
 
+    @classmethod
+    def req_other_reducer(cls, inst: ReducerMixin, **kwargs) -> ReducerMixin:
+        """
+        Same as :py:meth:`req` but overwrites specific arguments for instantiation that simplify requesting a different
+        reducer instance.
+
+        :param inst: The reference instance to request parameters from.
+        :param kwargs: Additional arguments forwarded to :py:meth:`req`.
+        :return: A new instance of *this* class.
+        """
+        # reducer_inst and known_shifts must be set to None to by-pass reducer instance cache lookup and thus, also full
+        # parameter resolution
+        kwargs.setdefault("reducer_inst", None)
+        kwargs.setdefault("known_shifts", None)
+
+        return cls.req(inst, **kwargs)
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
@@ -852,21 +903,6 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"producer"}
         return super().req_params(inst, **kwargs)
 
-    @property
-    def producer_repr(self) -> str:
-        """
-        Return a string representation of the producer class.
-        """
-        return self.build_repr(self.array_function_cls_repr(self.producer))
-
-    def store_parts(self) -> law.util.InsertableDict:
-        """
-        :return: Dictionary with parts that will be translated into an output directory path.
-        """
-        parts = super().store_parts()
-        parts.insert_after(self.config_store_anchor, "producer", f"prod__{self.producer_repr}")
-        return parts
-
     @classmethod
     def get_config_lookup_keys(
         cls,
@@ -885,6 +921,21 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
             keys[prefix] = f"{prefix}_{producer}"
 
         return keys
+
+    @property
+    def producer_repr(self) -> str:
+        """
+        Return a string representation of the producer class.
+        """
+        return self.build_repr(self.array_function_cls_repr(self.producer))
+
+    def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
+        parts = super().store_parts()
+        parts.insert_after(self.config_store_anchor, "producer", f"prod__{self.producer_repr}")
+        return parts
 
 
 class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
@@ -958,6 +1009,23 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
         (shifts.local if cls.invokes_producer else shifts.upstream).update(producer_shifts)
 
         super().get_known_shifts(params, shifts)
+
+    @classmethod
+    def req_other_producer(cls, inst: ProducerMixin, **kwargs) -> ProducerMixin:
+        """
+        Same as :py:meth:`req` but overwrites specific arguments for instantiation that simplify requesting a different
+        producer instance.
+
+        :param inst: The reference instance to request parameters from.
+        :param kwargs: Additional arguments forwarded to :py:meth:`req`.
+        :return: A new instance of *this* class.
+        """
+        # producer_inst and known_shifts must be set to None to by-pass producer instance cache lookup and thus, also
+        # full parameter resolution
+        kwargs.setdefault("producer_inst", None)
+        kwargs.setdefault("known_shifts", None)
+
+        return cls.req(inst, **kwargs)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -1680,21 +1748,6 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
         kwargs["_prefer_cli"] = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"hist_producer"}
         return super().req_params(inst, **kwargs)
 
-    @property
-    def hist_producer_repr(self) -> str:
-        """
-        Return a string representation of the hist producer class.
-        """
-        return self.build_repr(self.array_function_cls_repr(self.hist_producer))
-
-    def store_parts(self) -> law.util.InsertableDict:
-        """
-        :return: Dictionary with parts that will be translated into an output directory path.
-        """
-        parts = super().store_parts()
-        parts.insert_after(self.config_store_anchor, "hist_producer", f"hist__{self.hist_producer_repr}")
-        return parts
-
     @classmethod
     def get_config_lookup_keys(
         cls,
@@ -1713,6 +1766,21 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
             keys[prefix] = f"{prefix}_{producer}"
 
         return keys
+
+    @property
+    def hist_producer_repr(self) -> str:
+        """
+        Return a string representation of the hist producer class.
+        """
+        return self.build_repr(self.array_function_cls_repr(self.hist_producer))
+
+    def store_parts(self) -> law.util.InsertableDict:
+        """
+        :return: Dictionary with parts that will be translated into an output directory path.
+        """
+        parts = super().store_parts()
+        parts.insert_after(self.config_store_anchor, "hist_producer", f"hist__{self.hist_producer_repr}")
+        return parts
 
 
 class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
@@ -1789,6 +1857,23 @@ class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
         (shifts.local if cls.invokes_hist_producer else shifts.upstream).update(hist_producer_shifts)
 
         super().get_known_shifts(params, shifts)
+
+    @classmethod
+    def req_other_hist_producer(cls, inst: HistProducerMixin, **kwargs) -> HistProducerMixin:
+        """
+        Same as :py:meth:`req` but overwrites specific arguments for instantiation that simplify requesting a different
+        hist producer instance.
+
+        :param inst: The reference instance to request parameters from.
+        :param kwargs: Additional arguments forwarded to :py:meth:`req`.
+        :return: A new instance of *this* class.
+        """
+        # hist_producer_inst and known_shifts must be set to None to by-pass hist producer instance cache lookup and
+        # thus, also full parameter resolution
+        kwargs.setdefault("hist_producer_inst", None)
+        kwargs.setdefault("known_shifts", None)
+
+        return cls.req(inst, **kwargs)
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

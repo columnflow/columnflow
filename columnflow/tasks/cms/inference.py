@@ -14,8 +14,11 @@ import order as od
 from columnflow.tasks.framework.base import AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.inference import SerializeInferenceModelBase
 from columnflow.tasks.histograms import MergeHistograms
+from columnflow.inference.cms.datacard import DatacardWriter
+from columnflow.types import TYPE_CHECKING
 
-from columnflow.inference.cms.datacard import DatacardHists, ShiftHists, DatacardWriter
+if TYPE_CHECKING:
+    from columnflow.inference.cms.datacard import DatacardHists, ShiftHists
 
 
 class CreateDatacards(SerializeInferenceModelBase):
