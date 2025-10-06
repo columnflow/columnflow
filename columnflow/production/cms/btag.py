@@ -18,6 +18,7 @@ from columnflow.types import Any
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
+
 logger = law.logger.get_logger(__name__)
 
 

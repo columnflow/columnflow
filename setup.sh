@@ -794,6 +794,8 @@ cf_setup_post_install() {
     # Optional environment variables:
     #   CF_SKIP_SETUP_GIT_HOOKS
     #       When set to true, the setup of git hooks is skipped.
+    #   CF_SKIP_LAW_INDEX
+    #       When set to true, the initial indexing of law tasks is skipped.
     #   CF_SKIP_CHECK_TMP_DIR
     #       When set to true, the check of the size of the target tmp directory is skipped.
 
@@ -822,7 +824,9 @@ cf_setup_post_install() {
             complete -o bashdefault -o default -F _law_complete claw
 
             # silently index
-            law index -q
+            if ! ${CF_SKIP_LAW_INDEX}; then
+                law index -q
+            fi
         fi
     fi
 
@@ -1147,6 +1151,7 @@ for flag_name in \
         CF_REINSTALL_HOOKS \
         CF_SKIP_BANNER \
         CF_SKIP_SETUP_GIT_HOOKS \
+        CF_SKIP_LAW_INDEX \
         CF_SKIP_CHECK_TMP_DIR \
         CF_ON_HTCONDOR \
         CF_ON_SLURM \

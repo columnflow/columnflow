@@ -4,20 +4,24 @@
 Jet energy corrections and jet resolution smearing.
 """
 
+from __future__ import annotations
+
 import functools
 
 import law
 
-from columnflow.types import Any
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met, sum_transverse
 from columnflow.production.util import attach_coffea_behavior
 from columnflow.util import UNSET, maybe_import, DotDict, load_correction_set
 from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_column as optional
+from columnflow.types import TYPE_CHECKING, Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-correctionlib = maybe_import("correctionlib")
+if TYPE_CHECKING:
+    correctionlib = maybe_import("correctionlib")
+
 
 logger = law.logger.get_logger(__name__)
 

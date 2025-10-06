@@ -342,16 +342,19 @@ class SchedulerMessageHandler:
             )
 
 
+_default_remove_claw_sandbox = law.config.get_expanded("analysis", "default_remote_claw_sandbox", None) or law.NO_STR
+
+
 class RemoteWorkflowMixin(AnalysisTask):
     """
     Mixin class for custom remote workflows adding common functionality.
     """
 
     remote_claw_sandbox = luigi.Parameter(
-        default=law.NO_STR,
+        default=_default_remove_claw_sandbox,
         significant=False,
         description="the name of a non-dev sandbox to use in remote jobs for the 'claw' executable rather than using "
-        "using 'law' directly; not used when empty; default: empty",
+        f"using 'law' directly; not used when empty; default: {_default_remove_claw_sandbox}",
     )
 
     skip_destination_info: bool = False
