@@ -755,7 +755,7 @@ def track_category_changes(config: od.Config, summary_path: str | None = None) -
             prev_names = set(prev)
             if (added_names := curr_names - prev_names):
                 msgs.append(f"added categories    : {', '.join(sorted(added_names))}")
-            if (removed_names := prev_names - prev_names):
+            if (removed_names := prev_names - curr_names):
                 msgs.append(f"removed categories  : {', '.join(sorted(removed_names))}")
             # track id changes for names present in both
             changed_ids = {
