@@ -10,14 +10,15 @@ import law
 import order as od
 
 from columnflow.histogramming import HistProducer, hist_producer
-from columnflow.util import maybe_import
-from columnflow.hist_util import create_hist_from_variables, fill_hist, translate_hist_intcat_to_strcat
 from columnflow.columnar_util import has_ak_column, Route
-from columnflow.types import Any
+from columnflow.hist_util import create_hist_from_variables, fill_hist, translate_hist_intcat_to_strcat
+from columnflow.util import maybe_import
+from columnflow.types import TYPE_CHECKING, Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-hist = maybe_import("hist")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
 
 
 @hist_producer()
@@ -39,7 +40,7 @@ def cf_default_create_hist(
     variables: list[od.Variable],
     task: law.Task,
     **kwargs,
-) -> hist.Histogram:
+) -> hist.Hist:
     """
     Define the histogram structure for the default histogram producer.
     """
@@ -55,7 +56,7 @@ def cf_default_create_hist(
 
 
 @cf_default.fill_hist
-def cf_default_fill_hist(self: HistProducer, h: hist.Histogram, data: dict[str, Any], task: law.Task) -> None:
+def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any], task: law.Task) -> None:
     """
     Fill the histogram with the data.
     """
@@ -63,7 +64,7 @@ def cf_default_fill_hist(self: HistProducer, h: hist.Histogram, data: dict[str, 
 
 
 @cf_default.post_process_hist
-def cf_default_post_process_hist(self: HistProducer, h: hist.Histogram, task: law.Task) -> hist.Histogram:
+def cf_default_post_process_hist(self: HistProducer, h: hist.Hist, task: law.Task) -> hist.Hist:
     """
     Post-process the histogram, converting integer to string axis for consistent lookup across configs where ids might
     be different.

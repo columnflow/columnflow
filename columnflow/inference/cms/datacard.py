@@ -14,18 +14,19 @@ import law
 from columnflow import __version__ as cf_version
 from columnflow.inference import InferenceModel, ParameterType, ParameterTransformation, FlowStrategy
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div, maybe_int
-from columnflow.types import Sequence, Any, Union, Hashable
+from columnflow.types import TYPE_CHECKING, Sequence, Any, Union, Hashable
 
-hist = maybe_import("hist")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
+
+    # type aliases for nested histogram structs
+    ShiftHists = dict[Union[str, tuple[str, str]], hist.Hist]  # "nominal" or (param_name, "up|down") -> hists
+    ConfigHists = dict[str, ShiftHists]  # config name -> hists
+    ProcHists = dict[str, ConfigHists]  # process name -> hists
+    DatacardHists = dict[str, ProcHists]  # category name -> hists
 
 
 logger = law.logger.get_logger(__name__)
-
-# type aliases for nested histogram structs
-ShiftHists = dict[Union[str, tuple[str, str]], hist.Hist]  # "nominal" or (param_name, "up|down") -> hists
-ConfigHists = dict[str, ShiftHists]  # config name -> hists
-ProcHists = dict[str, ConfigHists]  # process name -> hists
-DatacardHists = dict[str, ProcHists]  # category name -> hists
 
 
 class DatacardWriter(object):

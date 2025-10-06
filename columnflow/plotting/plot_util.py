@@ -9,6 +9,7 @@ from __future__ import annotations
 __all__ = []
 
 import re
+import math
 import operator
 import functools
 from collections import OrderedDict
@@ -19,13 +20,12 @@ import scinum as sn
 
 from columnflow.util import maybe_import, try_int, try_complex, UNSET
 from columnflow.hist_util import copy_axis
-from columnflow.types import Iterable, Any, Callable, Sequence, Hashable
+from columnflow.types import TYPE_CHECKING, Iterable, Any, Callable, Sequence, Hashable
 
-math = maybe_import("math")
-hist = maybe_import("hist")
 np = maybe_import("numpy")
-plt = maybe_import("matplotlib.pyplot")
-mplhep = maybe_import("mplhep")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
+    plt = maybe_import("matplotlib.pyplot")
 
 
 logger = law.logger.get_logger(__name__)
@@ -255,6 +255,8 @@ def apply_variable_settings(
     applies settings from *variable_settings* dictionary to the *variable_insts*;
     the *rebin*, *overflow*, *underflow*, and *slice* settings are directly applied to the histograms
     """
+    import hist
+
     # store info gathered along application of variable settings that can be inserted to the style config
     variable_style_config = {}
 
@@ -382,12 +384,12 @@ def apply_density(hists: dict, density: bool = True) -> dict:
     if not density:
         return hists
 
-    for key, hist in hists.items():
+    for key, h in hists.items():
         # bin area safe for multi-dimensional histograms
-        area = functools.reduce(operator.mul, hist.axes.widths)
+        area = functools.reduce(operator.mul, h.axes.widths)
 
         # scale hist by bin area
-        hists[key] = hist / area
+        hists[key] = h / area
 
     return hists
 
@@ -398,6 +400,8 @@ def remove_residual_axis_single(
     max_bins: int = 1,
     select_value: Any = None,
 ) -> hist.Hist:
+    import hist
+
     # force always returning a copy
     h = h.copy()
 
@@ -510,6 +514,8 @@ def prepare_stack_plot_config(
     backgrounds with uncertainty bands, unstacked processes as lines and
     data entrys with errorbars.
     """
+    import hist
+
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     mc_syst_hists = []
@@ -943,6 +949,8 @@ def rebin_equal_width(
     :param axis_name: Name of the axis to rebin.
     :return: Tuple of the rebinned histograms and the new bin edges.
     """
+    import hist
+
     # get the variable axis from the first histogram
     assert hists
     for var_index, var_axis in enumerate(list(hists.values())[0].axes):
@@ -1049,6 +1057,7 @@ def calculate_stat_error(
         - 'poisson_unweighted': the plotted error is the poisson error for each bin
         - 'poisson_weighted': the plotted error is the poisson error for each bin, weighted by the variance
     """
+    import hist
 
     # determine the error type
     if error_type == "variance":

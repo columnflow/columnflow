@@ -32,13 +32,7 @@ from columnflow.util import (
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-dak = maybe_import("dask_awkward")
 uproot = maybe_import("uproot")
-coffea = maybe_import("coffea")
-maybe_import("coffea.nanoevents")
-maybe_import("coffea.nanoevents.methods.base")
-maybe_import("coffea.nanoevents.methods.nanoaod")
-pq = maybe_import("pyarrow.parquet")
 
 
 # loggers
@@ -1237,6 +1231,9 @@ def attach_behavior(
     (*skip_fields*) can contain names or name patterns of fields that are kept (filtered).
     *keep_fields* has priority, i.e., when it is set, *skip_fields* is not considered.
     """
+    import coffea.nanoevents
+    import coffea.nanoevents.methods.nanoaod
+
     if behavior is None:
         behavior = getattr(ak_array, "behavior", None) or coffea.nanoevents.methods.nanoaod.behavior
         if behavior is None:
@@ -3076,6 +3073,7 @@ class DaskArrayReader(object):
                 open_options["split_row_groups"] = False
 
         # open the file
+        import dask_awkward as dak
         self.dak_array = dak.from_parquet(path, **open_options)
         self.path = path
 
@@ -3614,7 +3612,7 @@ class ChunkedIOHandler(object):
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
-    ) -> coffea.nanoevents.methods.base.NanoEventsArray:
+    ) -> ak.Array:
         """
         Given a file location or opened uproot file, and a tree name in a 2-tuple *source_object*,
         returns an awkward array chunk referred to by *chunk_pos*, assuming nanoAOD structure.
@@ -3622,6 +3620,8 @@ class ChunkedIOHandler(object):
         *read_columns* are converted to strings and, if not already present, added as nested fields
         ``iteritems_options.filter_name`` to *read_options*.
         """
+        import coffea.nanoevents
+
         # default read options
         read_options = read_options or {}
         read_options["delayed"] = False
@@ -3669,6 +3669,8 @@ class ChunkedIOHandler(object):
         Given a parquet file located at *source*, returns a 2-tuple *(source, entries)*. Passing
         *open_options* or *read_columns* has no effect.
         """
+        import pyarrow.parquet as pq
+
         return (source, pq.ParquetFile(source).metadata.num_rows)
 
     @classmethod
@@ -3688,7 +3690,7 @@ class ChunkedIOHandler(object):
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
-    ) -> coffea.nanoevents.methods.base.NanoEventsArray:
+    ) -> ak.Array:
         """
         Given a the location of a parquet file *source_object*, returns an awkward array chunk
         referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
@@ -3696,6 +3698,8 @@ class ChunkedIOHandler(object):
         strings and, if not already present, added as nested field
         ``parquet_options.read_dictionary`` to *read_options*.
         """
+        import coffea.nanoevents
+
         # default read options
         read_options = read_options or {}
         read_options["runtime_cache"] = None

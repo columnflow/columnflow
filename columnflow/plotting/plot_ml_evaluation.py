@@ -6,42 +6,45 @@ Useful plot functions for ML Evaluation
 
 from __future__ import annotations
 
+__all__ = []
+
 import re
 
-from columnflow.types import Sequence
+import order as od
+import scinum
+
 from columnflow.util import maybe_import
 from columnflow.plotting.plot_util import get_cms_label
+from columnflow.types import TYPE_CHECKING, Sequence
 
-ak = maybe_import("awkward")
-od = maybe_import("order")
 np = maybe_import("numpy")
-sci = maybe_import("scinum")
-plt = maybe_import("matplotlib.pyplot")
-hep = maybe_import("mplhep")
-colors = maybe_import("matplotlib.colors")
+ak = maybe_import("awkward")
+if TYPE_CHECKING:
+    plt = maybe_import("matplotlib.pyplot")
+
 
 # define a CF custom color maps
 cf_colors = {
-    "cf_green_cmap": colors.ListedColormap([
+    "cf_green_cmap": [
         "#212121", "#242723", "#262D25", "#283426", "#2A3A26", "#2C4227", "#2E4927",
         "#305126", "#325A25", "#356224", "#386B22", "#3B7520", "#3F7F1E", "#43891B",
         "#479418", "#4C9F14", "#52AA10", "#58B60C", "#5FC207", "#67cf02",
-    ]),
-    "cf_ygb_cmap": colors.ListedColormap([
+    ],
+    "cf_ygb_cmap": [
         "#003675", "#005B83", "#008490", "#009A83", "#00A368", "#00AC49", "#00B428",
         "#00BC06", "#0CC300", "#39C900", "#67cf02", "#72DB02", "#7EE605", "#8DF207",
         "#9CFD09", "#AEFF0B", "#C1FF0E", "#D5FF10", "#EBFF12", "#FFFF14",
-    ]),
-    "cf_cmap": colors.ListedColormap([
+    ],
+    "cf_cmap": [
         "#002C9C", "#00419F", "#0056A2", "#006BA4", "#0081A7", "#0098AA", "#00ADAB",
         "#00B099", "#00B287", "#00B574", "#00B860", "#00BB4C", "#00BD38", "#00C023",
         "#00C20D", "#06C500", "#1EC800", "#36CA00", "#4ECD01", "#67cf02",
-    ]),
-    "viridis": colors.ListedColormap([
+    ],
+    "viridis": [
         "#263DA8", "#1652CC", "#1063DB", "#1171D8", "#1380D5", "#0E8ED0", "#089DCC",
         "#0DA7C2", "#1DAFB3", "#2DB7A3", "#52BA91", "#73BD80", "#94BE71", "#B2BC65",
         "#D0BA59", "#E1BF4A", "#F4C53A", "#FCD12B", "#FAE61C", "#F9F90E",
-    ]),
+    ],
 }
 
 
@@ -111,6 +114,10 @@ def plot_cm(
         is not *None* and its shape doesn't match *predictions*.
     :raises AssertionError: If *normalization* is not one of *None*, "row", "column".
     """
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    import mplhep
+
     # defining some useful properties and output shapes
     true_labels = list(events.keys())
     pred_labels = [s.removeprefix("score_") for s in list(events.values())[0].fields]
@@ -136,7 +143,7 @@ def plot_cm(
                 counts[ind, index] += count
 
         if not skip_uncertainties:
-            vecNumber = np.vectorize(lambda n, count: sci.Number(n, float(n / np.sqrt(count) if count else 0)))
+            vecNumber = np.vectorize(lambda n, count: scinum.Number(n, float(n / np.sqrt(count) if count else 0)))
             result = vecNumber(result, counts)
 
         # normalize Matrix if needed
@@ -203,7 +210,7 @@ def plot_cm(
             Useful for seperating the error from the data
             """
             if matrix.dtype.name == "object":
-                get_errors_vec = np.vectorize(lambda x: x.get(sci.UP, unc=True))
+                get_errors_vec = np.vectorize(lambda x: x.get(scinum.UP, unc=True))
                 return get_errors_vec(matrix)
             return np.zeros_like(matrix)
 
@@ -219,13 +226,13 @@ def plot_cm(
             return "{}\n\u00B1{}".format(fmt(values[i][j]), fmt(np.nan_to_num(uncs[i][j])))
 
         # create the plot
-        plt.style.use(hep.style.CMS)
+        plt.style.use(mplhep.style.CMS)
         fig, ax = plt.subplots(dpi=300)
 
         # some useful variables and functions
         n_processes = cm.shape[0]
         n_classes = cm.shape[1]
-        cmap = cf_colors.get(colormap, cf_colors["cf_cmap"])
+        cmap = mpl.colors.ListedColormap(cf_colors.get(colormap, cf_colors["cf_cmap"]))
         x_labels = x_labels if x_labels else [f"out{i}" for i in range(n_classes)]
         y_labels = y_labels if y_labels else true_labels
         font_ax = 20
@@ -292,7 +299,7 @@ def plot_cm(
         if cms_llabel != "skip":
             cms_label_kwargs = get_cms_label(ax=ax, llabel=cms_llabel)
             cms_label_kwargs["rlabel"] = cms_rlabel
-            hep.cms.label(**cms_label_kwargs)
+            mplhep.cms.label(**cms_label_kwargs)
         plt.tight_layout()
 
         return fig
@@ -349,6 +356,9 @@ def plot_roc(
         is not *None* and its shape doesn't match *predictions*.
     :raises ValueError: If *normalization* is not one of *None*, 'row', 'column'.
     """
+    import matplotlib.pyplot as plt
+    import mplhep
+
     # defining some useful properties and output shapes
     thresholds = np.linspace(0, 1, n_thresholds)
     weights = create_sample_weights(sample_weights, events, list(events.keys()))
@@ -478,7 +488,7 @@ def plot_roc(
         fpr = roc_data["fpr"]
         tpr = roc_data["tpr"]
 
-        plt.style.use(hep.style.CMS)
+        plt.style.use(mplhep.style.CMS)
         fig, ax = plt.subplots(dpi=300)
         ax.set_xlabel("FPR", loc="right", labelpad=10, fontsize=25)
         ax.set_ylabel("TPR", loc="top", labelpad=15, fontsize=25)
@@ -499,7 +509,7 @@ def plot_roc(
         if cms_llabel != "skip":
             cms_label_kwargs = get_cms_label(ax=ax, llabel=cms_llabel)
             cms_label_kwargs["rlabel"] = cms_rlabel
-            hep.cms.label(**cms_label_kwargs)
+            mplhep.cms.label(**cms_label_kwargs)
         plt.tight_layout()
 
         return fig

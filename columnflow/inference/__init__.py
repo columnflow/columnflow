@@ -19,8 +19,8 @@ from columnflow.util import (
     freeze,
 )
 
-logger = law.logger.get_logger(__name__)
 
+logger = law.logger.get_logger(__name__)
 
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
 
