@@ -680,26 +680,20 @@ def create_category_combinations(
                     # only connect to root categories
                     parent_gen = ((name,) for name in _group_names)
                 else:  # safe
-                    # same as "all", but drop safe groups and ensure the resulting combination is only used once
+                    # same as "all", but unsafe groups must be part of the combinations
                     def _parent_gen():
                         seen = set()
+                        # choose 1 group to sum over from _n_groups available
                         for names in itertools.combinations(_group_names, _n_groups - 1):
                             # as above, if there is at least one unsafe group missing, the parent was not created
                             if (set(_group_names) - set(names)) & unsafe_groups:
                                 continue
-                            # remove safe groups to only connect to unsafe ones that were created before
-                            names = tuple(name for name in names if name in unsafe_groups)
                             if names and names not in seen:
                                 seen.add(names)
-                                seen.update((name,) for name in names)
                                 yield names
-                        # in case no intermediate parent was selected, connect to the root categories
+                        # in case no parent combination was yielded, yield all root categories separately
                         if not seen:
-                            for name in _group_names:
-                                names = (name,)
-                                if names not in seen:
-                                    seen.add(names)
-                                    yield names
+                            yield from ((name,) for name in _group_names)
                     parent_gen = _parent_gen()
 
                 # actual connections
