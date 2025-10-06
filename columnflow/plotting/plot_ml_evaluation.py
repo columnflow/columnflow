@@ -356,6 +356,7 @@ def plot_roc(
         is not *None* and its shape doesn't match *predictions*.
     :raises ValueError: If *normalization* is not one of *None*, 'row', 'column'.
     """
+    import matplotlib.pyplot as plt
     import mplhep
 
     # defining some useful properties and output shapes
