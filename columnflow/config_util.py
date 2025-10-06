@@ -630,9 +630,9 @@ def create_category_combinations(
         # build all group combinations
         for _group_names in itertools.combinations(group_names, _n_groups):
             # when creating parents in "safe" mode, skip combinations that miss unsafe groups
+            # (i.e. they must be part of _group_names to be used later)
             if parent_mode == "safe":
-                missing_groups = set(group_names) - set(_group_names)
-                if missing_groups & unsafe_groups:
+                if (set(group_names) - set(_group_names)) & unsafe_groups:
                     continue
 
             # build the product of all categories for the given groups
