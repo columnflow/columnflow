@@ -72,6 +72,7 @@ def ak_extract_fields(arr: ak.Array, fields: list[str], **kwargs):
 def _lv_base(*args, **kwargs):
     # scoped partial to defer coffea import
     import coffea.nanoevents
+    import coffea.nanoevents.methods.nanoaod
     kwargs["behavior"] = coffea.nanoevents.methods.nanoaod.behavior
     return ak_extract_fields(*args, **kwargs)
 
