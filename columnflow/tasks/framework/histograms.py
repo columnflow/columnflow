@@ -18,8 +18,10 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import dev_sandbox, maybe_import
+from columnflow.types import TYPE_CHECKING
 
-hist = maybe_import("hist")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
 
 
 class HistogramsUserBase(

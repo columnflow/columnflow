@@ -342,12 +342,24 @@ class SchedulerMessageHandler:
             )
 
 
+_default_remove_claw_sandbox = law.config.get_expanded("analysis", "default_remote_claw_sandbox", None) or law.NO_STR
+
+
 class RemoteWorkflowMixin(AnalysisTask):
     """
     Mixin class for custom remote workflows adding common functionality.
     """
 
+    remote_claw_sandbox = luigi.Parameter(
+        default=_default_remove_claw_sandbox,
+        significant=False,
+        description="the name of a non-dev sandbox to use in remote jobs for the 'claw' executable rather than using "
+        f"using 'law' directly; not used when empty; default: {_default_remove_claw_sandbox}",
+    )
+
     skip_destination_info: bool = False
+
+    exclude_params_req = {"remote_claw_sandbox"}
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -576,6 +588,14 @@ class RemoteWorkflowMixin(AnalysisTask):
                 render=False,
             )
 
+        # claw sandbox
+        if self.remote_claw_sandbox not in {None, "", law.NO_STR}:
+            if self.remote_claw_sandbox.endswith("_dev"):
+                raise ValueError(
+                    f"remote_claw_sandbox must not refer to a dev sandbox, got '{self.remote_claw_sandbox}'",
+                )
+            config.render_variables["law_exe"] = f"CLAW_SANDBOX='{self.remote_claw_sandbox}' claw"
+
     def common_destination_info(self, info: dict[str, str]) -> dict[str, str]:
         """
         Hook to modify the additional info printed along logs of the workflow.
@@ -800,6 +820,8 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
             batch_name += f"_{info['config']}"
         if "dataset" in info:
             batch_name += f"_{info['dataset']}"
+        if "shift" in info:
+            batch_name += f"_{info['shift']}"
         config.custom_content.append(("batch_name", batch_name))
 
         # CERN settings, https://batchdocs.web.cern.ch/local/submit.html#os-selection-via-containers

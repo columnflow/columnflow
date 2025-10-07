@@ -4,20 +4,24 @@
 Jet energy corrections and jet resolution smearing.
 """
 
+from __future__ import annotations
+
 import functools
 
 import law
 
-from columnflow.types import Any
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met, sum_transverse
 from columnflow.production.util import attach_coffea_behavior
-from columnflow.util import maybe_import, DotDict, load_correction_set
+from columnflow.util import UNSET, maybe_import, DotDict, load_correction_set
 from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_column as optional
+from columnflow.types import TYPE_CHECKING, Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-correctionlib = maybe_import("correctionlib")
+if TYPE_CHECKING:
+    correctionlib = maybe_import("correctionlib")
+
 
 logger = law.logger.get_logger(__name__)
 
@@ -1129,8 +1133,6 @@ jer_ak8 = jer.derive("jer_ak8", cls_dict={"jet_name": "FatJet", "gen_jet_name": 
 #
 
 @calibrator(
-    uses={jec, jer},
-    produces={jec, jer},
     # name of the jet collection to smear
     jet_name="Jet",
     # name of the associated gen jet collection (for JER smearing)
@@ -1151,32 +1153,35 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     :param events: awkward array containing events to process
     """
     # apply jet energy corrections
-    events = self[jec](events, **kwargs)
+    events = self[self.jec_cls](events, **kwargs)
 
     # apply jer smearing on MC only
     if self.dataset_inst.is_mc:
-        events = self[jer](events, **kwargs)
+        events = self[self.jer_cls](events, **kwargs)
 
     return events
 
 
-@jets.pre_init
-def jets_pre_init(self: Calibrator, **kwargs) -> None:
-    # forward argument to the producers
-    self.deps_kwargs[jec]["jet_name"] = self.jet_name
-    self.deps_kwargs[jer]["jet_name"] = self.jet_name
-    self.deps_kwargs[jer]["gen_jet_name"] = self.gen_jet_name
-    if self.propagate_met is not None:
-        self.deps_kwargs[jec]["propagate_met"] = self.propagate_met
-        self.deps_kwargs[jer]["propagate_met"] = self.propagate_met
-    if self.get_jec_file is not None:
-        self.deps_kwargs[jec]["get_jec_file"] = self.get_jec_file
-    if self.get_jec_config is not None:
-        self.deps_kwargs[jec]["get_jec_config"] = self.get_jec_config
-    if self.get_jer_file is not None:
-        self.deps_kwargs[jer]["get_jer_file"] = self.get_jer_file
-    if self.get_jer_config is not None:
-        self.deps_kwargs[jer]["get_jer_config"] = self.get_jer_config
+@jets.init
+def jets_init(self: Calibrator, **kwargs) -> None:
+    # create custom jec and jer calibrators, using the jet name as the identifying value
+    def get_attrs(attrs):
+        cls_dict = {}
+        for attr in attrs:
+            if (value := getattr(self, attr, UNSET)) is not UNSET:
+                cls_dict[attr] = value
+        return cls_dict
+
+    jec_attrs = ["jet_name", "gen_jet_name", "propagate_met", "get_jec_file", "get_jec_config"]
+    self.jec_cls = jec.derive(f"jec_{self.jet_name}", cls_dict=get_attrs(jec_attrs))
+    self.uses.add(self.jec_cls)
+    self.produces.add(self.jec_cls)
+
+    if self.dataset_inst.is_mc:
+        jer_attrs = ["jet_name", "gen_jet_name", "propagate_met", "get_jer_file", "get_jer_config"]
+        self.jer_cls = jer.derive(f"jer_{self.jet_name}", cls_dict=get_attrs(jer_attrs))
+        self.uses.add(self.jer_cls)
+        self.produces.add(self.jer_cls)
 
 
 # explicit calibrators for standard jet collections

@@ -16,6 +16,7 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 dak = maybe_import("dask_awkward")
 coffea = maybe_import("coffea")
+maybe_import("coffea.nanoevents")
 
 
 class RouteTest(unittest.TestCase):

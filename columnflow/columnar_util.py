@@ -24,21 +24,15 @@ from collections import namedtuple, OrderedDict, deque, defaultdict
 import law
 import order as od
 
-from columnflow.types import Sequence, Callable, Any, T, Generator
+from columnflow.types import Sequence, Callable, Any, T, Generator, Hashable
 from columnflow.util import (
-    UNSET, maybe_import, classproperty, DotDict, DerivableMeta, Derivable, pattern_matcher,
+    UNSET, maybe_import, classproperty, DotDict, DerivableMeta, CachedDerivableMeta, Derivable, pattern_matcher,
     get_source_code, real_path, freeze, get_docs_url,
 )
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
-dak = maybe_import("dask_awkward")
 uproot = maybe_import("uproot")
-coffea = maybe_import("coffea")
-maybe_import("coffea.nanoevents")
-maybe_import("coffea.nanoevents.methods.base")
-maybe_import("coffea.nanoevents.methods.nanoaod")
-pq = maybe_import("pyarrow.parquet")
 
 
 # loggers
@@ -1237,6 +1231,9 @@ def attach_behavior(
     (*skip_fields*) can contain names or name patterns of fields that are kept (filtered).
     *keep_fields* has priority, i.e., when it is set, *skip_fields* is not considered.
     """
+    import coffea.nanoevents
+    import coffea.nanoevents.methods.nanoaod
+
     if behavior is None:
         behavior = getattr(ak_array, "behavior", None) or coffea.nanoevents.methods.nanoaod.behavior
         if behavior is None:
@@ -1635,11 +1632,6 @@ class ArrayFunction(Derivable):
     """
 
     # class-level attributes as defaults
-    call_func = None
-    pre_init_func = None
-    init_func = None
-    skip_func = None
-
     uses = set()
     produces = set()
     check_used_columns = True
@@ -1731,15 +1723,20 @@ class ArrayFunction(Derivable):
         return cls.IOFlagged(cls, cls.IOFlag.PRODUCES)
 
     @classmethod
-    def call(cls, func: Callable[[Any, ...], Any]) -> None:
+    def pre_init(cls, func: Callable[[], None]) -> None:
         """
-        Decorator to wrap a function *func* that should be registered as :py:meth:`call_func`
-        which defines the main callable for processing chunks of data. The function should accept
-        arbitrary arguments and can return arbitrary objects.
+        Decorator to wrap a function *func* that should be registered as :py:meth:`pre_init_func`
+        which is invoked prior to any dependency creation. The function should not accept arguments.
 
         The decorator does not return the wrapped function.
         """
-        cls.call_func = func
+        cls.pre_init_func = func
+
+    def pre_init_func(self) -> None:
+        """
+        Default pre-init function.
+        """
+        return
 
     @classmethod
     def init(cls, func: Callable[[], None]) -> None:
@@ -1752,16 +1749,11 @@ class ArrayFunction(Derivable):
         """
         cls.init_func = func
 
-    @classmethod
-    def pre_init(cls, func: Callable[[], None]) -> None:
+    def init_func(self) -> None:
         """
-        Decorator to wrap a function *func* that should be registered as :py:meth:`pre_init_func`
-        which is invoked prior to any dependency creation. The function should not accept positional
-        arguments.
-
-        The decorator does not return the wrapped function.
+        Default init function.
         """
-        cls.pre_init_func = func
+        return
 
     @classmethod
     def skip(cls, func: Callable[[], bool]) -> None:
@@ -1774,12 +1766,35 @@ class ArrayFunction(Derivable):
         """
         cls.skip_func = func
 
+    def skip_func(self) -> None:
+        """
+        Default skip function.
+        """
+        return
+
+    @classmethod
+    def call(cls, func: Callable[[Any, ...], Any]) -> None:
+        """
+        Decorator to wrap a function *func* that should be registered as :py:meth:`call_func`
+        which defines the main callable for processing chunks of data. The function should accept
+        arbitrary arguments and can return arbitrary objects.
+
+        The decorator does not return the wrapped function.
+        """
+        cls.call_func = func
+
+    def call_func(self, *args, **kwargs) -> Any:
+        """
+        Default call function.
+        """
+        return
+
     def __init__(
         self,
-        call_func: Callable | None = law.no_value,
-        pre_init_func: Callable | None = law.no_value,
-        init_func: Callable | None = law.no_value,
-        skip_func: Callable | None = law.no_value,
+        pre_init_func: Callable | law.NoValue | None = law.no_value,
+        init_func: Callable | law.NoValue | None = law.no_value,
+        skip_func: Callable | law.NoValue | None = law.no_value,
+        call_func: Callable | law.NoValue | None = law.no_value,
         check_used_columns: bool | None = None,
         check_produced_columns: bool | None = None,
         instance_cache: dict | None = None,
@@ -1790,14 +1805,14 @@ class ArrayFunction(Derivable):
         super().__init__()
 
         # add class-level attributes as defaults for unset arguments (no_value)
-        if call_func == law.no_value:
-            call_func = self.__class__.call_func
         if pre_init_func == law.no_value:
             pre_init_func = self.__class__.pre_init_func
         if init_func == law.no_value:
             init_func = self.__class__.init_func
         if skip_func == law.no_value:
             skip_func = self.__class__.skip_func
+        if call_func == law.no_value:
+            call_func = self.__class__.call_func
         if check_used_columns is not None:
             self.check_used_columns = check_used_columns
         if check_produced_columns is not None:
@@ -1806,14 +1821,14 @@ class ArrayFunction(Derivable):
             self.log_runtime = log_runtime
 
         # when a custom funcs are passed, bind them to this instance
-        if call_func:
-            self.call_func = call_func.__get__(self, self.__class__)
         if pre_init_func:
             self.pre_init_func = pre_init_func.__get__(self, self.__class__)
         if init_func:
             self.init_func = init_func.__get__(self, self.__class__)
         if skip_func:
             self.skip_func = skip_func.__get__(self, self.__class__)
+        if call_func:
+            self.call_func = call_func.__get__(self, self.__class__)
 
         # create instance-level sets of dependent ArrayFunction classes,
         # optionally with priority to sets passed in keyword arguments
@@ -2260,26 +2275,10 @@ def skip_column(
     return tagged_column("skip", *routes)
 
 
-class TaskArrayFunctionMeta(DerivableMeta):
+class TaskArrayFunctionMeta(CachedDerivableMeta):
 
-    def __new__(metacls, cls_name: str, bases: tuple, cls_dict: dict) -> TaskArrayFunctionMeta:
-        # add an instance cache if not disabled
-        cls_dict.setdefault("cache_instances", True)
-        cls_dict["_instances"] = {} if cls_dict["cache_instances"] else None
-
-        return super().__new__(metacls, cls_name, bases, cls_dict)
-
-    def __call__(cls, *args, **kwargs) -> TaskArrayFunction:
-        # when not caching instances, return right away
-        if not cls.cache_instances:
-            return super().__call__(*args, **kwargs)
-
-        # build the cache key from the inst_dict in kwargs
-        key = freeze((cls, kwargs.get("inst_dict", {})))
-        if key not in cls._instances:
-            cls._instances[key] = super().__call__(*args, **kwargs)
-
-        return cls._instances[key]
+    def _get_inst_cache_key(cls, args: tuple, kwargs: dict) -> Hashable:
+        return freeze((cls, kwargs.get("inst_dict", {})))
 
 
 class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
@@ -2418,10 +2417,6 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
     """
 
     # class-level attributes as defaults
-    post_init_func = None
-    requires_func = None
-    setup_func = None
-    teardown_func = None
     sandbox = None
     call_force = None
     max_chunk_size = None
@@ -2475,6 +2470,12 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         """
         cls.post_init_func = func
 
+    def post_init_func(self, task: law.Task) -> None:
+        """
+        Default post-init function.
+        """
+        return
+
     @classmethod
     def requires(cls, func: Callable[[dict], None]) -> None:
         """
@@ -2497,6 +2498,12 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         """
         cls.requires_func = func
 
+    def requires_func(self, task: law.Task, reqs: dict[str, DotDict[str, Any]]) -> None:
+        """
+        Default requires function.
+        """
+        return
+
     @classmethod
     def setup(cls, func: Callable[[dict], None]) -> None:
         """
@@ -2515,6 +2522,18 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         """
         cls.setup_func = func
 
+    def setup_func(
+        self,
+        task: law.Task,
+        reqs: dict[str, DotDict[str, Any]],
+        inputs: dict[str, Any],
+        reader_targets: law.util.InsertableDict,
+    ) -> None:
+        """
+        Default setup function.
+        """
+        return
+
     @classmethod
     def teardown(cls, func: Callable[[dict], None]) -> None:
         """
@@ -2527,6 +2546,12 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         The decorator does not return the wrapped function.
         """
         cls.teardown_func = func
+
+    def teardown_func(self, task: law.Task) -> None:
+        """
+        Default teardown function.
+        """
+        return
 
     def __init__(
         self,
@@ -2666,7 +2691,7 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
             if isinstance(shift, od.Shift):
                 shifts.add(shift.name)
             elif isinstance(shift, str):
-                shifts.add(shift)
+                shifts.update(law.util.brace_expand(shift))
         _cache.add(self)
 
         # add shifts of all dependent objects
@@ -3048,6 +3073,7 @@ class DaskArrayReader(object):
                 open_options["split_row_groups"] = False
 
         # open the file
+        import dask_awkward as dak
         self.dak_array = dak.from_parquet(path, **open_options)
         self.path = path
 
@@ -3586,7 +3612,7 @@ class ChunkedIOHandler(object):
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
-    ) -> coffea.nanoevents.methods.base.NanoEventsArray:
+    ) -> ak.Array:
         """
         Given a file location or opened uproot file, and a tree name in a 2-tuple *source_object*,
         returns an awkward array chunk referred to by *chunk_pos*, assuming nanoAOD structure.
@@ -3594,6 +3620,8 @@ class ChunkedIOHandler(object):
         *read_columns* are converted to strings and, if not already present, added as nested fields
         ``iteritems_options.filter_name`` to *read_options*.
         """
+        import coffea.nanoevents
+
         # default read options
         read_options = read_options or {}
         read_options["delayed"] = False
@@ -3641,6 +3669,8 @@ class ChunkedIOHandler(object):
         Given a parquet file located at *source*, returns a 2-tuple *(source, entries)*. Passing
         *open_options* or *read_columns* has no effect.
         """
+        import pyarrow.parquet as pq
+
         return (source, pq.ParquetFile(source).metadata.num_rows)
 
     @classmethod
@@ -3660,7 +3690,7 @@ class ChunkedIOHandler(object):
         chunk_pos: ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
-    ) -> coffea.nanoevents.methods.base.NanoEventsArray:
+    ) -> ak.Array:
         """
         Given a the location of a parquet file *source_object*, returns an awkward array chunk
         referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to
@@ -3668,6 +3698,8 @@ class ChunkedIOHandler(object):
         strings and, if not already present, added as nested field
         ``parquet_options.read_dictionary`` to *read_options*.
         """
+        import coffea.nanoevents
+
         # default read options
         read_options = read_options or {}
         read_options["runtime_cache"] = None
