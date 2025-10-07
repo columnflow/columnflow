@@ -248,7 +248,9 @@ setup_venv() {
 
         # install if not existing
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
-            cf_color cyan "installing venv ${CF_VENV_NAME} from ${sandbox_file} at ${install_path}"
+            echo -n "$( cf_color cyan "installing venv" )"
+            echo -n " $( cf_color cyan_bright "${CF_VENV_NAME}" )"
+            echo " $( cf_color cyan "from ${sandbox_file} at ${install_path}" )"
 
             rm -rf "${install_path}"
             cf_create_venv "${venv_name_hashed}"
