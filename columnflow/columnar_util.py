@@ -3573,7 +3573,7 @@ class ChunkedIOHandler(object):
                     # priotize coffea nano events
                     source_type = "coffea_root"
                 elif source.endswith(".parquet"):
-                    # priotize non-dask awkward reader
+                    # prioritize non-dask awkward reader
                     source_type = "awkward_parquet"
 
             if not source_type:
