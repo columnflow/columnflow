@@ -50,9 +50,19 @@ class _PlotVariablesBase(
 
 
 class PlotVariablesBase(_PlotVariablesBase):
+
+    bypass_branch_requirements = luigi.BoolParameter(
+        default=False,
+        description="whether to skip branch requirements and only use that of the workflow; default: False",
+    )
+
     single_config = False
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
+    exclude_params_repr = {"bypass_branch_requirements"}
+    exclude_params_index = {"bypass_branch_requirements"}
+    exclude_params_repr = {"bypass_branch_requirements"}
 
     exclude_index = True
 
@@ -73,6 +83,13 @@ class PlotVariablesBase(_PlotVariablesBase):
         reqs["merged_hists"] = self.requires_from_branch()
         return reqs
 
+    def local_workflow_pre_run(self):
+        # when branches are cached, reinitiate the branch tasks with dropped branch level requirements since this
+        # method is called from a context where the identical workflow level requirements are already resolved
+        if self.cache_branch_map:
+            self._branch_tasks = None
+            self.get_branch_tasks(bypass_branch_requirements=True)
+
     @abstractmethod
     def get_plot_shifts(self):
         return
@@ -92,7 +109,7 @@ class PlotVariablesBase(_PlotVariablesBase):
             dictionaries containing the dataset-process mapping and the shifts to be considered, and a dictionary
             mapping process names to the shifts to be considered.
         """
-        reqs = self.requires()
+        reqs = self.requires() or self.as_workflow().requires().merged_hists
 
         config_process_map = {config_inst: {} for config_inst in self.config_insts}
         process_shift_map = defaultdict(set)
@@ -164,7 +181,8 @@ class PlotVariablesBase(_PlotVariablesBase):
         # histogram data per process copy
         hists: dict[od.Config, dict[od.Process, hist.Hist]] = {}
         with self.publish_step(f"plotting {self.branch_data.variable} in {self.branch_data.category}"):
-            for i, (config, dataset_dict) in enumerate(self.input().items()):
+            inputs = self.input() or self.workflow_input().merged_hists
+            for i, (config, dataset_dict) in enumerate(inputs.items()):
                 config_inst = self.config_insts[i]
                 category_inst = config_inst.get_category(self.branch_data.category)
                 leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
@@ -218,7 +236,10 @@ class PlotVariablesBase(_PlotVariablesBase):
                     )
 
             # update histograms using custom hooks
-            hists = self.invoke_hist_hooks(hists)
+            hists = self.invoke_hist_hooks(
+                hists,
+                hook_kwargs={"category_name": self.branch_data.category, "variable_name": self.branch_data.variable},
+            )
 
             # merge configs
             if len(self.config_insts) != 1:
@@ -308,6 +329,7 @@ class PlotVariablesBaseSingleShift(
 ):
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
     resolution_task_cls = MergeHistograms
+
     exclude_index = True
 
     reqs = Requirements(
@@ -322,28 +344,27 @@ class PlotVariablesBaseSingleShift(
             for cat_name in sorted(self.categories)
         ]
 
-    def workflow_requires(self):
-        reqs = super().workflow_requires()
-        return reqs
-
     def requires(self):
-        req = {}
+        reqs = {}
 
-        for i, config_inst in enumerate(self.config_insts):
-            sub_datasets = self.datasets[i]
-            req[config_inst.name] = {}
-            for d in sub_datasets:
-                if d in config_inst.datasets.names():
-                    req[config_inst.name][d] = self.reqs.MergeHistograms.req(
-                        self,
-                        config=config_inst.name,
-                        shift=self.global_shift_insts[config_inst].name,
-                        dataset=d,
-                        branch=-1,
-                        _exclude={"branches"},
-                        _prefer_cli={"variables"},
-                    )
-        return req
+        if self.is_branch() and self.bypass_branch_requirements:
+            return reqs
+
+        for config_inst, datasets in zip(self.config_insts, self.datasets):
+            reqs[config_inst.name] = {}
+            for d in datasets:
+                if d not in config_inst.datasets:
+                    continue
+                reqs[config_inst.name][d] = self.reqs.MergeHistograms.req_different_branching(
+                    self,
+                    config=config_inst.name,
+                    shift=self.global_shift_insts[config_inst].name,
+                    dataset=d,
+                    branch=-1,
+                    _prefer_cli={"variables"},
+                )
+
+        return reqs
 
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
@@ -482,26 +503,32 @@ class PlotVariablesBaseMultiShifts(
         return [DotDict(zip(keys, vals)) for vals in itertools.product(*seqs)]
 
     def requires(self):
-        req_cls = lambda dataset_name: (
+        reqs = {}
+
+        if self.is_branch() and self.bypass_branch_requirements:
+            return reqs
+
+        req_cls = lambda dataset_name, config_inst: (
             self.reqs.MergeShiftedHistograms
-            if self.config_inst.get_dataset(dataset_name).is_mc
+            if config_inst.get_dataset(dataset_name).is_mc
             else self.reqs.MergeHistograms
         )
 
-        req = {}
-        for i, config_inst in enumerate(self.config_insts):
-            req[config_inst.name] = {}
-            for dataset_name in self.datasets[i]:
-                if dataset_name in config_inst.datasets:
-                    req[config_inst.name][dataset_name] = req_cls(dataset_name).req(
-                        self,
-                        config=config_inst.name,
-                        dataset=dataset_name,
-                        branch=-1,
-                        _exclude={"branches"},
-                        _prefer_cli={"variables"},
-                    )
-        return req
+        for config_inst, datasets in zip(self.config_insts, self.datasets):
+            reqs[config_inst.name] = {}
+            for d in datasets:
+                if d not in config_inst.datasets:
+                    continue
+                reqs[config_inst.name][d] = req_cls(d, config_inst).req(
+                    self,
+                    config=config_inst.name,
+                    dataset=d,
+                    branch=-1,
+                    _exclude={"branches"},
+                    _prefer_cli={"variables"},
+                )
+
+        return reqs
 
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
@@ -573,8 +600,8 @@ class PlotShiftedVariablesPerShift1D(
 
 
 class PlotShiftedVariablesPerConfig1D(
-    law.WrapperTask,
     PlotShiftedVariables1D,
+    law.WrapperTask,
 ):
     # force this one to be a local workflow
     workflow = "local"

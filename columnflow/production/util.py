@@ -3,9 +3,10 @@
 """
 General producers that might be utilized in various places.
 """
+
 from __future__ import annotations
 
-from functools import partial
+import functools
 
 from columnflow.types import Iterable, Sequence, Union
 from columnflow.production import Producer, producer
@@ -13,7 +14,6 @@ from columnflow.util import maybe_import
 from columnflow.columnar_util import attach_coffea_behavior as attach_coffea_behavior_fn
 
 ak = maybe_import("awkward")
-coffea = maybe_import("coffea")
 
 
 @producer(call_force=True)
@@ -69,15 +69,21 @@ def ak_extract_fields(arr: ak.Array, fields: list[str], **kwargs):
 # functions for operating on lorentz vectors
 #
 
-_lv_base = partial(ak_extract_fields, behavior=coffea.nanoevents.methods.nanoaod.behavior)
+def _lv_base(*args, **kwargs):
+    # scoped partial to defer coffea import
+    import coffea.nanoevents
+    import coffea.nanoevents.methods.nanoaod
+    kwargs["behavior"] = coffea.nanoevents.methods.nanoaod.behavior
+    return ak_extract_fields(*args, **kwargs)
 
-lv_xyzt = partial(_lv_base, fields=["x", "y", "z", "t"], with_name="LorentzVector")
+
+lv_xyzt = functools.partial(_lv_base, fields=["x", "y", "z", "t"], with_name="LorentzVector")
 lv_xyzt.__doc__ = """Construct a `LorentzVectorArray` from an input array."""
 
-lv_mass = partial(_lv_base, fields=["pt", "eta", "phi", "mass"], with_name="PtEtaPhiMLorentzVector")
+lv_mass = functools.partial(_lv_base, fields=["pt", "eta", "phi", "mass"], with_name="PtEtaPhiMLorentzVector")
 lv_mass.__doc__ = """Construct a `PtEtaPhiMLorentzVectorArray` from an input array."""
 
-lv_energy = partial(_lv_base, fields=["pt", "eta", "phi", "energy"], with_name="PtEtaPhiELorentzVector")
+lv_energy = functools.partial(_lv_base, fields=["pt", "eta", "phi", "energy"], with_name="PtEtaPhiELorentzVector")
 lv_energy.__doc__ = """Construct a `PtEtaPhiELorentzVectorArray` from an input array."""
 
 

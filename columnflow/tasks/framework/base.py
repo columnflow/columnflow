@@ -23,7 +23,7 @@ import law
 import order as od
 
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
-from columnflow.util import get_docs_url, is_regex, prettify, DotDict
+from columnflow.util import get_docs_url, is_regex, prettify, DotDict, freeze
 from columnflow.types import Sequence, Callable, Any, T
 
 
@@ -79,6 +79,9 @@ class TaskShifts:
 
     local: set[str] = field(default_factory=set)
     upstream: set[str] = field(default_factory=set)
+
+    def __hash__(self) -> int:
+        return hash((frozenset(self.local), frozenset(self.upstream)))
 
 
 class BaseTask(law.Task):
@@ -176,20 +179,26 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {
             "version", "workflow", "job_workers", "poll_interval", "walltime", "max_runtime",
             "retries", "acceptance", "tolerance", "parallel_jobs", "shuffle_jobs", "htcondor_cpus",
-            "htcondor_gpus", "htcondor_memory", "htcondor_disk", "htcondor_pool", "pilot",
+            "htcondor_gpus", "htcondor_memory", "htcondor_disk", "htcondor_pool", "pilot", "remote_claw_sandbox",
         }
         kwargs["_prefer_cli"] = _prefer_cli
 
         # build the params
         params = super().req_params(inst, **kwargs)
 
-        # when not explicitly set in kwargs and no global value was defined on the cli for the task
-        # family, evaluate and use the default value
+        # evaluate and use the default version in case
+        # - "version" is an actual parameter object of cls, and
+        # - "version" is not explicitly set in kwargs, and
+        # - no global value was defined on the cli for the task family, and
+        # - if cls and inst belong to the same family, they differ in the keys used for the config lookup
         if (
             isinstance(getattr(cls, "version", None), luigi.Parameter) and
             "version" not in kwargs and
             not law.parser.global_cmdline_values().get(f"{cls.task_family}_version") and
-            cls.task_family != law.parser.root_task_cls().task_family
+            (
+                cls.task_family != inst.task_family or
+                freeze(cls.get_config_lookup_keys(params)) != freeze(inst.get_config_lookup_keys(params))
+            )
         ):
             default_version = cls.get_default_version(inst, params)
             if default_version and default_version != law.NO_STR:
@@ -1375,14 +1384,17 @@ class ConfigTask(AnalysisTask):
     resolution_task_cls = None
 
     @classmethod
-    def req_params(cls, inst: law.Task, *args, **kwargs) -> dict[str, Any]:
-        params = super().req_params(inst, *args, **kwargs)
-
+    def req_params(cls, inst: law.Task, **kwargs) -> dict[str, Any]:
         # manually add known shifts between workflows and branches
-        if isinstance(inst, law.BaseWorkflow) and inst.__class__ == cls and getattr(inst, "known_shifts", None):
-            params["known_shifts"] = inst.known_shifts
+        if (
+            "known_shifts" not in kwargs and
+            isinstance(inst, law.BaseWorkflow) and
+            inst.__class__ == cls and
+            getattr(inst, "known_shifts", None)
+        ):
+            kwargs["known_shifts"] = inst.known_shifts
 
-        return params
+        return super().req_params(inst, **kwargs)
 
     @classmethod
     def _multi_sequence_repr(
@@ -1504,7 +1516,7 @@ class ConfigTask(AnalysisTask):
 
     @property
     def config_repr(self) -> str:
-        return "__".join(config_inst.name for config_inst in self.config_insts)
+        return "__".join(config_inst.name for config_inst in sorted(self.config_insts, key=lambda c: c.id))
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
@@ -1711,6 +1723,21 @@ class DatasetTask(ShiftTask):
         # store a reference to the dataset inst
         if "dataset_inst" not in params and "config_inst" in params and "dataset" in params:
             params["dataset_inst"] = params["config_inst"].get_dataset(params["dataset"])
+
+        return params
+
+    @classmethod
+    def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values(params)
+
+        # also add a reference to the info instance when a global shift is defined
+        if "dataset_inst" in params and "global_shift_inst" in params:
+            shift_name = params["global_shift_inst"].name
+            params["dataset_info_inst"] = (
+                params["dataset_inst"].get_info(shift_name)
+                if shift_name in params["dataset_inst"].info
+                else params["dataset_inst"].get_info("nominal")
+            )
 
         return params
 

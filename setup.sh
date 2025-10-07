@@ -376,6 +376,7 @@ cf_setup_interactive_common_variables() {
     query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "false"
     [ "${CF_VENV_SETUP_MODE_UPDATE}" != "true" ] && export_and_save CF_VENV_SETUP_MODE "update"
     unset CF_VENV_SETUP_MODE_UPDATE
+    query CF_INTERACTIVE_VENV_FILE "Custom venv setup fill to use for interactive work instead of 'cf_dev'" "" "''"
 
     query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "true"
     if [ "${CF_LOCAL_SCHEDULER}" != "true" ]; then
@@ -530,8 +531,12 @@ cf_setup_software_stack() {
     # Optional environments variables:
     #   CF_REMOTE_ENV
     #       When true-ish, the software stack is sourced but not built.
-    #   CF_CI_ENV
-    #       When true-ish, the "cf" venv is skipped and only the "cf_dev" env is built.
+    #   CF_LOCAL_ENV
+    #       When not true-ish, the context is not meant for local development and only the "cf_dev" venv is built.
+    #       CF_INTERACTIVE_VENV_FILE is ignored in this case.
+    #   CF_INTERACTIVE_VENV_FILE
+    #       IF CF_LOCAL_ENV is true-ish, the venv setup of this file is sourced to start the interactive shell. When
+    #       empty, defaults to ${CF_BASE}/sandboxes/cf_dev.sh.
     #   CF_REINSTALL_SOFTWARE
     #       When true-ish, any existing software stack is removed and freshly installed.
     #   CF_CONDA_ARCH
@@ -620,8 +625,8 @@ cf_setup_software_stack() {
         # conda / micromamba setup
         #
 
-        # not needed in CI or RTD jobs
-        if ! ${CF_CI_ENV} && ! ${CF_RTD_ENV}; then
+        # only needed in local envs
+        if ${CF_LOCAL_ENV}; then
             # base environment
             local conda_missing="$( [ -d "${CF_CONDA_BASE}" ] && echo "false" || echo "true" )"
             if ${conda_missing}; then
@@ -690,32 +695,61 @@ EOF
 
         # - "cf"     : contains the minimal stack to run tasks and is sent alongside jobs
         # - "cf_dev" : "cf" + additional python tools for local development (e.g. ipython)
+        # - custom   : when CF_INTERACTIVE_VENV_FILE is set, source the venv setup from there
 
-        show_version_warning() {
-            >&2 echo
-            >&2 echo "WARNING: your venv '$1' is not up to date, please consider updating it in a new shell with"
-            >&2 echo "WARNING: > CF_REINSTALL_SOFTWARE=1 source setup.sh $( ${setup_is_default} || echo "${setup_name}" )"
-            >&2 echo
-        }
+        source_venv() {
+            # all parameters must be given
+            local venv_file="$1"
+            local venv_name="$2"
+            # must be true or false
+            local use_subshell="$3"
 
-        # source the production sandbox, potentially skipped in CI and RTD jobs
-        if ! ${CF_CI_ENV} && ! ${CF_RTD_ENV}; then
-            ( source "${CF_BASE}/sandboxes/cf.sh" "" "silent" )
-            ret="$?"
+            # source the file and catch the return code
+            local ret="0"
+            if ${use_subshell}; then
+                ( source "${venv_file}" "" "silent" )
+                ret="$?"
+            else
+                source "${venv_file}" "" "silent"
+                ret="$?"
+            fi
+
+            # code 21 means "version outdated", all others are as usual
             if [ "${ret}" = "21" ]; then
-                show_version_warning "cf"
+                >&2 echo
+                >&2 echo "WARNING: your venv '${venv_name}' is not up to date, please consider updating it in a new shell with"
+                >&2 echo "WARNING: > CF_REINSTALL_SOFTWARE=1 source setup.sh $( ${setup_is_default} || echo "${setup_name}" )"
+                >&2 echo
             elif [ "${ret}" != "0" ]; then
                 return "${ret}"
             fi
+
+            return "0"
+        }
+
+        # build the production sandbox in a subshell, only in local envs
+        if ${CF_LOCAL_ENV}; then
+            source_venv "${CF_BASE}/sandboxes/cf.sh" "cf" true || return "$?"
         fi
 
-        # source the dev sandbox
-        source "${CF_BASE}/sandboxes/cf_dev.sh" "" "silent"
-        ret="$?"
-        if [ "${ret}" = "21" ]; then
-            show_version_warning "cf_dev"
-        elif [ "${ret}" != "0" ]; then
-            return "${ret}"
+        # check if a custom interactive venv should be used, check the file, but only in local envs
+        local use_custom_interactive_venv="false"
+        if ${CF_LOCAL_ENV} && [ ! -z "${CF_INTERACTIVE_VENV_FILE}" ]; then
+            # check existence
+            if [ ! -f "${CF_INTERACTIVE_VENV_FILE}" ]; then
+                >&2 echo "the interactive venv setup file ${CF_INTERACTIVE_VENV_FILE} does not exist"
+                return "2"
+            fi
+            use_custom_interactive_venv="true"
+        fi
+
+        # build the dev sandbox, using a subshell if a custom venv is given that should be sourced afterwards
+        source_venv "${CF_BASE}/sandboxes/cf_dev.sh" "cf_dev" "${use_custom_interactive_venv}" || return "$?"
+
+        # source the custom interactive venv setup file if given
+        if ${use_custom_interactive_venv}; then
+            echo "activating custom interactive venv from $( cf_color magenta "${CF_INTERACTIVE_VENV_FILE}" )"
+            source_venv "${CF_INTERACTIVE_VENV_FILE}" "$( basename "${CF_INTERACTIVE_VENV_FILE%.*}" )" false || return "$?"
         fi
 
         # initialze submodules
@@ -760,6 +794,8 @@ cf_setup_post_install() {
     # Optional environment variables:
     #   CF_SKIP_SETUP_GIT_HOOKS
     #       When set to true, the setup of git hooks is skipped.
+    #   CF_SKIP_LAW_INDEX
+    #       When set to true, the initial indexing of law tasks is skipped.
     #   CF_SKIP_CHECK_TMP_DIR
     #       When set to true, the check of the size of the target tmp directory is skipped.
 
@@ -788,7 +824,9 @@ cf_setup_post_install() {
             complete -o bashdefault -o default -F _law_complete claw
 
             # silently index
-            law index -q
+            if ! ${CF_SKIP_LAW_INDEX}; then
+                law index -q
+            fi
         fi
     fi
 
@@ -1113,6 +1151,7 @@ for flag_name in \
         CF_REINSTALL_HOOKS \
         CF_SKIP_BANNER \
         CF_SKIP_SETUP_GIT_HOOKS \
+        CF_SKIP_LAW_INDEX \
         CF_SKIP_CHECK_TMP_DIR \
         CF_ON_HTCONDOR \
         CF_ON_SLURM \

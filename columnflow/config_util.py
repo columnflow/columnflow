@@ -18,7 +18,7 @@ import order as od
 
 from columnflow.util import maybe_import, get_docs_url
 from columnflow.columnar_util import flat_np_view, layout_ak_array
-from columnflow.types import Callable, Any, Sequence
+from columnflow.types import Callable, Any, Sequence, Literal
 
 ak = maybe_import("awkward")
 np = maybe_import("numpy")
@@ -467,6 +467,10 @@ class CategoryGroup:
     Container to store information about a group of categories, mostly used for creating combinations in
     :py:func:`create_category_combinations`.
 
+    .. note::
+
+        A group is considered a full partition of the phase space if it is both complete and non-overlapping.
+
     :param categories: List of :py:class:`order.Category` objects or names that refer to the desired category.
     :param is_complete: Should be *True* if the union of category selections covers the full phase space (no gaps).
     :param has_overlap: Should be *False* if all categories are pairwise disjoint (no overlap).
@@ -490,6 +494,7 @@ def create_category_combinations(
     config: od.Config,
     categories: dict[str, CategoryGroup | list[od.Category]],
     name_fn: Callable[[Any], str],
+    parent_mode: Literal["all", "none", "safe"] = "safe",
     kwargs_fn: Callable[[Any], dict] | None = None,
     skip_existing: bool = True,
     skip_fn: Callable[[dict[str, od.Category], str], bool] | None = None,
@@ -500,9 +505,9 @@ def create_category_combinations(
     returns the number of newly created categories.
 
     *categories* should be a dictionary that maps string names to :py:class:`CategoryGroup` objects which are thin
-    wrappers around sequences of categories (objects or names). Group names (dictionary keys) are used as keyword
-    arguments in a callable *name_fn* that is supposed to return the name of newly created categories (see example
-    below).
+    wrappers around sequences of categories (objects or names) and provide additional information about the group as a
+    whole. Group names (dictionary keys) are used as keyword arguments in a callable *name_fn* that is supposed to
+    return the name of newly created categories (see example below).
 
     .. note::
 
@@ -510,6 +515,18 @@ def create_category_combinations(
         columnflow to determine whether the summation over specific categories is valid or may result in under- or
         over-counting when combining leaf categories. These checks may be performed by other functions and tools based
         on information derived from groups and stored in auxiliary fields of the newly created categories.
+
+    All intermediate layers of categories can be built and connected automatically to one another by parent - child
+    category relations. The exact behavior is controlled by *parent_mode*:
+
+        - ``"all"``: All intermediate parent category layers are created and connected. Please note that this choice
+            omits information about group completeness and overlaps (see :py:attr:`CategoryGroup.is_partition`) of child
+            categories which - in cases such as child category summation - can lead to unintended results.
+        - ``"none"``: No intermediate parent category layers but only leaf categories are created and connected to their
+            root categories.
+        - ``"safe"``: Intermediate parent category layers are created and connected only if the group of child
+            categories is both complete and non-overlapping (see :py:attr:`CategoryGroup.is_partition`). This is the
+            recommended choice (and the default) as it avoids unintended results as mentioned in ``"all"``.
 
     Each newly created category is instantiated with this name as well as arbitrary keyword arguments as returned by
     *kwargs_fn*. This function is called with the categories (in a dictionary, mapped to the sequence names as given in
@@ -547,6 +564,8 @@ def create_category_combinations(
     :param categories: Dictionary that maps group names to :py:class:`CategoryGroup` containers.
     :param name_fn: Callable that receives a dictionary mapping group names to categories and returns the name of the
         newly created category.
+    :param parent_mode: Controls how intermediate parent categories are created and connected. Either of ``"all"``,
+        ``"none"``, or ``"safe"``.
     :param kwargs_fn: Callable that receives a dictionary mapping group names to categories and returns a dictionary of
         keyword arguments that are forwarded to the category constructor.
     :param skip_existing: If *True*, skip the creation of a category when it already exists in *config*.
@@ -557,6 +576,12 @@ def create_category_combinations(
     :raises ValueError: If a non-unique category id is detected.
     :return: Number of newly created categories.
     """
+    # check parent mode
+    parent_mode = parent_mode.lower()
+    known_parent_modes = ["all", "none", "safe"]
+    if parent_mode not in known_parent_modes:
+        raise ValueError(f"unknown parent_mode {parent_mode}, known values are {', '.join(known_parent_modes)}")
+
     # cast categories
     for name, _categories in categories.items():
         # ensure CategoryGroup is used
@@ -567,6 +592,7 @@ def create_category_combinations(
                 f"using a list to define a sequence of categories for create_category_combinations() is depcreated "
                 f"and will be removed in a future version, please use a CategoryGroup instance instead: {docs_url}",
             )
+            # create a group assuming (!) it describes a full, valid phasespace partition
             _categories = CategoryGroup(
                 categories=law.util.make_list(_categories),
                 is_complete=True,
@@ -582,6 +608,8 @@ def create_category_combinations(
     unique_ids_cache = {cat.id for cat, _, _ in config.walk_categories()}
     n_groups = len(categories)
     group_names = list(categories.keys())
+    safe_groups = {name for name, group in categories.items() if group.is_partition}
+    unsafe_groups = set(group_names) - safe_groups
 
     # nothing to do when there are less than 2 groups
     if n_groups < 2:
@@ -593,11 +621,19 @@ def create_category_combinations(
     if kwargs_fn and not callable(kwargs_fn):
         raise TypeError(f"when set, kwargs_fn must be a function, but got {kwargs_fn}")
 
-    # start combining, considering one additional groups for combinatorics at a time
-    for _n_groups in range(2, n_groups + 1):
+    # lookup table with created categories for faster access when connecting parents
+    created_categories: dict[str, od.Category] = {}
 
+    # start combining, considering one additional group for combinatorics at a time
+    # if skipping parents entirely, only consider the iteration that contains all groups
+    for _n_groups in ([n_groups] if parent_mode == "none" else range(2, n_groups + 1)):
         # build all group combinations
         for _group_names in itertools.combinations(group_names, _n_groups):
+            # when creating parents in "safe" mode, skip combinations that miss unsafe groups
+            # (i.e. they must be part of _group_names to be used later)
+            if parent_mode == "safe":
+                if (set(group_names) - set(_group_names)) & unsafe_groups:
+                    continue
 
             # build the product of all categories for the given groups
             _categories = [categories[group_name].categories for group_name in _group_names]
@@ -623,7 +659,7 @@ def create_category_combinations(
 
                 # create the new category
                 cat = od.Category(name=cat_name, **kwargs)
-                n_created_categories += 1
+                created_categories[cat_name] = cat
 
                 # ID uniqueness check: raise an error when a non-unique id is detected for a new category
                 if isinstance(kwargs["id"], int):
@@ -636,19 +672,105 @@ def create_category_combinations(
                             )
                     unique_ids_cache.add(kwargs["id"])
 
-                # find direct parents and connect them
-                for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
+                # find combinations of parents and connect them, depending on parent_mode
+                if parent_mode == "all":
+                    # all direct parents, obtained by combinations with one missing group
+                    parent_gen = itertools.combinations(_group_names, _n_groups - 1)
+                elif parent_mode == "none":
+                    # only connect to root categories
+                    parent_gen = ((name,) for name in _group_names)
+                else:  # safe
+                    # same as "all", but unsafe groups must be part of the combinations
+                    def _parent_gen():
+                        seen = set()
+                        # choose 1 group to sum over from _n_groups available
+                        for names in itertools.combinations(_group_names, _n_groups - 1):
+                            # as above, if there is at least one unsafe group missing, the parent was not created
+                            if (set(_group_names) - set(names)) & unsafe_groups:
+                                continue
+                            if names and names not in seen:
+                                seen.add(names)
+                                yield names
+                        # in case no parent combination was yielded, yield all root categories separately
+                        if not seen:
+                            yield from ((name,) for name in _group_names)
+                    parent_gen = _parent_gen()
+
+                # actual connections
+                for _parent_group_names in parent_gen:
+                    # find the parent
                     if len(_parent_group_names) == 1:
-                        parent_cat_name = root_cats[_parent_group_names[0]].name
+                        parent_cat = root_cats[_parent_group_names[0]]
                     else:
                         parent_cat_name = name_fn({
                             group_name: root_cats[group_name]
                             for group_name in _parent_group_names
                         })
-                    parent_cat = config.get_category(parent_cat_name, deep=True)
+                        if parent_cat_name in created_categories:
+                            parent_cat = created_categories[parent_cat_name]
+                        else:
+                            parent_cat = config.get_category(parent_cat_name, deep=True)
+                    # connect
                     parent_cat.add_category(cat)
 
-    return n_created_categories
+    return len(created_categories)
+
+
+def track_category_changes(config: od.Config, summary_path: str | None = None) -> None:
+    """
+    Scans the categories in *config* and saves a summary in a file located at *summary_path*. If the file exists,
+    the summary from a previous run is loaded first and compare to the current categories. If changes are found, a
+    warning is shown with details about these changes.
+
+    :param config: :py:class:`~order.config.Config` instance to scan for categories.
+    :param summary_path: Path to the summary file. Defaults to "$LAW_HOME/category_summary_{config.name}.json".
+    """
+    # build summary file as law target
+    if not summary_path:
+        summary_path = law.config.law_home_path(f"category_summary_{config.name}.json")
+    summary_file = law.LocalFileTarget(summary_path)
+
+    # gather category info
+    cat_pairs = sorted((cat.name, cat.id) for cat, *_ in config.walk_categories(include_self=True))
+    cat_summary = {
+        "hash": law.util.create_hash(cat_pairs),
+        "categories": dict(cat_pairs),
+    }
+
+    save_summary = True
+    if summary_file.exists():
+        previous_summary = summary_file.load(formatter="json")
+        if previous_summary["hash"] == cat_summary["hash"]:
+            save_summary = False
+        else:
+            msgs = [
+                f"the category definitions in config '{config.name}' seem to have changed based on a hash comparison, "
+                "ignore this message in case you knowingly adjusted categories fully aware of the changes:",
+                f"old hash: {previous_summary['hash']}, new hash: {cat_summary['hash']}",
+            ]
+            curr = cat_summary["categories"]
+            prev = previous_summary["categories"]
+            # track added and removed names
+            curr_names = set(curr)
+            prev_names = set(prev)
+            if (added_names := curr_names - prev_names):
+                msgs.append(f"added categories    : {', '.join(sorted(added_names))}")
+            if (removed_names := prev_names - curr_names):
+                msgs.append(f"removed categories  : {', '.join(sorted(removed_names))}")
+            # track id changes for names present in both
+            changed_ids = {
+                name: (prev[name], curr[name])
+                for name in curr_names & prev_names
+                if prev[name] != curr[name]
+            }
+            if changed_ids:
+                pair_repr = lambda pair: f"{pair[0]}: {pair[1][0]} -> {pair[1][1]}"
+                msgs.append("changed category ids:\n  - " + "\n  - ".join(map(pair_repr, changed_ids.items())))
+
+            logger.warning_once(f"categories_changed_{config.name}", "\n".join(msgs))
+
+    if save_summary:
+        summary_file.dump(cat_summary, formatter="json", indent=4)
 
 
 def verify_config_processes(config: od.Config, warn: bool = False) -> None:

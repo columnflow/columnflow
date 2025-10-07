@@ -6,6 +6,7 @@ Main entry point for top-level settings and fixes before anything else is import
 
 import os
 import re
+import time
 import logging
 
 import law
@@ -17,7 +18,7 @@ from columnflow.__version__ import (  # noqa
 )
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(f"{__name__}_module_loader")
 
 # version info
 m = re.match(r"^(\d+)\.(\d+)\.(\d+)(-.+)?$", __version__)
@@ -79,62 +80,59 @@ if not env_is_rtd:
             for fs in law.config.get_expanded("outputs", "wlcg_file_systems", [], split_csv=True)
         ]
 
-    # initialize producers, calibrators, selectors, categorizers, ml models and stat models
+    # initialize producers, calibrators, selectors, reducers, categorizers, ml models, hist producers and stat models
     from columnflow.util import maybe_import
+
+    def load(module, group):
+        t0 = time.perf_counter()
+        maybe_import(module)
+        duration = law.util.human_duration(seconds=time.perf_counter() - t0)
+        logger.debug(f"loaded {group} module '{module}', took {duration}")
 
     import columnflow.calibration  # noqa
     if law.config.has_option("analysis", "calibration_modules"):
         for m in law.config.get_expanded("analysis", "calibration_modules", [], split_csv=True):
-            logger.debug(f"loading calibration module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "calibration")
 
     import columnflow.selection  # noqa
     if law.config.has_option("analysis", "selection_modules"):
         for m in law.config.get_expanded("analysis", "selection_modules", [], split_csv=True):
-            logger.debug(f"loading selection module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "selection")
 
     import columnflow.reduction  # noqa
     if law.config.has_option("analysis", "reduction_modules"):
         for m in law.config.get_expanded("analysis", "reduction_modules", [], split_csv=True):
-            logger.debug(f"loading reduction module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "reduction")
 
     import columnflow.production  # noqa
     if law.config.has_option("analysis", "production_modules"):
         for m in law.config.get_expanded("analysis", "production_modules", [], split_csv=True):
-            logger.debug(f"loading production module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "production")
 
     import columnflow.histogramming  # noqa
     if law.config.has_option("analysis", "hist_production_modules"):
         for m in law.config.get_expanded("analysis", "hist_production_modules", [], split_csv=True):
-            logger.debug(f"loading hist production module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "hist production")
 
     import columnflow.categorization  # noqa
     if law.config.has_option("analysis", "categorization_modules"):
         for m in law.config.get_expanded("analysis", "categorization_modules", [], split_csv=True):
-            logger.debug(f"loading categorization module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "categorization")
 
     import columnflow.ml  # noqa
     if law.config.has_option("analysis", "ml_modules"):
         for m in law.config.get_expanded("analysis", "ml_modules", [], split_csv=True):
-            logger.debug(f"loading ml module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "ml")
 
     import columnflow.inference  # noqa
     if law.config.has_option("analysis", "inference_modules"):
         for m in law.config.get_expanded("analysis", "inference_modules", [], split_csv=True):
-            logger.debug(f"loading inference module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "inference")
 
     # preload all task modules so that task parameters are globally known and accepted
     if law.config.has_section("modules"):
         for m in law.config.options("modules"):
-            logger.debug(f"loading task module '{m}'")
-            maybe_import(m.strip())
+            load(m.strip(), "task")
 
     # cleanup
     del m

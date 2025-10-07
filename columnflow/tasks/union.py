@@ -4,6 +4,8 @@
 Task to unite columns horizontally into a single file for further, possibly external processing.
 """
 
+from __future__ import annotations
+
 import luigi
 import law
 
@@ -13,7 +15,9 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
+from columnflow.columnar_util import Route
 from columnflow.util import dev_sandbox
+from columnflow.types import Callable
 
 
 class _UniteColumns(
@@ -46,6 +50,9 @@ class UniteColumns(_UniteColumns):
         ProduceColumns=ProduceColumns,
         MLEvaluation=MLEvaluation,
     )
+
+    # a column that is evaluated to decide whether to keep or drop an event before writing
+    filter_events: str | Route | Callable | None = None
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -105,8 +112,7 @@ class UniteColumns(_UniteColumns):
     @law.decorator.safe_output
     def run(self):
         from columnflow.columnar_util import (
-            Route, RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet,
-            sorted_ak_to_root,
+            RouteFilter, mandatory_coffea_columns, update_ak_array, sorted_ak_to_parquet, sorted_ak_to_root,
         )
 
         # prepare inputs and outputs
@@ -152,6 +158,16 @@ class UniteColumns(_UniteColumns):
             # add additional columns
             events = update_ak_array(events, *columns)
 
+            # optionally filter events
+            if self.filter_events:
+                if callable(self.filter_events):
+                    filter_func = self.filter_events
+                else:
+                    r = Route(self.filter_events)
+                    filter_func = r.apply
+                mask = filter_func(events)
+                events = events[mask]
+
             # remove columns
             events = route_filter(events)
 
@@ -174,7 +190,7 @@ class UniteColumns(_UniteColumns):
                 self, sorted_chunks, output["events"], local=True, writer_opts=self.get_parquet_writer_opts(),
             )
         else:  # root
-            law.root.hadd_task(self, sorted_chunks, output["events"], local=True)
+            law.root.hadd_task(self, sorted_chunks, output["events"], local=True, hadd_args=["-O", "-f501"])
 
 
 # overwrite class defaults

@@ -11,8 +11,8 @@ __all__ = []
 from collections import OrderedDict
 
 import law
+import order as od
 
-from columnflow.types import Iterable
 from columnflow.util import maybe_import
 from columnflow.plotting.plot_all import plot_all
 from columnflow.plotting.plot_util import (
@@ -27,17 +27,16 @@ from columnflow.plotting.plot_util import (
     get_position,
     get_profile_variations,
     blind_sensitive_bins,
+    remove_negative_contributions,
     join_labels,
 )
 from columnflow.hist_util import add_missing_shifts
+from columnflow.types import TYPE_CHECKING, Iterable
 
-
-hist = maybe_import("hist")
 np = maybe_import("numpy")
-mpl = maybe_import("matplotlib")
-plt = maybe_import("matplotlib.pyplot")
-mplhep = maybe_import("mplhep")
-od = maybe_import("order")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
+    plt = maybe_import("matplotlib.pyplot")
 
 
 def plot_variable_stack(
@@ -64,6 +63,11 @@ def plot_variable_stack(
     blinding_threshold = kwargs.get("blinding_threshold", None)
     if blinding_threshold:
         hists = blind_sensitive_bins(hists, config_inst, blinding_threshold)
+
+    # remove negative contributions per process if requested
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
+
     # process scaling
     hists = apply_process_scaling(hists)
     # density scaling per bin
@@ -99,6 +103,9 @@ def plot_variable_stack(
         shape_norm,
         yscale,
     )
+    # additional, plot function specific changes
+    if shape_norm:
+        default_style_config["ax_cfg"]["ylabel"] = "Normalized entries"
     style_config = law.util.merge_dicts(
         default_style_config,
         process_style_config,
@@ -107,11 +114,49 @@ def plot_variable_stack(
         deep=True,
     )
 
-    # additional, plot function specific changes
-    if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
-
     return plot_all(plot_config, style_config, **kwargs)
+
+
+def plot_variable_efficiency(
+    hists: OrderedDict,
+    config_inst: od.Config,
+    category_inst: od.Category,
+    variable_insts: list[od.Variable],
+    shift_insts: list[od.Shift] | None,
+    style_config: dict | None = None,
+    shape_norm: bool = True,
+    cumsum_reverse: bool = True,
+    **kwargs,
+):
+    """
+    This plot function allows users to plot the efficiency of a cut on a variable as a function of the cut value.
+    Per default, each bin shows the efficiency of requiring value >= bin edge (cumsum_reverse=True).
+    Setting cumsum_reverse=False will instead show the efficiency of requiring value <= bin edge.
+    """
+    for proc_inst, proc_hist in hists.items():
+        if cumsum_reverse:
+            proc_hist.values()[...] = np.cumsum(proc_hist.values()[..., ::-1], axis=-1)[..., ::-1]
+            shape_norm_func = kwargs.get("shape_norm_func", lambda h, shape_norm: h.values()[0] if shape_norm else 1)
+        else:
+            proc_hist.values()[...] = np.cumsum(proc_hist.values(), axis=-1)
+            shape_norm_func = kwargs.get("shape_norm_func", lambda h, shape_norm: h.values()[-1] if shape_norm else 1)
+
+    default_style_config = {
+        "ax_cfg": {"ylabel": "Efficiency" if shape_norm else "Cumulative entries"},
+    }
+    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+
+    return plot_variable_stack(
+        hists,
+        config_inst,
+        category_inst,
+        variable_insts,
+        shift_insts,
+        shape_norm=shape_norm,
+        shape_norm_func=shape_norm_func,
+        style_config=style_config,
+        **kwargs,
+    )
 
 
 def plot_variable_variants(
@@ -134,6 +179,8 @@ def plot_variable_variants(
 
     variable_inst = variable_insts[0]
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     if density:
         hists = apply_density(hists, density)
 
@@ -200,10 +247,14 @@ def plot_shifted_variable(
     """
     TODO.
     """
+    import hist
+
     variable_inst = variable_insts[0]
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)
@@ -274,6 +325,8 @@ def plot_shifted_variable(
     default_style_config["rax_cfg"]["ylabel"] = "Ratio"
     if legend_title:
         default_style_config["legend_cfg"]["title"] = legend_title
+    if shape_norm:
+        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
     style_config = law.util.merge_dicts(
         default_style_config,
         process_style_config,
@@ -281,8 +334,6 @@ def plot_shifted_variable(
         style_config,
         deep=True,
     )
-    if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
 
     return plot_all(plot_config, style_config, **kwargs)
 
@@ -350,7 +401,7 @@ def plot_cutflow(
         },
         "annotate_cfg": {"text": cat_label or ""},
         "cms_label_cfg": {
-            "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 2),  # /pb -> /fb
+            "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 1),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
         },
     }
@@ -400,6 +451,8 @@ def plot_profile(
     :param base_distribution_yscale: yscale of the base distributions
     :param skip_variations: whether to skip adding the up and down variation of the profile plot
     """
+    import matplotlib.pyplot as plt
+
     if len(variable_insts) != 2:
         raise Exception("The plot_profile function can only be used for 2-dimensional input histograms.")
 
@@ -408,6 +461,8 @@ def plot_profile(
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)

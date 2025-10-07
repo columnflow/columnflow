@@ -195,6 +195,7 @@ class ReduceEvents(_ReduceEvents):
                 [inp.abspath for inp in inps],
                 source_type=["coffea_root"] + (len(inps) - 1) * ["awkward_parquet"],
                 read_columns=[read_columns, read_sel_columns] + (len(inps) - 2) * [read_columns],
+                chunk_size=self.reducer_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs within diffs
                 if self.check_overlapping_inputs:
@@ -239,7 +240,12 @@ class ReduceEvents(_ReduceEvents):
         # merge output files
         sorted_chunks = [output_chunks[key] for key in sorted(output_chunks)]
         law.pyarrow.merge_parquet_task(
-            self, sorted_chunks, output["events"], local=True, writer_opts=self.get_parquet_writer_opts(),
+            task=self,
+            inputs=sorted_chunks,
+            output=output["events"],
+            local=True,
+            writer_opts=self.get_parquet_writer_opts(),
+            target_row_group_size=self.merging_row_group_size,
         )
 
 
@@ -280,16 +286,15 @@ class MergeReductionStats(_MergeReductionStats):
     n_inputs = luigi.IntParameter(
         default=10,
         significant=True,
-        description="minimal number of input files for sufficient statistics to infer merging "
-        "factors; default: 10",
+        description="minimal number of input files to infer merging factors with sufficient statistics; default: 10",
     )
     merged_size = law.BytesParameter(
         default=law.NO_FLOAT,
         unit="MB",
         significant=False,
-        description="the maximum file size of merged files; default unit is MB; when 0, the "
-        "merging factor is not actually calculated from input files, but it is assumed to be 1 "
-        "(= no merging); default: config value 'reduced_file_size' or 512MB'",
+        description="the maximum file size of merged files; default unit is MB; when 0, the merging factor is not "
+        "actually calculated from input files, but it is assumed to be 1 (= no merging); default: config value "
+        "'reduced_file_size' or 512MB",
     )
 
     # upstream requirements
@@ -301,6 +306,12 @@ class MergeReductionStats(_MergeReductionStats):
     @classmethod
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
+
+        # cap n_inputs
+        if "n_inputs" in params and (dataset_info_inst := params.get("dataset_info_inst")):
+            n_files = dataset_info_inst.n_files
+            if params["n_inputs"] < 0 or params["n_inputs"] > n_files:
+                params["n_inputs"] = n_files
 
         # check for the default merged size
         if "merged_size" in params:
@@ -407,7 +418,7 @@ class MergeReductionStats(_MergeReductionStats):
         self.publish_message(f" stats of {n} input files ".center(40, "-"))
         self.publish_message(f"average size: {law.util.human_bytes(stats['avg_size'], fmt=True)}")
         deviation = stats["std_size"] / stats["avg_size"]
-        self.publish_message(f"deviation   : {deviation * 100:.2f} % (std / avg)")
+        self.publish_message(f"deviation   : {deviation * 100:.2f}% (std/avg)")
         self.publish_message(" merging info ".center(40, "-"))
         self.publish_message(f"target size : {self.merged_size} MB")
         self.publish_message(f"merging     : {stats['merge_factor']} into 1")
@@ -453,8 +464,8 @@ class MergeReducedEvents(_MergeReducedEvents):
         ReduceEvents=ReduceEvents,
     )
 
-    # approximate number of events per row group in the merged file
-    target_row_group_size = 50_000
+    # number of events per row group in the merged file
+    merging_row_group_size = law.config.get_expanded_int("analysis", "merging_row_group_size", 50_000)
 
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def file_merging(self):
@@ -475,7 +486,10 @@ class MergeReducedEvents(_MergeReducedEvents):
     def workflow_requires(self):
         reqs = super().workflow_requires()
         reqs["stats"] = self.reqs.MergeReductionStats.req_different_branching(self)
-        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(self, branches=((0, -1),))
+        reqs["events"] = self.reqs.ReduceEvents.req_different_branching(
+            self,
+            branches=((0, self.dataset_info_inst.n_files),),
+        )
         return reqs
 
     def requires(self):
@@ -507,7 +521,7 @@ class MergeReducedEvents(_MergeReducedEvents):
             output=output,
             callback=self.create_progress_callback(len(inputs)),
             writer_opts=self.get_parquet_writer_opts(),
-            target_row_group_size=self.target_row_group_size,
+            target_row_group_size=self.merging_row_group_size,
         )
 
         # optionally remove initial inputs

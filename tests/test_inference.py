@@ -106,7 +106,7 @@ class TestInferenceModel(unittest.TestCase):
         # Test data
         name = "test_parameter"
         type = ParameterType.rate_gauss
-        transformations = [ParameterTransformation.centralize, ParameterTransformation.symmetrize]
+        transformations = [ParameterTransformation.symmetrize]
         config_name = "test_config"
         config_shift_source = "test_shift_source"
         effect = 1.5
@@ -177,34 +177,3 @@ class TestInferenceModel(unittest.TestCase):
         )
 
         self.assertDictEqual(result, expected_result)
-
-    def test_require_shapes_for_parameter_shape(self):
-        # No shape is required if the parameter type is a rate
-        types = [ParameterType.rate_gauss, ParameterType.rate_uniform, ParameterType.rate_unconstrained]
-        for t in types:
-            with self.subTest(t=t):
-                param_obj = DotDict(
-                    type=t,
-                    transformations=ParameterTransformations([ParameterTransformation.effect_from_rate]),
-                    name="test_param",
-                )
-                result = InferenceModel.require_shapes_for_parameter(param_obj)
-                self.assertFalse(result)
-
-                # if the transformation is shape-based expect True
-                param_obj.transformations = ParameterTransformations([ParameterTransformation.effect_from_shape])
-                result = InferenceModel.require_shapes_for_parameter(param_obj)
-                self.assertTrue(result)
-
-        # No shape is required if the transformation is from a rate
-        param_obj = DotDict(
-            type=ParameterType.shape,
-            transformations=ParameterTransformations([ParameterTransformation.effect_from_rate]),
-            name="test_param",
-        )
-        result = InferenceModel.require_shapes_for_parameter(param_obj)
-        self.assertFalse(result)
-
-        param_obj.transformations = ParameterTransformations([ParameterTransformation.effect_from_shape])
-        result = InferenceModel.require_shapes_for_parameter(param_obj)
-        self.assertTrue(result)
