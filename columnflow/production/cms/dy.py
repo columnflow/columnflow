@@ -28,6 +28,7 @@ class DrellYanConfig:
     unc_correction: str | None = None
     order: str | None = None
     njets: bool = False
+    ntags: bool = False
     systs: list[str] | None = None
 
     def __post_init__(self) -> None:
@@ -144,6 +145,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
             correction="dy_weight",
             systs=[],
             njets=True,
+            ntags=True,
         )
 
     *get_dy_weight_config* can be adapted in a subclass in case it is stored differently in the config.
@@ -159,6 +161,9 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         variable_map["order"] = self.dy_config.order
     if self.dy_config.njets:
         variable_map["njets"] = ak.num(events.Jet, axis=1)
+    if self.dy_config.ntags:
+        wp = self.config_inst.x.btag_working_points["particleNet"]["medium"]
+        variable_map["ntags"] = ak.sum(events.Jet.btagPNetB > wp, axis=-1)
 
     # initializing the list of weight variations (called syst in the dy files)
     systs = [("nom", "")]
@@ -197,6 +202,8 @@ def dy_weights_init(self: Producer) -> None:
     self.dy_config: DrellYanConfig = self.get_dy_weight_config()
     if self.dy_config.njets:
         self.uses.add("Jet.pt")
+    if self.dy_config.ntags:
+        self.uses.add("Jet.btagPNetB")
 
     # declare additional produced columns
     if self.dy_config.unc_correction:
@@ -470,7 +477,7 @@ def recoil_corrected_met_setup(
 # Weight producer for custom DY weights
 
 @producer(
-    uses={"{Muon,Electron,Tau,Jet}.{pt,eta,phi,mass}", "Jet.pt", "gen_dilepton_pt"},
+    uses={"{Muon,Electron,Tau,Jet}.{pt,eta,phi,mass}", "Jet.{pt,btagPNetB}", "gen_dilepton_pt"},
     produces={"dy_weight"},
     # only run on mc
     mc_only=True,
@@ -546,7 +553,7 @@ def dy_weights_uhh(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         variable_map = {**variable_map}
         variable_map_gen = {**variable_map_gen}
 
-        # evaluating dy weights given a certain era, njets and ptll arrays, and a systematic shift
+        # evaluating dy weights given a certain era, njets, and ptll arrays, and a systematic shift
         inputs = [variable_map[inp.name] for inp in self.dy_corrector.inputs]
         dy_weight = self.dy_corrector.evaluate(*inputs)
 
