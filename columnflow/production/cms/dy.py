@@ -33,10 +33,10 @@ class DrellYanConfig:
     order: str | None = None
     # list of systematics to be considered
     systs: list[str] | None = None
-    # functions to get njets and ntags from the events in case they should be used as inputs
+    # functions to get the number of jets and b-tagged jets from the events in case they should be used as inputs
     get_njets: callable[["dy_weights", ak.Array], ak.Array] | None = None
-    get_ntags: callable[["dy_weights", ak.Array], ak.Array] | None = None
-    # additional columns to be loaded, e.g. as needed for njets or ntags
+    get_nbtags: callable[["dy_weights", ak.Array], ak.Array] | None = None
+    # additional columns to be loaded, e.g. as needed for njets or nbtags
     used_columns: set = dataclasses.field(default_factory=set)
 
     def __post_init__(self) -> None:
@@ -169,8 +169,10 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         variable_map["order"] = self.dy_config.order
     if callable(self.dy_config.get_njets):
         variable_map["njets"] = self.dy_config.get_njets(self, events)
-    if callable(self.dy_config.get_ntags):
-        variable_map["ntags"] = self.dy_config.get_ntags(self, events)
+    if callable(self.dy_config.get_nbtags):
+        variable_map["nbtags"] = self.dy_config.get_nbtags(self, events)
+        # for compatibility
+        variable_map["ntags"] = variable_map["nbtags"]
 
     # initializing the list of weight variations (called syst in the dy files)
     systs = [("nom", "")]
