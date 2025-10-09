@@ -144,7 +144,8 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     *get_dy_weight_file* can be adapted in a subclass in case it is stored differently in the external files.
 
-    The campaign era and name of the correction set (see link above) should be given as an auxiliary entry in the config:
+    The analysis config should contain an auxiliary entry *dy_weight_config* pointing to a :py:class:`DrellYanConfig`
+    object:
 
     .. code-block:: python
 
