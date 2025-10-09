@@ -6,9 +6,9 @@ Column production methods related to Drell-Yan reweighting.
 
 from __future__ import annotations
 
-import law
+import dataclasses
 
-from dataclasses import dataclass
+import law
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set
@@ -21,14 +21,23 @@ ak = maybe_import("awkward")
 logger = law.logger.get_logger(__name__)
 
 
-@dataclass
+@dataclasses.dataclass
 class DrellYanConfig:
+    # era, e.g. "2022preEE"
     era: str
+    # correction set name
     correction: str
+    # uncertainty correction set name
     unc_correction: str | None = None
+    # generator order
     order: str | None = None
-    njets: bool = False
+    # list of systematics to be considered
     systs: list[str] | None = None
+    # functions to get njets and ntags from the events in case they should be used as inputs
+    get_njets: callable[["dy_weights", ak.Array], ak.Array] | None = None
+    get_ntags: callable[["dy_weights", ak.Array], ak.Array] | None = None
+    # additional columns to be loaded, e.g. as needed for njets or ntags
+    used_columns: set = dataclasses.field(default_factory=set)
 
     def __post_init__(self) -> None:
         if not self.era or not self.correction:
@@ -135,7 +144,8 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     *get_dy_weight_file* can be adapted in a subclass in case it is stored differently in the external files.
 
-    The campaign era and name of the correction set (see link above) should be given as an auxiliary entry in the config:
+    The analysis config should contain an auxiliary entry *dy_weight_config* pointing to a :py:class:`DrellYanConfig`
+    object:
 
     .. code-block:: python
 
@@ -157,8 +167,10 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     # optionals
     if self.dy_config.order:
         variable_map["order"] = self.dy_config.order
-    if self.dy_config.njets:
-        variable_map["njets"] = ak.num(events.Jet, axis=1)
+    if callable(self.dy_config.get_njets):
+        variable_map["njets"] = self.dy_config.get_njets(self, events)
+    if callable(self.dy_config.get_ntags):
+        variable_map["ntags"] = self.dy_config.get_ntags(self, events)
 
     # initializing the list of weight variations (called syst in the dy files)
     systs = [("nom", "")]
@@ -193,10 +205,12 @@ def dy_weights_init(self: Producer) -> None:
             f"campaign year {self.config_inst.campaign.x.year} is not yet supported by {self.cls_name}",
         )
 
-    # declare additional used columns
+    # get the dy weight config
     self.dy_config: DrellYanConfig = self.get_dy_weight_config()
-    if self.dy_config.njets:
-        self.uses.add("Jet.pt")
+
+    # declare additional used columns
+    if self.dy_config.used_columns:
+        self.uses.update(self.dy_config.used_columns)
 
     # declare additional produced columns
     if self.dy_config.unc_correction:
