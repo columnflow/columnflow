@@ -180,6 +180,9 @@ class PlotVariablesBase(_PlotVariablesBase):
                         if dataset_inst not in process_info["dataset_proc_name_map"].keys():
                             continue
 
+                        if h_in.sum().value == 0:
+                            continue  # skip empty histograms
+
                         # select processes and reduce axis
                         h = h_in.copy()
                         h = h[{

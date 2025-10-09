@@ -302,6 +302,53 @@ def draw_errorbars(
     ax.errorbar(**defaults)
 
 
+def draw_custom_errorbars(
+    ax: plt.Axes,
+    h: hist.Hist,
+    y: np.ndarray = 1.0,
+    xerr: np.ndarray = None,
+    yerr: np.ndarray = None,
+    **kwargs,
+) -> None:
+    """
+    Wrapper for matplotlib.pyplot.errorbar to plot custom error bars.
+    """
+    defaults = {
+        "x": h.axes[0].centers,
+        "y": y,
+        "xerr": xerr,
+        "yerr": yerr,
+        "fmt": "o-",
+        "elinewidth": 1,
+    }
+    defaults.update(kwargs)
+    ax.errorbar(**defaults)
+
+
+def draw_hist_twin(
+    ax: plt.Axes,
+    h: hist.Hist,
+    norm: float | Sequence | np.ndarray = 1.0,
+    **kwargs,
+) -> None:
+    """
+    calls draw_hist to plot a histogram on the right y-axis
+    """
+    ax2 = ax.twinx()
+    draw_hist(ax2, h, norm, **kwargs)
+    bin_widths = h.axes[0].widths
+    if norm == 1:
+        ax2.set_ylabel(r"Events / {:.2f} GeV".format(bin_widths[0]))
+    else:
+        ax2.set_ylabel("Normalized entries")
+    if bin_widths[0] > 5:
+        ax2.set_ylim(0, 0.129)
+    else:
+        ax2.set_ylim(0, 0.072)
+    # ax2.ticklabel_format(style="sci", scilimits=(2, 2), axis="y")
+    # ax2.yaxis.offsetText.set_position((1.075, 0.))
+
+
 def plot_all(
     plot_config: dict,
     style_config: dict,
@@ -362,7 +409,7 @@ def plot_all(
         func.__name__: func
         for func in [
             draw_stat_error_bands, draw_syst_error_bands, draw_stack, draw_hist, draw_profile,
-            draw_errorbars,
+            draw_errorbars, draw_custom_errorbars, draw_hist_twin,
         ]
     }
     for key, cfg in plot_config.items():

@@ -149,12 +149,30 @@ def plot_2d(
     # unit format on axes (could be configurable)
     unit_format = "{title} [{unit}]"
 
+    if "x_max" in variable_settings.get(variable_insts[0].name, {}):
+        x_max = variable_settings[variable_insts[0].name]["x_max"]
+    else:
+        x_max = variable_insts[0].x_max
+    if "x_min" in variable_settings.get(variable_insts[0].name, {}):
+        x_min = variable_settings[variable_insts[0].name]["x_min"]
+    else:
+        x_min = variable_insts[0].x_min
+
+    if "x_max" in variable_settings.get(variable_insts[1].name, {}):
+        y_max = variable_settings[variable_insts[1].name]["x_max"]
+    else:
+        y_max = variable_insts[1].x_max
+    if "x_min" in variable_settings.get(variable_insts[1].name, {}):
+        y_min = variable_settings[variable_insts[1].name]["x_min"]
+    else:
+        y_min = variable_insts[1].x_min
+
     # setup style config
     # TODO: some kind of z-label is still missing
     default_style_config = {
         "ax_cfg": {
-            "xlim": (variable_insts[0].x_min, variable_insts[0].x_max),
-            "ylim": (variable_insts[1].x_min, variable_insts[1].x_max),
+            "xlim": (x_min, x_max),
+            "ylim": (y_min, y_max),
             "xlabel": variable_insts[0].get_full_x_title(unit_format=unit_format),
             "ylabel": variable_insts[1].get_full_x_title(unit_format=unit_format),
             "xscale": "log" if variable_insts[0].log_x else "linear",
@@ -221,11 +239,11 @@ def plot_2d(
         label_options = {
             "wip": "Work in progress",
             "pre": "Preliminary",
-            "pw": "Private work",
+            "pw": "Private work (CMS data/simulation)",
             "sim": "Simulation",
             "simwip": "Simulation work in progress",
             "simpre": "Simulation preliminary",
-            "simpw": "Simulation private work",
+            "simpw": "Private work (CMS simulation)",
             "od": "OpenData",
             "odwip": "OpenData work in progress",
             "odpw": "OpenData private work",
@@ -236,6 +254,7 @@ def plot_2d(
             "llabel": label_options.get(cms_label, cms_label),
             "fontsize": 22,
             "data": False,
+            "exp": "",
         }
 
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
@@ -277,6 +296,9 @@ def plot_2d(
             cbar.ax.yaxis.set_minor_formatter(
                 mticker.LogFormatterSciNotation(_scale.base),
             )
+
+    ax.set_xlim(x_min, x_max)
+    ax.set_ylim(y_min, y_max)
 
     plt.tight_layout()
 
