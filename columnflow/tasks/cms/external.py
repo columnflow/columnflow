@@ -6,6 +6,9 @@ CMS related tasks dealing with external data.
 
 from __future__ import annotations
 
+import os
+import glob
+
 import luigi
 import law
 
@@ -19,6 +22,8 @@ logger = law.logger.get_logger(__name__)
 
 
 class CreatePileupWeights(ConfigTask):
+
+    task_namespace = "cms"
 
     single_config = True
 
@@ -162,3 +167,63 @@ CreatePileupWeightsWrapper = wrapper_factory(
     enable=["configs", "skip_configs"],
     attributes={"version": None},
 )
+
+
+class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
+    """
+    CMS specific task that checks for updates in the metadata managed and stored by the CAT group. See
+    https://cms-analysis-corrections.docs.cern.ch for more info.
+
+    This task requires two auxiliary entries in the analysis config to function correctly:
+
+        - ``cat_root``: the root directory where CAT metadata is stored, i.e. "/cvmfs/cms-griddata.cern.ch/cat/metadata"
+        - ``cat_info``: a :py:class:`columnflow.cms_util.CATInfo` instance that defines era information and POG
+            correction timestamps.
+    """
+
+    task_namespace = "cms"
+
+    version = None
+    single_config = False
+
+    def run(self):
+        # helpers to convert date tuples to strings and back
+        decode_date_str = lambda s: tuple(map(int, s.split("-")))
+        encode_date_str = lambda tpl: "-".join(map(str, tpl))
+
+        # loop through configs
+        for config_inst in self.config_insts:
+            with self.publish_step(
+                f"checking CAT metadata updates for config '{law.util.colored(config_inst.name, style='bright')}' in "
+                f"{config_inst.x.cat_root}",
+            ):
+                newest_dates = {}
+                updated_any = False
+                for pog, date_str in config_inst.x.cat_info.snapshot.items():
+                    newest_dates[pog] = date_str
+                    if not date_str:
+                        continue
+                    # get all versions in the cat directory, split by date numbers
+                    pog_era_dir = os.path.join(config_inst.x.cat_root, pog.upper(), config_inst.x.cat_info.key)
+                    dates = [
+                        decode_date_str(os.path.basename(path))
+                        for path in glob.glob(os.path.join(pog_era_dir, "*-*-*"))
+                    ]
+                    if not dates:
+                        raise ValueError(f"no CAT snapshots found in '{pog_era_dir}'")
+                    # compare with current date
+                    latest_date = max(dates)
+                    if date_str == "latest" or decode_date_str(date_str) < latest_date:
+                        latest_date_str = encode_date_str(latest_date)
+                        newest_dates[pog] = latest_date_str
+                        updated_any = True
+                        self.publish_message(f"found newer {pog.upper()} snapshot: {date_str} -> {latest_date_str}")
+
+                # print a new CATSnapshot line that can be copy-pasted into the config
+                if updated_any:
+                    args_str = ", ".join(f"{pog}=\"{date_str}\"" for pog, date_str in newest_dates.items() if date_str)
+                    self.publish_message(
+                        f"{law.util.colored('new CATSnapshot line ->', style='bright')} CATSnapshot({args_str})\n",
+                    )
+                else:
+                    self.publish_message("no updates found\n")
