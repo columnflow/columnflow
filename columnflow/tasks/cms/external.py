@@ -172,11 +172,9 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
     CMS specific task that checks for updates in the metadata managed and stored by the CAT group. See
     https://cms-analysis-corrections.docs.cern.ch for more info.
 
-    This task requires two auxiliary entries in the analysis config to function correctly:
-
-        - ``cat_root``: the root directory where CAT metadata is stored, i.e. "/cvmfs/cms-griddata.cern.ch/cat/metadata"
-        - ``cat_info``: a :py:class:`columnflow.cms_util.CATInfo` instance that defines era information and POG
-            correction timestamps.
+    To function correctly, this task requires an auxiliary entry ``cat_info`` in the analysis config, pointing to a
+    :py:class:`columnflow.cms_util.CATInfo` instance that defines the era information and the current POG correction
+    timestamps. The task will then check in the CAT metadata structure if newer timestamps are available.
     """
 
     version = None
@@ -191,7 +189,7 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
         for config_inst in self.config_insts:
             with self.publish_step(
                 f"checking CAT metadata updates for config '{law.util.colored(config_inst.name, style='bright')}' in "
-                f"{config_inst.x.cat_root}",
+                f"{config_inst.x.cat_info.METADATA_ROOT}",
             ):
                 newest_dates = {}
                 updated_any = False
@@ -199,14 +197,20 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                     newest_dates[pog] = date_str
                     if not date_str:
                         continue
+
                     # get all versions in the cat directory, split by date numbers
-                    pog_era_dir = os.path.join(config_inst.x.cat_root, pog.upper(), config_inst.x.cat_info.key)
+                    pog_era_dir = os.path.join(
+                        config_inst.x.cat_info.METADATA_ROOT,
+                        pog.upper(),
+                        config_inst.x.cat_info.key,
+                    )
                     dates = [
                         decode_date_str(os.path.basename(path))
                         for path in glob.glob(os.path.join(pog_era_dir, "*-*-*"))
                     ]
                     if not dates:
                         raise ValueError(f"no CAT snapshots found in '{pog_era_dir}'")
+
                     # compare with current date
                     latest_date = max(dates)
                     if date_str == "latest" or decode_date_str(date_str) < latest_date:
