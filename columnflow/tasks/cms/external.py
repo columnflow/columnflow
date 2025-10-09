@@ -23,8 +23,6 @@ logger = law.logger.get_logger(__name__)
 
 class CreatePileupWeights(ConfigTask):
 
-    task_namespace = "cms"
-
     single_config = True
 
     data_mode = luigi.ChoiceParameter(
@@ -180,8 +178,6 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
         - ``cat_info``: a :py:class:`columnflow.cms_util.CATInfo` instance that defines era information and POG
             correction timestamps.
     """
-
-    task_namespace = "cms"
 
     version = None
     single_config = False
