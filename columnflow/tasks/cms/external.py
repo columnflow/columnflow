@@ -202,7 +202,6 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                 for pog, date_str in config_inst.x.cat_info.snapshot.items():
                     if not date_str:
                         continue
-                    newest_dates[pog] = date_str
 
                     # get all versions in the cat directory, split by date numbers
                     pog_era_dir = os.path.join(
@@ -210,6 +209,9 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                         pog.upper(),
                         config_inst.x.cat_info.get_era_directory(pog),
                     )
+                    if not os.path.isdir(pog_era_dir):
+                        self.logger.warning(f"CAT metadata directory '{pog_era_dir}' does not exist, skipping")
+                        continue
                     dates = [
                         os.path.basename(path)
                         for path in glob.glob(os.path.join(pog_era_dir, "*-*-*"))
@@ -223,6 +225,8 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                         newest_dates[pog] = latest_date_str
                         updated_any = True
                         self.publish_message(f"found newer {pog.upper()} snapshot: {date_str} -> {latest_date_str}")
+                    else:
+                        newest_dates[pog] = date_str
 
                 # print a new CATSnapshot line that can be copy-pasted into the config
                 if updated_any:
