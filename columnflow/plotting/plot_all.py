@@ -300,6 +300,41 @@ def draw_errorbars(
             yerr[np.isinf(yerr)] = np.nan
         defaults["yerr"] = yerr
 
+    # -------------------------------------------------------
+    # save nr. of events and normalization factors
+    dic = {}
+    if values[0] > 500:
+        dic["geq2b_events"] = {}
+        dic["geq2b_events"]["nom"] = np.sum(values[-8:])
+        dic["geq2b_events"]["up"] = np.sum(yerr[0, -8:])
+        dic["geq2b_events"]["down"] = np.sum(yerr[1, -8:])
+        for i in range(10):
+            dic[f"eq{i}b_events"] = {}
+            dic[f"eq{i}b_events"]["nom"] = values[i]
+            dic[f"eq{i}b_events"]["up"] = yerr[0, i]
+            dic[f"eq{i}b_events"]["down"] = yerr[1, i]
+    else:
+        for i in range(10):
+            dic[f"eq{i}b_factor"] = {}
+            dic[f"eq{i}b_factor"]["nom"] = values[i]
+            dic[f"eq{i}b_factor"]["up"] = yerr[0, i]
+            dic[f"eq{i}b_factor"]["down"] = yerr[1, i]
+
+    geq2b_sum = 0
+    for shift in ["nom", "up", "down"]:
+        for i in range(2, 10):
+            geq2b_sum += (dic[f"eq{i}b_factor"][f"{shift}"] * dic[f"eq{i}b_events"][f"{shift}"])
+        geq2b = geq2b_sum / dic["geq2b_events"][f"{shift}"]
+        dic["geq2b_factor"][f"{shift}"] = geq2b
+
+    print("")
+    print(f"0 btags: {dic['eq0b_factor']['nom']},  # up/down {dic['eq0b_factor']['up']} / {dic['eq0b_factor']['down']}")
+    print(f"1 btags: {dic['eq1b_factor']['nom']},  # up/down {dic['eq1b_factor']['up']} / {dic['eq1b_factor']['down']}")
+    print(f"2 btags (weighted): {dic['geq2b_factor']['nom']},  # up/down {dic['geq2b_factor']['up']} / {dic['geq2b_factor']['down']}")  # noqa: E501
+    print("")
+    print("--------------------------------------------------")
+    # -------------------------------------------------------
+
     ax.errorbar(**defaults)
 
 
