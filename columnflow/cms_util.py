@@ -78,7 +78,7 @@ class CATInfo:
         """
         Returns the era directory name for a given *pog*.
 
-        :param pog: The POG to get the era for. Leave empty if the common POG-unspecific era should be used.
+        :param pog: The POG to get the era for. Leave empty if the common POG-unspecific directory name should be used.
         """
         pog = pog.lower()
 
