@@ -24,11 +24,12 @@ cat_metadata_root = "/cvmfs/cms-griddata.cern.ch/cat/metadata"
 @dataclasses.dataclass
 class CATSnapshot:
     """
-    Dataclass to wrap YYYY-MM-DD stype timestamps of CAT metadata per POG stored in
+    Dataclass to wrap YYYY-M[M]-D[D] stype timestamps of CAT metadata per POG stored in
     "/cvmfs/cms-griddata.cern.ch/cat/metadata". No format parsing or validation is done, leaving responsibility to the
     user.
     """
     btv: str = ""
+    dc: str = ""
     egm: str = ""
     jme: str = ""
     lum: str = ""

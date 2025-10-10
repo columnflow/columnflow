@@ -201,9 +201,9 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                 newest_dates = {}
                 updated_any = False
                 for pog, date_str in config_inst.x.cat_info.snapshot.items():
-                    newest_dates[pog] = date_str
                     if not date_str:
                         continue
+                    newest_dates[pog] = date_str
 
                     # get all versions in the cat directory, split by date numbers
                     pog_era_dir = os.path.join(
