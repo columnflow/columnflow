@@ -24,7 +24,7 @@ cat_metadata_root = "/cvmfs/cms-griddata.cern.ch/cat/metadata"
 @dataclasses.dataclass
 class CATSnapshot:
     """
-    Dataclass to wrap YYYY-M[M]-D[D] stype timestamps of CAT metadata per POG stored in
+    Dataclass to wrap YYYY-MM-DD stype timestamps of CAT metadata per POG stored in
     "/cvmfs/cms-griddata.cern.ch/cat/metadata". No format parsing or validation is done, leaving responsibility to the
     user.
     """
@@ -52,28 +52,43 @@ class CATInfo:
             era="22CDSep23-Summer22",
             vnano=12,
             snapshot=CATSnapshot(
-                btv="2025-8-20",
-                egm="2025-4-15",
-                jme="2025-9-23",
-                lum="2024-1-31",
-                muo="2025-8-14",
-                tau="2025-10-1",
+                btv="2025-08-20",
+                dc="2025-07-25",
+                egm="2025-04-15",
+                jme="2025-09-23",
+                lum="2024-01-31",
+                muo="2025-08-14",
+                tau="2025-10-01",
             ),
+            # pog-specific settings
+            pog_directories={"dc": "Collisions22"},
         )
     """
     run: int
     era: str
     vnano: int
     snapshot: CATSnapshot
+    # optional POG-specific overrides
+    pog_eras: dict[str, str] = dataclasses.field(default_factory=dict)
+    pog_directories: dict[str, str] = dataclasses.field(default_factory=dict)
 
     metadata_root: ClassVar[str] = cat_metadata_root
 
-    @property
-    def key(self) -> str:
+    def get_era_directory(self, pog: str = "") -> str:
         """
-        Returns the era key that is used for directory names in the CAT metadata structure.
+        Returns the era directory name for a given *pog*.
+
+        :param pog: The POG to get the era for. Leave empty if the common POG-unspecific era should be used.
         """
-        return f"Run{self.run}-{self.era}-NanoAODv{self.vnano}"
+        pog = pog.lower()
+
+        # use specific directory if defined
+        if pog in self.pog_directories:
+            return self.pog_directories[pog]
+
+        # build common directory name from run, era, and vnano
+        era = self.pog_eras.get(pog.lower(), self.era) if pog else self.era
+        return f"Run{self.run}-{era}-NanoAODv{self.vnano}"
 
     def get_file(self, pog: str, *paths: str | pathlib.Path) -> str:
         """
@@ -83,7 +98,7 @@ class CATInfo:
         return os.path.join(
             self.metadata_root,
             pog.upper(),
-            self.key,
+            self.get_era_directory(pog),
             getattr(self.snapshot, pog.lower()),
             *(str(p).strip("/") for p in paths),
         )

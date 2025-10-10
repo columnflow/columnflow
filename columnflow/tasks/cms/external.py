@@ -188,9 +188,8 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
     single_config = False
 
     def run(self):
-        # helpers to convert date tuples to strings and back
+        # helpers to convert date strings to tuples for numeric comparisons
         decode_date_str = lambda s: tuple(map(int, s.split("-")))
-        encode_date_str = lambda tpl: "-".join(map(str, tpl))
 
         # loop through configs
         for config_inst in self.config_insts:
@@ -209,19 +208,18 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                     pog_era_dir = os.path.join(
                         config_inst.x.cat_info.metadata_root,
                         pog.upper(),
-                        config_inst.x.cat_info.key,
+                        config_inst.x.cat_info.get_era_directory(pog),
                     )
                     dates = [
-                        decode_date_str(os.path.basename(path))
+                        os.path.basename(path)
                         for path in glob.glob(os.path.join(pog_era_dir, "*-*-*"))
                     ]
                     if not dates:
                         raise ValueError(f"no CAT snapshots found in '{pog_era_dir}'")
 
                     # compare with current date
-                    latest_date = max(dates)
-                    if date_str == "latest" or decode_date_str(date_str) < latest_date:
-                        latest_date_str = encode_date_str(latest_date)
+                    latest_date_str = max(dates, key=decode_date_str)
+                    if date_str == "latest" or decode_date_str(date_str) < decode_date_str(latest_date_str):
                         newest_dates[pog] = latest_date_str
                         updated_any = True
                         self.publish_message(f"found newer {pog.upper()} snapshot: {date_str} -> {latest_date_str}")
