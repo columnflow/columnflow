@@ -11,6 +11,7 @@ __all__ = []
 import os
 import re
 import copy
+import pathlib
 import dataclasses
 
 from columnflow.types import ClassVar, Generator
@@ -73,9 +74,9 @@ class CATInfo:
         """
         return f"Run{self.run}-{self.era}-NanoAODv{self.vnano}"
 
-    def get_file(self, pog: str, *path: str) -> str:
+    def get_file(self, pog: str, *paths: str | pathlib.Path) -> str:
         """
-        Returns the full path to a specific file or directory defined by *path* in the CAT metadata structure for a
+        Returns the full path to a specific file or directory defined by *paths* in the CAT metadata structure for a
         given *pog*.
         """
         return os.path.join(
@@ -83,7 +84,7 @@ class CATInfo:
             pog.upper(),
             self.key,
             getattr(self.snapshot, pog.lower()),
-            *(p.strip("/") for p in path),
+            *(str(p).strip("/") for p in paths),
         )
 
 
