@@ -6,6 +6,8 @@ CMS related tasks dealing with external data.
 
 from __future__ import annotations
 
+__all__ = []
+
 import os
 import glob
 
@@ -22,6 +24,8 @@ logger = law.logger.get_logger(__name__)
 
 
 class CreatePileupWeights(ConfigTask):
+
+    task_namespace = "cf.cms"
 
     single_config = True
 
@@ -177,7 +181,10 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
     timestamps. The task will then check in the CAT metadata structure if newer timestamps are available.
     """
 
+    task_namespace = "cf.cms"
+
     version = None
+
     single_config = False
 
     def run(self):
@@ -189,7 +196,7 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
         for config_inst in self.config_insts:
             with self.publish_step(
                 f"checking CAT metadata updates for config '{law.util.colored(config_inst.name, style='bright')}' in "
-                f"{config_inst.x.cat_info.METADATA_ROOT}",
+                f"{config_inst.x.cat_info.metadata_root}",
             ):
                 newest_dates = {}
                 updated_any = False
@@ -200,7 +207,7 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
 
                     # get all versions in the cat directory, split by date numbers
                     pog_era_dir = os.path.join(
-                        config_inst.x.cat_info.METADATA_ROOT,
+                        config_inst.x.cat_info.metadata_root,
                         pog.upper(),
                         config_inst.x.cat_info.key,
                     )

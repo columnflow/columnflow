@@ -14,6 +14,7 @@ import dataclasses
 from columnflow.types import ClassVar, Generator
 
 
+#: Default root path to CAT metadata.
 cat_metadata_root = "/cvmfs/cms-griddata.cern.ch/cat/metadata"
 
 
@@ -61,7 +62,7 @@ class CATInfo:
     vnano: int
     snapshot: CATSnapshot
 
-    METADATA_ROOT: ClassVar[str] = cat_metadata_root
+    metadata_root: ClassVar[str] = cat_metadata_root
 
     @property
     def key(self) -> str:
@@ -76,7 +77,7 @@ class CATInfo:
         given *pog*.
         """
         return os.path.join(
-            self.METADATA_ROOT,
+            self.metadata_root,
             pog.upper(),
             self.key,
             getattr(self.snapshot, pog.lower()),
