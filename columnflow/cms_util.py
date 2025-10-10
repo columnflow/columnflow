@@ -138,7 +138,7 @@ class CMSDatasetInfo:
         :return: A new instance of :py:class:`CMSDatasetInfo`.
         """
         # split
-        if not (m := re.match(r"^/([^/]+)/([^/-]+)-([^/-]+)-([^/-]+)/(.+)AOD(SIM)?$", key)):
+        if not (m := re.match(r"^/([^/]+)/([^/-]+)-([^/-]+)-([^/-]+)/([^/-]+)AOD(SIM)?$", key)):
             raise ValueError(f"invalid dataset key '{key}'")
 
         # create instance
@@ -174,9 +174,7 @@ class CMSDatasetInfo:
 
     @kind.setter
     def kind(self, value: str) -> None:
-        if not isinstance(value, str):
-            raise TypeError(f"expected string for kind, got '{value}' ({type(value)})")
-        if (_value := value.lower()) not in {"mc", "data"}:
+        if (_value := str(value).lower()) not in {"mc", "data"}:
             raise ValueError(f"invalid kind '{value}', expected 'mc' or 'data'")
         self.mc = _value == "mc"
 
