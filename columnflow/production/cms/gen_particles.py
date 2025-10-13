@@ -30,7 +30,10 @@ def drop_gen_part_fields(gen_parts: ak.Array) -> ak.Array:
 
 
 @producer(
-    uses={"GenPart.{genPartIdxMother,status,statusFlags}", f"GenPart.{{{','.join(keep_gen_part_fields)}}}"},
+    uses={
+        "GenPart.{genPartIdxMother,status,statusFlags}",  # required by the gen particle identification
+        f"GenPart.{{{','.join(keep_gen_part_fields)}}}",  # additional fields that should be read and added to gen_top
+    },
     produces={"gen_top"},
 )
 def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwargs) -> ak.Array:
