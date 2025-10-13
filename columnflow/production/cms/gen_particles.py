@@ -59,7 +59,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     t = t[ak.argsort(t.pdgId, axis=1, ascending=False)]
 
     # distinct top quark children
-    # (asking for isLastCopy leads to some tops that miss chidlren)
+    # (asking for isLastCopy leads to some tops that miss children, usually b's)
     t_children = ak.drop_none(t.distinctChildren[t.distinctChildren.hasFlags("fromHardProcess", "isFirstCopy")])
 
     # strict mode: check that there are exactly two children that are b and w
@@ -69,11 +69,11 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
         if (tci := unique_set(abs(t_children.pdgId))) != {5, 24}:
             raise Exception(f"found top quark children with unexpected pdgIds: {tci - {5, 24}}")
 
-    # store b's and W's
+    # store b's and w's
     b = ak.drop_none(ak.firsts(t_children[abs(t_children.pdgId) == 5], axis=2))
     w = ak.drop_none(ak.firsts(t_children[abs(t_children.pdgId) == 24], axis=2))
 
-    # distinct W children
+    # distinct w children
     w_children = ak.drop_none(w.distinctChildrenDeep)
 
     # distinguish into "hard" and additional ones
