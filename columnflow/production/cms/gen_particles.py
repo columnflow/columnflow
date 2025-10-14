@@ -44,9 +44,9 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
         - ``t``: list of all top quarks in the event, sorted such that top quarks precede anti-top quarks
         - ``b``: list of bottom quarks from top quark decays, consistent ordering w.r.t. ``t``
         - ``w``: list of W bosons from top quark decays, consistent ordering w.r.t. ``t``
-        - ``wDecay``: list of W boson decay products, consistent ordering w.r.t. ``w``, the first entry is the down-type
-            quark or charged lepton, the second entry is the up-type quark or neutrino, and additional decay products
-            (e.g photons) are appended afterwards
+        - ``wChildren``: list of W boson decay products, consistent ordering w.r.t. ``w``, the first entry is the
+            down-type quark or charged lepton, the second entry is the up-type quark or neutrino, and additional
+            decay products (e.g photons) are appended afterwards
     """
     # helper to extract unique values
     unique_set = lambda a: set(np.unique(ak.flatten(a, axis=None)))
@@ -96,7 +96,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
             "t": drop_gen_part_fields(t),
             "b": drop_gen_part_fields(b),
             "w": drop_gen_part_fields(w),
-            "wDecay": drop_gen_part_fields(w_children),
+            "wChildren": drop_gen_part_fields(w_children),
         },
         depth_limit=1,
     )
