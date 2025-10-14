@@ -7,32 +7,38 @@ useful for generator studies and truth definitions of physics objects.
 
 from __future__ import annotations
 
+import law
+
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column, remove_ak_column
+from columnflow.columnar_util import set_ak_column
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
-keep_gen_part_fields = {"pt", "eta", "phi", "mass", "pdgId"}
+logger = law.logger.get_logger(__name__)
+
+_keep_gen_part_fields = ["pt", "eta", "phi", "mass", "pdgId"]
 
 
-# helper to drop fields
-def drop_gen_part_fields(gen_parts: ak.Array) -> ak.Array:
-    """
-    Takes a GenParticleArray *gen_parts* and drops all fields except for those in `keep_gen_part_fields`.
-    """
-    for field in gen_parts.fields:
-        if field not in keep_gen_part_fields:
-            gen_parts = remove_ak_column(gen_parts, field)
-    return gen_parts
+# helper to transform generator particles by dropping / adding fields
+def transform_gen_part(gen_parts: ak.Array) -> ak.Array:
+    # reduce down to relevant fields
+    arr = ak.zip(
+        {f: getattr(gen_parts, f) for f in _keep_gen_part_fields},
+        depth_limit=1,
+    )
+    # remove parameters and add Lorentz vector behavior
+    arr = ak.without_parameters(arr)
+    arr = ak.with_name(arr, "PtEtaPhiMLorentzVector")
+    return arr
 
 
 @producer(
     uses={
         "GenPart.{genPartIdxMother,status,statusFlags}",  # required by the gen particle identification
-        f"GenPart.{{{','.join(keep_gen_part_fields)}}}",  # additional fields that should be read and added to gen_top
+        f"GenPart.{{{','.join(_keep_gen_part_fields)}}}",  # additional fields that should be read and added to gen_top
     },
     produces={"gen_top"},
 )
@@ -45,8 +51,8 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
         - ``b``: list of bottom quarks from top quark decays, consistent ordering w.r.t. ``t``
         - ``w``: list of W bosons from top quark decays, consistent ordering w.r.t. ``t``
         - ``wChildren``: list of W boson decay products, consistent ordering w.r.t. ``w``, the first entry is the
-            down-type quark or charged lepton, the second entry is the up-type quark or neutrino, and additional
-            decay products (e.g photons) are appended afterwards
+            down-type quark or charged lepton, the second entry is the up-type quark or neutrino, and additional decay
+            products (e.g photons) are appended afterwards
     """
     # helper to extract unique values
     unique_set = lambda a: set(np.unique(ak.flatten(a, axis=None)))
@@ -93,10 +99,10 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     # zip into a single array with named fields
     gen_top = ak.zip(
         {
-            "t": drop_gen_part_fields(t),
-            "b": drop_gen_part_fields(b),
-            "w": drop_gen_part_fields(w),
-            "wChildren": drop_gen_part_fields(w_children),
+            "t": transform_gen_part(t),
+            "b": transform_gen_part(b),
+            "w": transform_gen_part(w),
+            "wChildren": transform_gen_part(w_children),
         },
         depth_limit=1,
     )
