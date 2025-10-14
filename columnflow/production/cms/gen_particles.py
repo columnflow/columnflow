@@ -93,7 +93,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
 
     # sort them so that down-type quarks and charged leptons (odd pdgIds) come first, followed by up-type quarks and
     # neutrinos (even pdgIds), then add back the remaining ones
-    w_children_hard = w_children_hard[ak.argsort(1 - (w_children_hard.pdgId % 2), axis=2)]
+    w_children_hard = w_children_hard[ak.argsort(-(w_children_hard.pdgId % 2), axis=2)]
     w_children = ak.concatenate([w_children_hard, w_children_rest], axis=2)
 
     # zip into a single array with named fields
