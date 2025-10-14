@@ -15,7 +15,7 @@ np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
-keep_gen_part_fields = {"pt", "eta", "phi", "mass", "pdgId", "status", "statusFlags"}
+keep_gen_part_fields = {"pt", "eta", "phi", "mass", "pdgId"}
 
 
 # helper to drop fields
