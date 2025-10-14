@@ -1047,7 +1047,7 @@ def remove_label_placeholders(
 
 
 def calculate_stat_error(
-    hist: hist.Hist,
+    h: hist.Hist,
     error_type: str,
 ) -> dict:
     """
@@ -1061,13 +1061,13 @@ def calculate_stat_error(
 
     # determine the error type
     if error_type == "variance":
-        yerr = hist.view().variance ** 0.5
+        yerr = h.view().variance ** 0.5
     elif error_type in {"poisson_unweighted", "poisson_weighted"}:
         # compute asymmetric poisson confidence interval
         from hist.intervals import poisson_interval
 
-        variances = hist.view().variance if error_type == "poisson_weighted" else None
-        values = hist.view().value
+        variances = h.view().variance if error_type == "poisson_weighted" else None
+        values = h.view().value
         confidence_interval = poisson_interval(values, variances)
 
         # negative values are considerd as blinded bins -> set confidence interval to 0
