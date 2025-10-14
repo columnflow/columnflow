@@ -40,7 +40,7 @@ def transform_gen_part(gen_parts: ak.Array) -> ak.Array:
         "GenPart.{genPartIdxMother,status,statusFlags}",  # required by the gen particle identification
         f"GenPart.{{{','.join(_keep_gen_part_fields)}}}",  # additional fields that should be read and added to gen_top
     },
-    produces={"gen_top"},
+    produces={"gen_top.*.*"},
 )
 def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwargs) -> ak.Array:
     """
@@ -48,9 +48,10 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     products in a structured array with the following fields:
 
         - ``t``: list of all top quarks in the event, sorted such that top quarks precede anti-top quarks
-        - ``b``: list of bottom quarks from top quark decays, consistent ordering w.r.t. ``t``
+        - ``b``: list of bottom quarks from top quark decays, consistent ordering w.r.t. ``t`` (note that, in rare
+            cases, the decay into charm or down quarks is realized, and therefore stored in this field)
         - ``w``: list of W bosons from top quark decays, consistent ordering w.r.t. ``t``
-        - ``wChildren``: list of W boson decay products, consistent ordering w.r.t. ``w``, the first entry is the
+        - ``w_children``: list of W boson decay products, consistent ordering w.r.t. ``w``, the first entry is the
             down-type quark or charged lepton, the second entry is the up-type quark or neutrino, and additional decay
             products (e.g photons) are appended afterwards
     """
@@ -72,11 +73,12 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     if strict:
         if (tcn := unique_set(ak.num(t_children, axis=2))) != {2}:
             raise Exception(f"found top quarks that have != 2 children: {tcn - {2}}")
-        if (tci := unique_set(abs(t_children.pdgId))) != {5, 24}:
-            raise Exception(f"found top quark children with unexpected pdgIds: {tci - {5, 24}}")
+        if (tci := unique_set(abs(t_children.pdgId))) - {1, 3, 5, 24}:
+            raise Exception(f"found top quark children with unexpected pdgIds: {tci - {1, 3, 5, 24}}")
 
-    # store b's and w's
-    b = ak.drop_none(ak.firsts(t_children[abs(t_children.pdgId) == 5], axis=2))
+    # store b's (or s/d) and w's
+    abs_tc_ids = abs(t_children.pdgId)
+    b = ak.drop_none(ak.firsts(t_children[(abs_tc_ids == 1) | (abs_tc_ids == 3) | (abs_tc_ids == 5)], axis=2))
     w = ak.drop_none(ak.firsts(t_children[abs(t_children.pdgId) == 24], axis=2))
 
     # distinct w children
@@ -102,7 +104,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
             "t": transform_gen_part(t),
             "b": transform_gen_part(b),
             "w": transform_gen_part(w),
-            "wChildren": transform_gen_part(w_children),
+            "w_children": transform_gen_part(w_children),
         },
         depth_limit=1,
     )
@@ -118,7 +120,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
         "GenPart.{genPartIdxMother,status,statusFlags}",  # required by the gen particle identification
         f"GenPart.{{{','.join(_keep_gen_part_fields)}}}",  # additional fields that should be read and added to gen_top
     },
-    produces={"gen_higgs"},
+    produces={"gen_higgs.*.*"},
 )
 def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwargs) -> ak.Array:
     """
@@ -127,15 +129,15 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
 
         - ``h``: list of all Higgs bosons in the event, sorted by the pdgId of their decay products such that Higgs
             bosons decaying to quarks (b's) come first, followed by leptons, and then gauge bosons
-        - ``hChildren``: list of direct Higgs boson children, consistent ordering w.r.t. ``h``, with the first entry
+        - ``h_children``: list of direct Higgs boson children, consistent ordering w.r.t. ``h``, with the first entry
             being the particle and the second one being the anti-particle
-        - ``tauChildren``: list of decay products from tau lepton decays coming from Higgs bosons, with the first entry
+        - ``tau_children``: list of decay products from tau lepton decays coming from Higgs bosons, with the first entry
             being the neutrino and the second one being the W boson
-        - ``tauWChildren``: list of the decay products from W boson decays from tau lepton decays, with the first entry
-            being the down-type quark or charged lepton, the second entry being the up-type quark or neutrino, and
+        - ``tau_w_children``: list of the decay products from W boson decays from tau lepton decays, with the first
+            entry being the down-type quark or charged lepton, the second entry being the up-type quark or neutrino, and
             additional decay products (e.g photons) are appended afterwards
-        - ``zChildren``: not yet implemented
-        - ``wChildren``: not yet implemented
+        - ``z_children``: not yet implemented
+        - ``w_children``: not yet implemented
     """
     # helper to extract unique values
     unique_set = lambda a: set(np.unique(ak.flatten(a, axis=None)))
@@ -159,6 +161,9 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
 
     # sort them by decreasing pdgId
     h_children = h_children[ak.argsort(h_children.pdgId, axis=2, ascending=False)]
+    # in strict mode, fix the children dimension to 2
+    if strict:
+        h_children = h_children[:, :, [0, 1]]
 
     # further treatment of tau decays
     tau_mask = h_children.pdgId[:, :, 0] == 15
@@ -207,11 +212,11 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
     gen_higgs = ak.zip(
         {
             "h": transform_gen_part(h),
-            "hChildren": transform_gen_part(h_children),
-            "tauChildren": transform_gen_part(tau_nuw),
-            "tauWChildren": transform_gen_part(tau_w_children),
-            # "zChildren": None,  # not yet implemented
-            # "wChildren": None,  # not yet implemented
+            "h_children": transform_gen_part(h_children),
+            "tau_children": transform_gen_part(tau_nuw),
+            "tau_w_children": transform_gen_part(tau_w_children),
+            # "z_children": None,  # not yet implemented
+            # "w_children": None,  # not yet implemented
         },
         depth_limit=1,
     )
