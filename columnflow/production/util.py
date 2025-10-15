@@ -47,11 +47,14 @@ def attach_coffea_behavior(
 # general awkward array functions
 #
 
-def ak_extract_fields(arr: ak.Array, fields: list[str], **kwargs):
+def ak_extract_fields(arr: ak.Array, fields: list[str], optional_fields: list[str] | None = None, **kwargs):
     """
     Build an array containing only certain `fields` of an input array `arr`,
     preserving behaviors.
     """
+    if optional_fields is None:
+        optional_fields = []
+
     # reattach behavior
     if "behavior" not in kwargs:
         kwargs["behavior"] = arr.behavior
@@ -60,6 +63,10 @@ def ak_extract_fields(arr: ak.Array, fields: list[str], **kwargs):
         {
             field: getattr(arr, field)
             for field in fields
+        } | {
+            field: getattr(arr, field)
+            for field in optional_fields
+            if field in arr.fields
         },
         **kwargs,
     )

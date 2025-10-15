@@ -10,8 +10,8 @@ from __future__ import annotations
 import law
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import
 from columnflow.columnar_util import set_ak_column
+from columnflow.util import UNSET, maybe_import
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -23,15 +23,21 @@ _keep_gen_part_fields = ["pt", "eta", "phi", "mass", "pdgId"]
 
 
 # helper to transform generator particles by dropping / adding fields
-def transform_gen_part(gen_parts: ak.Array) -> ak.Array:
+def transform_gen_part(gen_parts: ak.Array, *, depth_limit: int, optional: bool = False) -> ak.Array:
     # reduce down to relevant fields
-    arr = ak.zip(
-        {f: getattr(gen_parts, f) for f in _keep_gen_part_fields},
-        depth_limit=1,
-    )
+    arr = {}
+    for f in _keep_gen_part_fields:
+        if optional:
+            if (v := getattr(gen_parts, f, UNSET)) is not UNSET:
+                arr[f] = v
+        else:
+            arr[f] = getattr(gen_parts, f)
+    arr = ak.zip(arr, depth_limit=depth_limit)
+
     # remove parameters and add Lorentz vector behavior
     arr = ak.without_parameters(arr)
     arr = ak.with_name(arr, "PtEtaPhiMLorentzVector")
+
     return arr
 
 
@@ -101,10 +107,10 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     # zip into a single array with named fields
     gen_top = ak.zip(
         {
-            "t": transform_gen_part(t),
-            "b": transform_gen_part(b),
-            "w": transform_gen_part(w),
-            "w_children": transform_gen_part(w_children),
+            "t": transform_gen_part(t, depth_limit=2),
+            "b": transform_gen_part(b, depth_limit=2),
+            "w": transform_gen_part(w, depth_limit=2),
+            "w_children": transform_gen_part(w_children, depth_limit=3),
         },
         depth_limit=1,
     )
@@ -211,10 +217,10 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
     # zip into a single array with named fields
     gen_higgs = ak.zip(
         {
-            "h": transform_gen_part(h),
-            "h_children": transform_gen_part(h_children),
-            "tau_children": transform_gen_part(tau_nuw),
-            "tau_w_children": transform_gen_part(tau_w_children),
+            "h": transform_gen_part(h, depth_limit=2),
+            "h_children": transform_gen_part(h_children, depth_limit=3),
+            "tau_children": transform_gen_part(tau_nuw, depth_limit=4),
+            "tau_w_children": transform_gen_part(tau_w_children, depth_limit=4),
             # "z_children": None,  # not yet implemented
             # "w_children": None,  # not yet implemented
         },
