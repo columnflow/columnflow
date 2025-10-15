@@ -231,3 +231,113 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
     events = set_ak_column(events, "gen_higgs", gen_higgs)
 
     return events
+
+
+@producer(
+    uses={
+        "GenPart.{genPartIdxMother,status,statusFlags}",  # required by the gen particle identification
+        f"GenPart.{{{','.join(_keep_gen_part_fields)}}}",  # additional fields that should be read and added to gen_top
+    },
+    produces={"gen_dy.*.*"},
+)
+def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwargs) -> ak.Array:
+    """
+    Creates a new ragged column "gen_dy" containing information about generator-level Z/g bosons and their decay
+    products in a structured array with the following fields:
+
+        - ``z``: list of all Z/g bosons in the event, sorted by the pdgId of their decay products
+        - ``lep``: list of direct Z/g boson children, consistent ordering w.r.t. ``z``, with the first entry being the
+            lepton and the second one being the anti-lepton
+        - ``tau_children``: list of decay products from tau lepton decays coming from Z/g bosons, with the first entry
+            being the neutrino and the second one being the W boson
+        - ``tau_w_children``: list of the decay products from W boson decays from tau lepton decays, with the first
+            entry being the down-type quark or charged lepton, the second entry being the up-type quark or neutrino, and
+            additional decay products (e.g photons) are appended afterwards
+    """
+    # note: in about 4% of DY events, the Z/g boson is missing, so this lookup starts at lepton level, see
+    # -> https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
+    # -> https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
+
+    # helper to extract unique values
+    unique_set = lambda a: set(np.unique(ak.flatten(a, axis=None)))
+
+    # get the e/mu and tau masks
+    abs_id = abs(events.GenPart.pdgId)
+    emu_mask = (
+        ((abs_id == 11) | (abs_id == 13)) &
+        (events.GenPart.status == 1) &
+        events.GenPart.hasFlags("fromHardProcess")
+    )
+    # taus need to have status == 2
+    tau_mask = (
+        (abs_id == 15) &
+        (events.GenPart.status == 2) &
+        events.GenPart.hasFlags("fromHardProcess")
+    )
+    lep_mask = emu_mask | tau_mask
+
+    # strict mode: there must be exactly two charged leptons per event
+    if strict:
+        if (nl := unique_set(ak.num(events.GenPart[lep_mask], axis=1))) - {2}:
+            raise Exception(f"found events that have != 2 charged leptons: {nl - {2}}")
+
+    # get the leptons and sort by decreasing pdgId (lepton before anti-lepton)
+    lep = events.GenPart[lep_mask]
+    lep = lep[ak.argsort(lep.pdgId, axis=1, ascending=False)]
+
+    # in strict mode, fix the lep dimension to 2
+    if strict:
+        lep = lep[:, [0, 1]]
+
+    # build the z from them
+    z = lep.sum(axis=-1)
+    z = set_ak_column(z, "pdgId", np.int32(23))
+
+    # further treatment of tau decays
+    tau = events.GenPart[tau_mask]
+    tau_children = tau.distinctChildren[tau.distinctChildren.hasFlags("isFirstCopy", "isTauDecayProduct")]
+    tau_children = ak.drop_none(tau_children)
+    # prepare neutrino and W boson handling
+    tau_nu_mask = abs(tau_children.pdgId) == 16
+    tau_w_mask = abs(tau_children.pdgId) == 24
+    tau_rest_mask = ~(tau_nu_mask | tau_w_mask)
+    tau_has_rest = ak.any(tau_rest_mask, axis=2)
+    # strict mode: there should always be a neutrino, and _either_ a W and nothing else _or_ no W at all
+    if strict:
+        if not ak.all(ak.any(tau_nu_mask, axis=2)):
+            raise Exception("found tau leptons without a tau neutrino among their children")
+        tau_has_w = ak.any(tau_w_mask, axis=2)
+        if not ak.all(tau_has_w ^ tau_has_rest):
+            raise Exception("found tau leptons with both W bosons and other decay products among their children")
+    # get the tau neutrino
+    tau_nu = tau_children[tau_nu_mask].sum(axis=2)
+    tau_nu = set_ak_column(tau_nu, "pdgId", ak.values_astype(16 * np.sign(tau.pdgId), np.int32))
+    # get the W boson in case it is part of the tau children, otherwise build it from the sum of children
+    tau_w = tau_children[tau_w_mask].sum(axis=2)
+    if ak.any(tau_has_rest):
+        tau_w_rest = tau_children[tau_rest_mask].sum(axis=-1)
+        tau_w = ak.where(tau_has_rest, tau_w_rest, tau_w)
+    tau_w = set_ak_column(tau_w, "pdgId", ak.values_astype(-24 * np.sign(tau.pdgId), np.int32))
+    # combine nu and w again
+    tau_nuw = ak.concatenate([tau_nu[..., None], tau_w[..., None]], axis=2)
+    # define w children
+    tau_w_children = ak.concatenate(
+        [tau_children[tau_rest_mask], ak.drop_none(ak.firsts(tau_children[tau_w_mask], axis=2).children)],
+        axis=1,
+    )
+
+    # zip into a single array with named fields
+    gen_dy = ak.zip(
+        {
+            "z": transform_gen_part(z, depth_limit=1),
+            "lep": transform_gen_part(lep, depth_limit=2),
+            "tau_children": transform_gen_part(tau_nuw, depth_limit=3),
+            "tau_w_children": transform_gen_part(tau_w_children, depth_limit=3),
+        },
+        depth_limit=1,
+    )
+
+    # save the column
+    events = set_ak_column(events, "gen_dy", gen_dy)
+
+    return events
