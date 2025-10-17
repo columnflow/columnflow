@@ -174,7 +174,6 @@ class CreateDatacards(SerializeInferenceModelBase):
                         shift_hists["nominal"] = h_proc[{
                             "shift": hist.loc(config_inst.get_shift("nominal").name),
                         }]
-                        h_proc = h_proc[{"category": sum}]
 
                         # no additional shifts need to be created for data
                         if proc_obj.name == "data":

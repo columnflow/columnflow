@@ -624,8 +624,9 @@ def create_category_combinations(
     # lookup table with created categories for faster access when connecting parents
     created_categories: dict[str, od.Category] = {}
 
-        # from IPython import embed; embed(header="debugger")
-
+    # start combining, considering one additional group for combinatorics at a time
+    # if skipping parents entirely, only consider the iteration that contains all groups
+    for _n_groups in ([n_groups] if parent_mode == "none" else range(2, n_groups + 1)):
         # build all group combinations
         for _group_names in itertools.combinations(group_names, _n_groups):
             # when creating parents in "safe" mode, skip combinations that miss unsafe groups
@@ -671,20 +672,46 @@ def create_category_combinations(
                             )
                     unique_ids_cache.add(kwargs["id"])
 
-                # find direct parents and connect them
-                # hack for now
-                parent_cat = root_cats[_group_names[0]]
-                parent_cat.add_category(cat)
-                # for _parent_group_names in itertools.combinations(_group_names, _n_groups - 1):
-                #     if len(_parent_group_names) == 1:
-                #         parent_cat_name = root_cats[_parent_group_names[0]].name
-                #     else:
-                #         parent_cat_name = name_fn({
-                #             group_name: root_cats[group_name]
-                #             for group_name in _parent_group_names
-                #         })
-                #     parent_cat = config.get_category(parent_cat_name, deep=True)
-                #     parent_cat.add_category(cat)
+                # find combinations of parents and connect them, depending on parent_mode
+                if parent_mode == "all":
+                    # all direct parents, obtained by combinations with one missing group
+                    parent_gen = itertools.combinations(_group_names, _n_groups - 1)
+                elif parent_mode == "none":
+                    # only connect to root categories
+                    parent_gen = ((name,) for name in _group_names)
+                else:  # safe
+                    # same as "all", but unsafe groups must be part of the combinations
+                    def _parent_gen():
+                        seen = set()
+                        # choose 1 group to sum over from _n_groups available
+                        for names in itertools.combinations(_group_names, _n_groups - 1):
+                            # as above, if there is at least one unsafe group missing, the parent was not created
+                            if (set(_group_names) - set(names)) & unsafe_groups:
+                                continue
+                            if names and names not in seen:
+                                seen.add(names)
+                                yield names
+                        # in case no parent combination was yielded, yield all root categories separately
+                        if not seen:
+                            yield from ((name,) for name in _group_names)
+                    parent_gen = _parent_gen()
+
+                # actual connections
+                for _parent_group_names in parent_gen:
+                    # find the parent
+                    if len(_parent_group_names) == 1:
+                        parent_cat = root_cats[_parent_group_names[0]]
+                    else:
+                        parent_cat_name = name_fn({
+                            group_name: root_cats[group_name]
+                            for group_name in _parent_group_names
+                        })
+                        if parent_cat_name in created_categories:
+                            parent_cat = created_categories[parent_cat_name]
+                        else:
+                            parent_cat = config.get_category(parent_cat_name, deep=True)
+                    # connect
+                    parent_cat.add_category(cat)
 
     return len(created_categories)
 
