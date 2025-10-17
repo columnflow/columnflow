@@ -11,13 +11,12 @@ import inspect
 import law
 import order as od
 
-from columnflow.types import Callable
-from columnflow.util import DerivableMeta, maybe_import
 from columnflow.columnar_util import TaskArrayFunction
-from columnflow.types import Any
+from columnflow.util import DerivableMeta, maybe_import
+from columnflow.types import TYPE_CHECKING, Any, Callable
 
-
-hist = maybe_import("hist")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
 
 
 class HistProducer(TaskArrayFunction):
@@ -247,7 +246,7 @@ class HistProducer(TaskArrayFunction):
             return h
         return self.post_process_hist_func(h, task=task)
 
-    def run_post_process_merged_hist(self, h: Any, task: law.Task) -> hist.Histogram:
+    def run_post_process_merged_hist(self, h: Any, task: law.Task) -> hist.Hist:
         """
         Invokes the :py:meth:`post_process_merged_hist_func` of this instance and returns its result, forwarding all
         arguments.

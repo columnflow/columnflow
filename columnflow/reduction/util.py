@@ -89,8 +89,21 @@ def create_collections_from_masks(
 
         # add collections
         for dst_name in dst_names:
-            object_mask = object_masks[src_name, dst_name]
-            dst_collection = events[src_name][object_mask]
+            object_mask = ak.drop_none(object_masks[src_name, dst_name])
+            try:
+                dst_collection = events[src_name][object_mask]
+            except ValueError as e:
+                # check f the object mask refers to an option type
+                mask_type = getattr(getattr(ak.type(object_mask), "content", None), "cotent", None)
+                if isinstance(mask_type, ak.types.OptionType):
+                    msg = (
+                        f"object mask to create dst collection '{dst_name}' from src collection '{src_name}' uses an "
+                        f"option type '{object_mask.typestr}' which is not supported; please adjust your mask to not "
+                        "contain missing values (most likely by using ak.drop_none() in your event selection)"
+                    )
+                    raise ValueError(msg) from e
+                # no further custom handling, re-raise
+                raise e
             events = set_ak_column(events, dst_name, dst_collection)
 
     return events

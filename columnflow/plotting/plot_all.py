@@ -10,7 +10,6 @@ __all__ = []
 
 import order as od
 
-from columnflow.types import Sequence
 from columnflow.util import maybe_import, try_float
 from columnflow.config_util import group_shifts
 from columnflow.plotting.plot_util import (
@@ -21,12 +20,12 @@ from columnflow.plotting.plot_util import (
     apply_label_placeholders,
     calculate_stat_error,
 )
+from columnflow.types import TYPE_CHECKING, Sequence
 
-hist = maybe_import("hist")
 np = maybe_import("numpy")
-mpl = maybe_import("matplotlib")
-plt = maybe_import("matplotlib.pyplot")
-mplhep = maybe_import("mplhep")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
+    plt = maybe_import("matplotlib.pyplot")
 
 
 def draw_stat_error_bands(
@@ -71,6 +70,8 @@ def draw_syst_error_bands(
     method: str = "quadratic_sum",
     **kwargs,
 ) -> None:
+    import hist
+
     assert len(h.axes) == 1
     assert method in ("quadratic_sum", "envelope")
 
@@ -169,6 +170,8 @@ def draw_stack(
     norm: float | Sequence | np.ndarray = 1.0,
     **kwargs,
 ) -> None:
+    import hist
+
     # check if norm is a number
     if try_float(norm):
         h = hist.Stack(*[i / norm for i in h])
@@ -202,6 +205,8 @@ def draw_hist(
     error_type: str = "variance",
     **kwargs,
 ) -> None:
+    import hist
+
     assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
 
     if kwargs.get("color", "") is None:
@@ -243,6 +248,8 @@ def draw_profile(
     """
     Profiled histograms contains the storage type "Mean" and can therefore not be normalized
     """
+    import hist
+
     assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
 
     if kwargs.get("color", "") is None:
@@ -272,6 +279,8 @@ def draw_errorbars(
     error_type: str = "poisson_unweighted",
     **kwargs,
 ) -> None:
+    import hist
+
     assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
 
     values = h.values() / norm
@@ -377,6 +386,10 @@ def plot_all(
     :param magnitudes: Optional float parameter that defines the displayed ymin when plotting with a logarithmic scale.
     :return: tuple of plot figure and axes
     """
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    import mplhep
+
     # general mplhep style
     plt.style.use(mplhep.style.CMS)
 
@@ -387,13 +400,17 @@ def plot_all(
     rax = None
     grid_spec = {"left": 0.15, "right": 0.95, "top": 0.95, "bottom": 0.1}
     grid_spec |= style_config.get("gridspec_cfg", {})
+
+    # Get figure size from style_config, with default values
+    subplots_cfg = style_config.get("subplots_cfg", {})
+
     if not skip_ratio:
         grid_spec = {"height_ratios": [3, 1], "hspace": 0, **grid_spec}
-        fig, axs = plt.subplots(2, 1, gridspec_kw=grid_spec, sharex=True)
+        fig, axs = plt.subplots(2, 1, gridspec_kw=grid_spec, sharex=True, **subplots_cfg)
         (ax, rax) = axs
     else:
         grid_spec.pop("height_ratios", None)
-        fig, ax = plt.subplots(gridspec_kw=grid_spec)
+        fig, ax = plt.subplots(gridspec_kw=grid_spec, **subplots_cfg)
         axs = (ax,)
 
     # invoke all plots methods

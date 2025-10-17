@@ -14,11 +14,12 @@ import order as od
 
 from columnflow.columnar_util import flat_np_view
 from columnflow.util import maybe_import
-from columnflow.types import Any
+from columnflow.types import TYPE_CHECKING, Any
 
-hist = maybe_import("hist")
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
 
 
 logger = law.logger.get_logger(__name__)
@@ -38,6 +39,8 @@ def fill_hist(
     determined automatically and depends on the variable axis type. In this case, shifting is applied to all continuous,
     non-circular axes.
     """
+    import hist
+
     if fill_kwargs is None:
         fill_kwargs = {}
 
@@ -163,6 +166,8 @@ def get_axis_kwargs(axis: hist.axis.AxesMixin) -> dict[str, Any]:
     :param axis: The axis instance to extract information from.
     :return: The extracted information in a dict.
     """
+    import hist
+
     axis_attrs = ["name", "label"]
     traits_attrs = []
     kwargs = {}
@@ -213,6 +218,8 @@ def create_hist_from_variables(
     weight: bool = True,
     storage: str | None = None,
 ) -> hist.Hist:
+    import hist
+
     histogram = hist.Hist.new
 
     # additional category axes
@@ -259,6 +266,8 @@ def translate_hist_intcat_to_strcat(
     axis_name: str,
     id_map: dict[int, str],
 ) -> hist.Hist:
+    import hist
+
     out_axes = [
         ax if ax.name != axis_name else hist.axis.StrCategory(
             [id_map[v] for v in list(ax)],
@@ -280,6 +289,8 @@ def add_missing_shifts(
     """
     Adds missing shift bins to a histogram *h*.
     """
+    import hist
+
     # get the set of bins that are missing in the histogram
     shift_bins = set(h.axes[str_axis])
     missing_shifts = set(expected_shifts_bins) - shift_bins

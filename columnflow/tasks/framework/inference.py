@@ -18,10 +18,12 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeShiftedHistograms
-from columnflow.util import dev_sandbox, DotDict, maybe_import
 from columnflow.config_util import get_datasets_from_process
+from columnflow.util import dev_sandbox, DotDict, maybe_import
+from columnflow.types import TYPE_CHECKING
 
-hist = maybe_import("hist")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
 
 
 class SerializeInferenceModelBase(
@@ -116,7 +118,7 @@ class SerializeInferenceModelBase(
                 "variables": set(),
                 # plain set of names of real data datasets
                 "data_datasets": set(),
-                # per name of mc dataset, the set of shift sources and the name of the datacard process object
+                # per mc dataset name, the set of shift sources and the names processes to be extracted from them
                 "mc_datasets": {},
             }
             for config_inst in self.config_insts
@@ -149,22 +151,22 @@ class SerializeInferenceModelBase(
                     for dataset_name in mc_datasets:
                         if dataset_name not in data["mc_datasets"]:
                             data["mc_datasets"][dataset_name] = {
-                                "proc_name": proc_obj.name,
                                 "shift_sources": set(),
+                                "proc_names": set(),
                             }
-                        elif data["mc_datasets"][dataset_name]["proc_name"] != proc_obj.name:
-                            raise ValueError(
-                                f"dataset '{dataset_name}' was already assigned to datacard process "
-                                f"'{data['mc_datasets'][dataset_name]['proc_name']}' and cannot be re-assigned to "
-                                f"'{proc_obj.name}' in config '{config_inst.name}'",
-                            )
+                        data["mc_datasets"][dataset_name]["proc_names"].add(
+                            proc_obj.config_data[config_inst.name].process,
+                        )
 
                     # shift sources
                     for param_obj in proc_obj.parameters:
                         if config_inst.name not in param_obj.config_data:
                             continue
                         # only add if a shift is required for this parameter
-                        if param_obj.type.is_shape or any(trafo.from_shape for trafo in param_obj.transformations):
+                        if (
+                            (param_obj.type.is_shape and not param_obj.transformations.any_from_rate) or
+                            (param_obj.type.is_rate and param_obj.transformations.any_from_shape)
+                        ):
                             shift_source = param_obj.config_data[config_inst.name].shift_source
                             for mc_dataset in mc_datasets:
                                 data["mc_datasets"][mc_dataset]["shift_sources"].add(shift_source)
@@ -231,25 +233,17 @@ class SerializeInferenceModelBase(
     def load_process_hists(
         self,
         config_inst: od.Config,
-        dataset_names: list[str],
+        dataset_processes: dict[str, list[str]],
         variable: str,
         inputs: dict,
     ) -> dict[str, dict[od.Process, hist.Hist]]:
+        import hist
+
         # collect histograms per variable and process
         hists: dict[od.Process, hist.Hist] = {}
 
         with self.publish_step(f"extracting '{variable}' for config {config_inst.name} ..."):
-            for dataset_name in dataset_names:
-                dataset_inst = config_inst.get_dataset(dataset_name)
-                process_inst = dataset_inst.processes.get_first()
-
-                # for real data, fallback to the main data process
-                if process_inst.is_data:
-                    process_inst = config_inst.get_process("data")
-
-                # gather all subprocesses for a full query later
-                sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
-
+            for dataset_name, process_names in dataset_processes.items():
                 # open the histogram and work on a copy
                 inp = inputs[dataset_name]["collection"][0]["hists"][variable]
                 try:
@@ -260,18 +254,53 @@ class SerializeInferenceModelBase(
                         f"'{config_inst.name}' from {inp.abspath}",
                     ) from e
 
-                # there must be at least one matching sub process
-                if not any(p.name in h.axes["process"] for p in sub_process_insts):
-                    raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
+                # determine processes to extract
+                process_insts = [config_inst.get_process(name) for name in process_names]
 
-                # select and reduce over relevant processes
-                h = h[{"process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]]}]
-                h = h[{"process": sum}]
+                # loop over all proceses assigned to this dataset
+                for process_inst in process_insts:
+                    # gather all subprocesses for a full query later
+                    sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
-                # store it
-                if process_inst in hists:
-                    hists[process_inst] += h
-                else:
-                    hists[process_inst] = h
+                    # there must be at least one matching sub process
+                    if not any(p.name in h.axes["process"] for p in sub_process_insts):
+                        raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
+
+                    # select and reduce over relevant processes
+                    h_proc = h[{
+                        "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
+                    }]
+                    h_proc = h_proc[{"process": sum}]
+
+                    # additional custom reductions
+                    h_proc = self.modify_process_hist(
+                        config_inst=config_inst,
+                        process_inst=process_inst,
+                        variable=variable,
+                        h=h_proc,
+                    )
+
+                    # store it
+                    if process_inst in hists:
+                        hists[process_inst] += h_proc
+                    else:
+                        hists[process_inst] = h_proc
 
         return hists
+
+    def modify_process_hist(
+        self,
+        config_inst: od.Config,
+        process_inst: od.Process,
+        variable: str,
+        h: hist.Hist,
+    ) -> hist.Hist:
+        """
+        Hook to modify a process histogram after it has been loaded. This can be helpful to reduce memory early on.
+
+        :param config_inst: The config instance the histogram belongs to.
+        :param process_inst: The process instance the histogram belongs to.
+        :param h: The histogram to modify.
+        :return: The modified histogram.
+        """
+        return h

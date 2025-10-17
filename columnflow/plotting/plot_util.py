@@ -9,6 +9,7 @@ from __future__ import annotations
 __all__ = []
 
 import re
+import math
 import operator
 import functools
 from collections import OrderedDict
@@ -19,13 +20,12 @@ import scinum as sn
 
 from columnflow.util import maybe_import, try_int, try_complex, UNSET, safe_div
 from columnflow.hist_util import copy_axis
-from columnflow.types import Iterable, Any, Callable, Sequence, Hashable
+from columnflow.types import TYPE_CHECKING, Iterable, Any, Callable, Sequence, Hashable
 
-math = maybe_import("math")
-hist = maybe_import("hist")
 np = maybe_import("numpy")
-plt = maybe_import("matplotlib.pyplot")
-mplhep = maybe_import("mplhep")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
+    plt = maybe_import("matplotlib.pyplot")
 
 
 logger = law.logger.get_logger(__name__)
@@ -255,6 +255,8 @@ def apply_variable_settings(
     applies settings from *variable_settings* dictionary to the *variable_insts*;
     the *rebin*, *overflow*, *underflow*, and *slice* settings are directly applied to the histograms
     """
+    import hist
+
     # store info gathered along application of variable settings that can be inserted to the style config
     variable_style_config = {}
 
@@ -312,6 +314,15 @@ def apply_variable_settings(
                 raise ValueError(f"unknown x transformation '{trafo}'")
 
     return hists, variable_style_config
+
+
+def remove_negative_contributions(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hist.Hist]:
+    _hists = hists.copy()
+    for proc_inst, h in hists.items():
+        h = h.copy()
+        h.view().value[h.view().value < 0] = 0
+        _hists[proc_inst] = h
+    return _hists
 
 
 def use_flow_bins(
@@ -373,12 +384,12 @@ def apply_density(hists: dict, density: bool = True) -> dict:
     if not density:
         return hists
 
-    for key, hist in hists.items():
+    for key, h in hists.items():
         # bin area safe for multi-dimensional histograms
-        area = functools.reduce(operator.mul, hist.axes.widths)
+        area = functools.reduce(operator.mul, h.axes.widths)
 
         # scale hist by bin area
-        hists[key] = hist / area
+        hists[key] = h / area
 
     return hists
 
@@ -389,6 +400,8 @@ def remove_residual_axis_single(
     max_bins: int = 1,
     select_value: Any = None,
 ) -> hist.Hist:
+    import hist
+
     # force always returning a copy
     h = h.copy()
 
@@ -501,6 +514,8 @@ def prepare_stack_plot_config(
     backgrounds with uncertainty bands, unstacked processes as lines and
     data entrys with errorbars.
     """
+    import hist
+
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     mc_syst_hists = []
@@ -934,6 +949,8 @@ def rebin_equal_width(
     :param axis_name: Name of the axis to rebin.
     :return: Tuple of the rebinned histograms and the new bin edges.
     """
+    import hist
+
     # get the variable axis from the first histogram
     assert hists
     for var_index, var_axis in enumerate(list(hists.values())[0].axes):
@@ -1029,27 +1046,25 @@ def remove_label_placeholders(
     return re.sub(f"__{sel}__", "", label)
 
 
-def calculate_stat_error(
-    hist: hist.Hist,
-    error_type: str,
-) -> dict:
+def calculate_stat_error(h: hist.Hist, error_type: str) -> np.ndarray:
     """
-    Calculate the error to be plotted for the given histogram *hist*.
+    Calculate the error to be plotted for the given histogram *h*.
     Supported error types are:
-        - 'variance': the plotted error is the square root of the variance for each bin
-        - 'poisson_unweighted': the plotted error is the poisson error for each bin
-        - 'poisson_weighted': the plotted error is the poisson error for each bin, weighted by the variance
-    """
 
+        - "variance": the plotted error is the square root of the variance for each bin
+        - "poisson_unweighted": the plotted error is the poisson error for each bin
+        - "poisson_weighted": the plotted error is the poisson error for each bin, weighted by the variance
+    """
     # determine the error type
     if error_type == "variance":
-        yerr = hist.view().variance ** 0.5
+        yerr = h.view().variance ** 0.5
+
     elif error_type in {"poisson_unweighted", "poisson_weighted"}:
         # compute asymmetric poisson confidence interval
         from hist.intervals import poisson_interval
 
-        variances = hist.view().variance if error_type == "poisson_weighted" else None
-        values = hist.view().value
+        variances = h.view().variance if error_type == "poisson_weighted" else None
+        values = h.view().value
         confidence_interval = poisson_interval(values, variances)
 
         # negative values are considerd as blinded bins -> set confidence interval to 0
@@ -1062,19 +1077,14 @@ def calculate_stat_error(
             raise ValueError("Unweighted Poisson interval calculation returned NaN values, check Hist package")
 
         # calculate the error
-        # yerr_lower is the lower error
         yerr_lower = values - confidence_interval[0]
-        # yerr_upper is the upper error
         yerr_upper = confidence_interval[1] - values
-        # yerr is the size of the errorbars to be plotted
         yerr = np.array([yerr_lower, yerr_upper])
 
         if np.any(yerr < 0):
-            logger.warning(
-                "yerr < 0, setting to 0. "
-                "This should not happen, please check your histogram.",
-            )
+            logger.warning("found yerr < 0, forcing to 0; this should not happen, please check your histogram")
             yerr[yerr < 0] = 0
+
     else:
         raise ValueError(f"unknown error type '{error_type}'")
 

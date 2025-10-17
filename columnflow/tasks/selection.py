@@ -21,7 +21,6 @@ from columnflow.tasks.calibration import CalibrateEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div, DotDict
 from columnflow.tasks.framework.parameters import DerivableInstParameter
 
-
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 

@@ -12,11 +12,12 @@ from collections import OrderedDict
 import law
 import order as od
 
-from columnflow.types import Any, Sequence
-from columnflow.util import maybe_import, Derivable, DotDict, KeyValueMessage
 from columnflow.columnar_util import Route
+from columnflow.util import maybe_import, Derivable, DotDict, KeyValueMessage
+from columnflow.types import TYPE_CHECKING, Any, Sequence
 
-ak = maybe_import("awkward")
+if TYPE_CHECKING:
+    ak = maybe_import("awkward")
 
 
 class MLModel(Derivable):

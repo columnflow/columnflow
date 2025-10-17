@@ -571,7 +571,12 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
                 # copy local dir
                 shutil.copytree(src, dst)
             else:
-                raise NotImplementedError(f"fetching {src} is not supported")
+                err = f"cannot fetch {src}"
+                if src.startswith("/") and os.path.isdir("/".join(src.split("/", 2)[:2])):
+                    err += ", file or directory does not exist"
+                else:
+                    err += ", resource type is not supported"
+                raise NotImplementedError(err)
 
         # helper function to fetch generic files
         def fetch_file(ext_file, counter=[0]):

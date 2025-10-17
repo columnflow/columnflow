@@ -61,7 +61,7 @@ def empty(
     events = set_ak_column(events, "category_ids", category_ids)
 
     # empty selection result with a trivial event mask
-    results = SelectionResult(event=ak.Array(np.ones(len(events), dtype=np.bool_)))
+    results = SelectionResult(event=ak.Array(np.ones(len(events), dtype=bool)))
 
     # increment stats
     weight_map = {

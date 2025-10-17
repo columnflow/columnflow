@@ -23,7 +23,7 @@ import law
 import order as od
 
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
-from columnflow.util import get_docs_url, is_regex, prettify, DotDict
+from columnflow.util import get_docs_url, is_regex, prettify, DotDict, freeze
 from columnflow.types import Sequence, Callable, Any, T
 
 
@@ -186,13 +186,19 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         # build the params
         params = super().req_params(inst, **kwargs)
 
-        # when not explicitly set in kwargs and no global value was defined on the cli for the task
-        # family, evaluate and use the default value
+        # evaluate and use the default version in case
+        # - "version" is an actual parameter object of cls, and
+        # - "version" is not explicitly set in kwargs, and
+        # - no global value was defined on the cli for the task family, and
+        # - if cls and inst belong to the same family, they differ in the keys used for the config lookup
         if (
             isinstance(getattr(cls, "version", None), luigi.Parameter) and
             "version" not in kwargs and
             not law.parser.global_cmdline_values().get(f"{cls.task_family}_version") and
-            cls.task_family != law.parser.root_task_cls().task_family
+            (
+                cls.task_family != inst.task_family or
+                freeze(cls.get_config_lookup_keys(params)) != freeze(inst.get_config_lookup_keys(params))
+            )
         ):
             default_version = cls.get_default_version(inst, params)
             if default_version and default_version != law.NO_STR:
@@ -1264,6 +1270,17 @@ class ConfigTask(AnalysisTask):
                     params["config_insts"] = [params["config_inst"]]
             else:
                 if "config_insts" not in params and "configs" in params:
+                    # custom pattern matching
+                    matched_config_names = []
+                    for pattern in params["configs"]:
+                        matched_config_names.extend(
+                            config_name for config_name in analysis_inst.configs.names()
+                            if law.util.multi_match(config_name, pattern)
+                        )
+                    matched_config_names = law.util.make_unique(matched_config_names)
+                    if matched_config_names:
+                        params["configs"] = matched_config_names
+                    # load config instances
                     params["config_insts"] = list(map(analysis_inst.get_config, params["configs"]))
 
         # resolving of parameters that is required before ArrayFunctions etc. can be initialized

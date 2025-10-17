@@ -11,8 +11,8 @@ __all__ = []
 from collections import OrderedDict
 
 import law
+import order as od
 
-from columnflow.types import Iterable
 from columnflow.util import maybe_import
 from columnflow.plotting.plot_all import plot_all
 from columnflow.plotting.plot_util import (
@@ -27,17 +27,16 @@ from columnflow.plotting.plot_util import (
     get_position,
     get_profile_variations,
     blind_sensitive_bins,
+    remove_negative_contributions,
     join_labels,
 )
 from columnflow.hist_util import add_missing_shifts
+from columnflow.types import TYPE_CHECKING, Iterable
 
-
-hist = maybe_import("hist")
 np = maybe_import("numpy")
-mpl = maybe_import("matplotlib")
-plt = maybe_import("matplotlib.pyplot")
-mplhep = maybe_import("mplhep")
-od = maybe_import("order")
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
+    plt = maybe_import("matplotlib.pyplot")
 
 
 def plot_variable_stack(
@@ -64,6 +63,11 @@ def plot_variable_stack(
     blinding_threshold = kwargs.get("blinding_threshold", None)
     if blinding_threshold:
         hists = blind_sensitive_bins(hists, config_inst, blinding_threshold)
+
+    # remove negative contributions per process if requested
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
+
     # process scaling
     hists = apply_process_scaling(hists)
     # density scaling per bin
@@ -175,6 +179,8 @@ def plot_variable_variants(
 
     variable_inst = variable_insts[0]
     hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     if density:
         hists = apply_density(hists, density)
 
@@ -241,10 +247,14 @@ def plot_shifted_variable(
     """
     TODO.
     """
+    import hist
+
     variable_inst = variable_insts[0]
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)
@@ -441,6 +451,8 @@ def plot_profile(
     :param base_distribution_yscale: yscale of the base distributions
     :param skip_variations: whether to skip adding the up and down variation of the profile plot
     """
+    import matplotlib.pyplot as plt
+
     if len(variable_insts) != 2:
         raise Exception("The plot_profile function can only be used for 2-dimensional input histograms.")
 
@@ -449,6 +461,8 @@ def plot_profile(
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
+    if kwargs.get("remove_negative", None):
+        hists = remove_negative_contributions(hists)
     hists = apply_process_scaling(hists)
     if density:
         hists = apply_density(hists, density)
