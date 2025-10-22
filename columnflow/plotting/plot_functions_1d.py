@@ -76,7 +76,7 @@ def plot_variable_stack(
 
     if len(shift_insts) == 1:
         # when there is exactly one shift bin, we can remove the shift axis
-        hists = remove_residual_axis(hists, "shift", select_value=shift_insts[0].name)
+        hists = remove_residual_axis(hists, "shift")
     else:
         # remove shift axis of histograms that are not to be stacked
         unstacked_hists = {
