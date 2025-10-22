@@ -136,7 +136,8 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
         - ``h``: list of all Higgs bosons in the event, sorted by the pdgId of their decay products such that Higgs
             bosons decaying to quarks (b's) come first, followed by leptons, and then gauge bosons
         - ``h_children``: list of direct Higgs boson children, consistent ordering w.r.t. ``h``, with the first entry
-            being the particle and the second one being the anti-particle
+            being the particle and the second one being the anti-particle; for Z bosons and (effective) gluons and
+            photons, no ordering is applied
         - ``tau_children``: list of decay products from tau lepton decays coming from Higgs bosons, with the first entry
             being the neutrino and the second one being the W boson
         - ``tau_w_children``: list of the decay products from W boson decays from tau lepton decays, with the first
@@ -152,18 +153,16 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
     h = events.GenPart[events.GenPart.pdgId == 25]
     h = h[h.hasFlags("fromHardProcess", "isLastCopy")]
 
-    # sort them by increasing pdgId if their children (quarks, leptons, Z, W)
+    # sort them by increasing pdgId of their children (quarks, leptons, Z, W, effective gluons/photons)
     h = h[ak.argsort(abs(ak.drop_none(ak.min(h.children.pdgId, axis=2))), axis=1, ascending=True)]
 
     # get distinct children
     h_children = ak.drop_none(h.distinctChildren[h.distinctChildren.hasFlags("fromHardProcess", "isFirstCopy")])
 
-    # strict mode: check that there are exactly two children with opposite pdg ids
+    # strict mode: check that there are exactly two children
     if strict:
         if (hcn := unique_set(ak.num(h_children, axis=2))) != {2}:
             raise Exception(f"found Higgs bosons that have != 2 children: {hcn - {2}}")
-        if ak.any((hcm := ak.sum(h_children.pdgId, axis=-1) != 0)):
-            raise Exception(f"found Higgs boson children with non-matching pdgIds: {unique_set(h_children.pdgId[hcm])}")
 
     # sort them by decreasing pdgId
     h_children = h_children[ak.argsort(h_children.pdgId, axis=2, ascending=False)]
