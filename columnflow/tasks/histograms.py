@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import luigi
 import law
-import order as od
 
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import (
@@ -23,6 +22,7 @@ from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.util import dev_sandbox, maybe_import
+from columnflow.hist_util import update_ax_labels
 
 
 hist = maybe_import("hist")
@@ -332,32 +332,6 @@ CreateHistogramsWrapper = wrapper_factory(
     require_cls=CreateHistograms,
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
-
-
-def update_ax_labels(hists: list[hist.Hist], config_inst: od.Config, variable_name: str) -> None:
-    """
-    Helper function to update the axis labels of histograms based on variable instances from
-    the *config_inst*.
-
-    :param hists: List of histograms to update.
-    :param config_inst: Configuration instance containing variable definitions.
-    :param variable_name: Name of the variable to update labels for, formatted as a string
-                         with variable names separated by hyphens (e.g., "var1-var2").
-    :raises ValueError: If a variable name is not found in the histogram axes.
-    """
-    labels = {}
-    for var_name in variable_name.split("-"):
-        var_inst = config_inst.get_variable(var_name, None)
-        if var_inst:
-            labels[var_name] = var_inst.x_title
-
-    for h in hists:
-        for var_name, label in labels.items():
-            ax_names = [ax.name for ax in h.axes]
-            if var_name in ax_names:
-                h.axes[var_name].label = label
-            else:
-                raise ValueError(f"variable '{var_name}' not found in histogram axes: {h.axes}")
 
 
 class _MergeHistograms(
