@@ -34,6 +34,7 @@ class InspectHistograms(HistogramsUserSingleShiftBase):
         If `debugger` is set to True, an IPython debugger session is started for
         interactive inspection of the histograms.
         """
+        inputs = self.input()
         shifts = {self.shift, "nominal"}
         hists = {}
 
@@ -44,9 +45,9 @@ class InspectHistograms(HistogramsUserSingleShiftBase):
                 for dataset in self.datasets[i]:
                     # sum over all histograms of the same variable and config
                     if hist_per_config is None:
-                        hist_per_config = self.load_histogram(config_inst, dataset, variable)
+                        hist_per_config = self.load_histogram(inputs, config_inst, dataset, variable)
                     else:
-                        hist_per_config += self.load_histogram(config_inst, dataset, variable)
+                        hist_per_config += self.load_histogram(inputs, config_inst, dataset, variable)
 
                 # slice histogram per config according to the sub_processes and categories
                 hist_per_config = self.slice_histogram(
@@ -89,6 +90,7 @@ class InspectShiftedHistograms(HistogramsUserMultiShiftBase):
         If `debugger` is set to True, an IPython debugger session is started for
         interactive inspection of the histograms.
         """
+        inputs = self.input()
         shifts = ["nominal"] + self.shifts
         hists = {}
 
@@ -99,9 +101,9 @@ class InspectShiftedHistograms(HistogramsUserMultiShiftBase):
                 for dataset in self.datasets[i]:
                     # sum over all histograms of the same variable and config
                     if hist_per_config is None:
-                        hist_per_config = self.load_histogram(config_inst, dataset, variable)
+                        hist_per_config = self.load_histogram(inputs, config_inst, dataset, variable)
                     else:
-                        hist_per_config += self.load_histogram(config_inst, dataset, variable)
+                        hist_per_config += self.load_histogram(inputs, config_inst, dataset, variable)
 
                 # slice histogram per config according to the sub_processes and categories
                 hist_per_config = self.slice_histogram(

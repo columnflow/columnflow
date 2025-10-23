@@ -6,8 +6,6 @@ Base tasks for working with multiple merged histograms.
 
 from __future__ import annotations
 
-from functools import cached_property
-
 import law
 import order as od
 
@@ -44,12 +42,9 @@ class HistogramsUserBase(
         parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
         return parts
 
-    @cached_property
-    def inputs(self):
-        return self.input()
-
     def load_histogram(
         self,
+        inputs: dict,
         config: str | od.Config,
         dataset: str | od.Dataset,
         variable: str | od.Variable,
@@ -58,6 +53,7 @@ class HistogramsUserBase(
         """
         Helper function to load the histogram from the input for a given dataset and variable.
 
+        :param inputs: The inputs dictionary containing the histograms.
         :param config: The config name or instance.
         :param dataset: The dataset name or instance.
         :param variable: The variable name or instance.
@@ -72,7 +68,7 @@ class HistogramsUserBase(
             variable = variable.name
         if isinstance(config, od.Config):
             config = config.name
-        histogram = self.inputs[config][dataset]["collection"][0]["hists"].targets[variable].load(formatter="pickle")
+        histogram = inputs[config][dataset]["collection"][0]["hists"].targets[variable].load(formatter="pickle")
 
         if update_label:
             # get variable label from first config instance
