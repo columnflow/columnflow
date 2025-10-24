@@ -2504,6 +2504,8 @@ class ChunkedIOMixin(ConfigTask):
         Checks whether all values in array *ak_array* are finite.
 
         The check is performed using the :external+numpy:py:func:`numpy.isfinite` function.
+        If the type check fails with a :py:class:`TypeError`, a warning is logged and the check is skipped for the
+        respective column.
 
         :param ak_array: Array with events to check.
         :raises ValueError: If any value in *ak_array* is not finite.
@@ -2512,7 +2514,12 @@ class ChunkedIOMixin(ConfigTask):
         from columnflow.columnar_util import get_ak_routes
 
         for route in get_ak_routes(ak_array):
-            if ak.any(~np.isfinite(ak.flatten(route.apply(ak_array), axis=None))):
+            try:
+                has_non_finite_values = ak.any(~np.isfinite(ak.flatten(route.apply(ak_array), axis=None)))
+            except TypeError:
+                logger.warning(f"failed to check for non-finite values in column '{route.column}' of array {ak_array}")
+                continue
+            if has_non_finite_values:
                 raise ValueError(f"found one or more non-finite values in column '{route.column}' of array {ak_array}")
 
     @classmethod
