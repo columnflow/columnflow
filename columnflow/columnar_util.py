@@ -3247,6 +3247,7 @@ class ChunkedParquetReader(object):
         meta_options = open_options.copy()
         meta_options.pop("row_groups", None)
         meta_options.pop("ignore_metadata", None)
+        meta_options.pop("columns", None)
         self.metadata = ak.metadata_from_parquet(path, **meta_options)
 
         # extract row group sizes for chunked reading

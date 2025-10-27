@@ -130,7 +130,7 @@ class CreateDatacards(SerializeInferenceModelBase):
                         proc_objs.append(self.inference_model_inst.process_spec(name="data"))
                     for proc_obj in proc_objs:
                         # skip the process objects if it does not contribute to this config_inst
-                        if config_inst.name not in proc_obj.config_data:
+                        if config_inst.name not in proc_obj.config_data and proc_obj.name != "data":
                             continue
 
                         # get all process instances (keys in _input_hists) to be combined

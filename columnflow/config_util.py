@@ -333,16 +333,27 @@ def get_shift_from_configs(configs: list[od.Config], shift: str | od.Shift, sile
 
 def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) -> list[od.Shift]:
     """
-    Takes a *config* object and returns a list of shift instances for both directions given a
-    sequence *shift_sources*.
+    Takes a *config* object and returns a list of shift instances for both directions given a sequence of
+    *shift_sources*. Each source should be the name of a shift source (no direction suffix) or a pattern.
+
+    :param config: :py:class:`order.Config` object from which to retrieve the shifts.
+    :param shift_sources: Sequence of shift source names or patterns.
+    :return: List of :py:class:`order.Shift` instances obtained from the given sources.
     """
-    return sum(
-        (
-            [config.get_shift(f"{s}_{od.Shift.UP}"), config.get_shift(f"{s}_{od.Shift.DOWN}")]
-            for s in shift_sources
-        ),
-        [],
-    )
+    # since each passed source can be a pattern, all existing sources need to be checked
+    # however, the order should be preserved, so loop through each pattern and check for matching sources
+    existing_sources = {shift.source for shift in config.shifts}
+    found_sources = set()
+    shifts = []
+    for pattern in shift_sources:
+        for source in existing_sources:
+            if source not in found_sources and law.util.multi_match(source, pattern):
+                found_sources.add(source)
+                shifts += [
+                    config.get_shift(f"{source}_{od.Shift.UP}"),
+                    config.get_shift(f"{source}_{od.Shift.DOWN}"),
+                ]
+    return shifts
 
 
 def group_shifts(

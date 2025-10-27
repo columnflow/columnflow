@@ -1270,6 +1270,17 @@ class ConfigTask(AnalysisTask):
                     params["config_insts"] = [params["config_inst"]]
             else:
                 if "config_insts" not in params and "configs" in params:
+                    # custom pattern matching
+                    matched_config_names = []
+                    for pattern in params["configs"]:
+                        matched_config_names.extend(
+                            config_name for config_name in analysis_inst.configs.names()
+                            if law.util.multi_match(config_name, pattern)
+                        )
+                    matched_config_names = law.util.make_unique(matched_config_names)
+                    if matched_config_names:
+                        params["configs"] = matched_config_names
+                    # load config instances
                     params["config_insts"] = list(map(analysis_inst.get_config, params["configs"]))
 
         # resolving of parameters that is required before ArrayFunctions etc. can be initialized

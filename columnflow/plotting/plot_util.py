@@ -18,7 +18,7 @@ import law
 import order as od
 import scinum as sn
 
-from columnflow.util import maybe_import, try_int, try_complex, UNSET
+from columnflow.util import maybe_import, try_int, try_complex, safe_div, UNSET
 from columnflow.hist_util import copy_axis
 from columnflow.types import TYPE_CHECKING, Iterable, Any, Callable, Sequence, Hashable
 
@@ -224,7 +224,7 @@ def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hi
         if scale_factor == "stack":
             # compute the scale factor and round
             h_no_shift = remove_residual_axis_single(h, "shift", select_value="nominal")
-            scale_factor = round_dynamic(get_stack_integral() / h_no_shift.sum().value) or 1
+            scale_factor = round_dynamic(safe_div(get_stack_integral(), h_no_shift.sum().value)) or 1
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
@@ -1046,28 +1046,25 @@ def remove_label_placeholders(
     return re.sub(f"__{sel}__", "", label)
 
 
-def calculate_stat_error(
-    hist: hist.Hist,
-    error_type: str,
-) -> dict:
+def calculate_stat_error(h: hist.Hist, error_type: str) -> np.ndarray:
     """
-    Calculate the error to be plotted for the given histogram *hist*.
+    Calculate the error to be plotted for the given histogram *h*.
     Supported error types are:
-        - 'variance': the plotted error is the square root of the variance for each bin
-        - 'poisson_unweighted': the plotted error is the poisson error for each bin
-        - 'poisson_weighted': the plotted error is the poisson error for each bin, weighted by the variance
-    """
-    import hist
 
+        - "variance": the plotted error is the square root of the variance for each bin
+        - "poisson_unweighted": the plotted error is the poisson error for each bin
+        - "poisson_weighted": the plotted error is the poisson error for each bin, weighted by the variance
+    """
     # determine the error type
     if error_type == "variance":
-        yerr = hist.view().variance ** 0.5
+        yerr = h.view().variance ** 0.5
+
     elif error_type in {"poisson_unweighted", "poisson_weighted"}:
         # compute asymmetric poisson confidence interval
         from hist.intervals import poisson_interval
 
-        variances = hist.view().variance if error_type == "poisson_weighted" else None
-        values = hist.view().value
+        variances = h.view().variance if error_type == "poisson_weighted" else None
+        values = h.view().value
         confidence_interval = poisson_interval(values, variances)
 
         # negative values are considerd as blinded bins -> set confidence interval to 0
@@ -1080,19 +1077,14 @@ def calculate_stat_error(
             raise ValueError("Unweighted Poisson interval calculation returned NaN values, check Hist package")
 
         # calculate the error
-        # yerr_lower is the lower error
         yerr_lower = values - confidence_interval[0]
-        # yerr_upper is the upper error
         yerr_upper = confidence_interval[1] - values
-        # yerr is the size of the errorbars to be plotted
         yerr = np.array([yerr_lower, yerr_upper])
 
         if np.any(yerr < 0):
-            logger.warning(
-                "yerr < 0, setting to 0. "
-                "This should not happen, please check your histogram.",
-            )
+            logger.warning("found yerr < 0, forcing to 0; this should not happen, please check your histogram")
             yerr[yerr < 0] = 0
+
     else:
         raise ValueError(f"unknown error type '{error_type}'")
 

@@ -28,6 +28,7 @@ from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler, 
 from columnflow.util import maybe_import, DotDict, get_docs_url, get_code_url
 from columnflow.types import Callable
 
+np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
@@ -2501,18 +2502,25 @@ class ChunkedIOMixin(ConfigTask):
     @classmethod
     def raise_if_not_finite(cls, ak_array: ak.Array) -> None:
         """
-        Checks whether all values in array *ak_array* are finite.
+        Checks whether values of all columns in *ak_array* are finite. String and bytestring types are skipped.
 
         The check is performed using the :external+numpy:py:func:`numpy.isfinite` function.
 
-        :param ak_array: Array with events to check.
+        :param ak_array: Array with columns to check.
         :raises ValueError: If any value in *ak_array* is not finite.
         """
-        import numpy as np
         from columnflow.columnar_util import get_ak_routes
 
         for route in get_ak_routes(ak_array):
-            if ak.any(~np.isfinite(ak.flatten(route.apply(ak_array), axis=None))):
+            # flatten
+            flat = ak.flatten(route.apply(ak_array), axis=None)
+            # perform parameter dependent checks
+            if isinstance((params := getattr(getattr(flat, "layout", None), "parameters", None)), dict):
+                # skip string and bytestring arrays
+                if params.get("__array__") in {"string", "bytestring"}:
+                    continue
+            # check finiteness
+            if ak.any(~np.isfinite(flat)):
                 raise ValueError(f"found one or more non-finite values in column '{route.column}' of array {ak_array}")
 
     @classmethod

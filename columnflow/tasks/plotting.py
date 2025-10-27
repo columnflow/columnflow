@@ -269,7 +269,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                     if process_inst.name in process_shift_map
                     else {"nominal"}
                 )
-                expected_shifts = plot_shift_names & process_shifts
+                expected_shifts = (process_shifts & plot_shift_names) or (process_shifts & {"nominal"})
                 if not expected_shifts:
                     raise Exception(f"no shifts to plot found for process {process_inst.name}")
                 # selections

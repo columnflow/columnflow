@@ -213,11 +213,15 @@ class ReduceEvents(_ReduceEvents):
                 )
 
                 # invoke the reducer
-                if len(events):
+                if len(events) > 0:
                     n_all += len(events)
                     events = attach_coffea_behavior(events)
                     events = self.reducer_inst(events, selection=sel, task=self)
                     n_reduced += len(events)
+
+                # no need to proceed when no events are left
+                if len(events) == 0:
+                    continue
 
                 # remove columns
                 events = route_filter(events)
