@@ -224,7 +224,10 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                     if date_str == "latest" or decode_date_str(date_str) < decode_date_str(latest_date_str):
                         newest_dates[pog] = latest_date_str
                         updated_any = True
-                        self.publish_message(f"found newer {pog.upper()} snapshot: {date_str} -> {latest_date_str}")
+                        self.publish_message(
+                            f"found newer {law.util.colored(pog.upper(), color='cyan')} snapshot: {date_str} -> "
+                            f"{latest_date_str} ({os.path.join(pog_era_dir, latest_date_str)})",
+                        )
                     else:
                         newest_dates[pog] = date_str
 
