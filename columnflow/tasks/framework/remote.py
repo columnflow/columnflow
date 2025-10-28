@@ -48,6 +48,10 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
         os.environ["CF_CONDA_BASE"],
     ]
 
+    include_files = [
+        "law_user.cfg",
+    ]
+
     def get_repo_path(self):
         # required by BundleGitRepository
         return os.environ["CF_REPO_BASE"]
