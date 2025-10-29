@@ -109,7 +109,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     w_children = ak.concatenate([w_children_hard, w_children_rest], axis=2)
 
     # further distinguish tau decays in w_children
-    w_tau_children = ak.drop_none(w_children[abs(w_children.pdgId == 15)].distinctChildrenDeep)
+    w_tau_children = ak.drop_none(w_children[abs(w_children.pdgId) == 15].distinctChildrenDeep)
     # sort: nu tau first, photons last, rest in between sorted by ascending absolute pdgId
     w_tau_nu_mask = abs(w_tau_children.pdgId) == 16
     w_tau_photon_mask = w_tau_children.pdgId == 22
