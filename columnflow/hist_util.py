@@ -306,3 +306,29 @@ def add_missing_shifts(
             h.fill(*dummy_fill, weight=0)
             # TODO: this might skip overflow and underflow bins
             h[{str_axis: hist.loc(missing_shift)}] = nominal.view()
+
+
+def update_ax_labels(hists: list[hist.Hist], config_inst: od.Config, variable_name: str) -> None:
+    """
+    Helper function to update the axis labels of histograms based on variable instances from
+    the *config_inst*.
+
+    :param hists: List of histograms to update.
+    :param config_inst: Configuration instance containing variable definitions.
+    :param variable_name: Name of the variable to update labels for, formatted as a string
+                         with variable names separated by hyphens (e.g., "var1-var2").
+    :raises ValueError: If a variable name is not found in the histogram axes.
+    """
+    labels = {}
+    for var_name in variable_name.split("-"):
+        var_inst = config_inst.get_variable(var_name, None)
+        if var_inst:
+            labels[var_name] = var_inst.x_title
+
+    for h in hists:
+        for var_name, label in labels.items():
+            ax_names = [ax.name for ax in h.axes]
+            if var_name in ax_names:
+                h.axes[var_name].label = label
+            else:
+                raise ValueError(f"variable '{var_name}' not found in histogram axes: {h.axes}")
