@@ -21,6 +21,7 @@ from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.reduction import ReducedEventsUser
 from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
+from columnflow.hist_util import sum_hists
 from columnflow.util import dev_sandbox
 
 
@@ -444,7 +445,7 @@ class MergeHistograms(_MergeHistograms):
 
             # merge them
             variable_hists = [h[variable_name] for h in hists]
-            merged = sum(variable_hists[1:], variable_hists[0].copy())
+            merged = sum_hists(variable_hists)
 
             # post-process the merged histogram
             merged = self.hist_producer_inst.run_post_process_merged_hist(merged, task=self)
@@ -542,7 +543,7 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
                 ]
 
                 # merge and write the output
-                merged = sum(variable_hists[1:], variable_hists[0].copy())
+                merged = sum_hists(variable_hists)
                 outp.dump(merged, formatter="pickle")
 
 
