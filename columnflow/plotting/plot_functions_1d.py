@@ -30,7 +30,7 @@ from columnflow.plotting.plot_util import (
     remove_negative_contributions,
     join_labels,
 )
-from columnflow.hist_util import add_missing_shifts
+from columnflow.hist_util import add_missing_shifts, sum_hists
 from columnflow.types import TYPE_CHECKING, Iterable
 
 np = maybe_import("numpy")
@@ -265,7 +265,7 @@ def plot_shifted_variable(
         add_missing_shifts(h, all_shifts, str_axis="shift", nominal_bin="nominal")
 
     # create the sum of histograms over all processes
-    h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
+    h_sum = sum_hists(hists.values())
 
     # setup plotting configs
     plot_config = {}
