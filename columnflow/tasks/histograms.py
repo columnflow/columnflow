@@ -261,6 +261,12 @@ class CreateHistograms(_CreateHistograms):
                         # create the histogram in the first chunk
                         histograms[var_key] = self.hist_producer_inst.run_create_hist(variable_insts, task=self)
 
+                    if len(events) == 0:
+                        self.publish_message(
+                            f"no events found in chunk {pos}",
+                        )
+                        continue
+
                     # mask events and weights when selection expressions are found
                     masked_events = events
                     masked_weights = weight

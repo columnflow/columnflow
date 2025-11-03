@@ -330,7 +330,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
         )
 
     # read the weight per process (defined as lumi * xsec / sum_weights) from the lookup table
-    process_weight = np.squeeze(np.asarray(self.process_weight_table[process_id, 0].todense()))
+    process_weight = np.squeeze(np.asarray(self.process_weight_table[process_id].todense()), axis=-1)
 
     # compute the weight and store it
     norm_weight = events.mc_weight * process_weight

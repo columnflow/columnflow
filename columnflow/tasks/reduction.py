@@ -220,7 +220,7 @@ class ReduceEvents(_ReduceEvents):
                     n_reduced += len(events)
 
                 # no need to proceed when no events are left
-                if len(events) == 0:
+                if len(events) == 0 and len(output_chunks) > 0:
                     continue
 
                 # remove columns
