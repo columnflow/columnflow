@@ -16,6 +16,7 @@ import time
 import enum
 import inspect
 import threading
+import dataclasses
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
@@ -2921,6 +2922,19 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
 
         # select the minimum value that defines the bottleneck
         return min((s for s in sizes if isinstance(s, int)), default=None)
+
+
+@dataclasses.dataclass
+class TAFConfig:
+
+    def copy(self, **kwargs) -> TAFConfig:
+        """
+        Returns a copy of this TAFConfig instance, updated by any given *kwargs*.
+
+        :param kwargs: Attributes to update in the copied instance.
+        :return: The copied and updated TAFConfig instance.
+        """
+        return self.__class__(self.__dict__ | kwargs)
 
 
 class NoThreadPool(object):
