@@ -3444,7 +3444,7 @@ class ChunkedIOHandler(object):
     # chunk position container
     ChunkPosition = namedtuple(
         "ChunkPosition",
-        ["index", "entry_start", "entry_stop", "max_chunk_size"],
+        ["index", "entry_start", "entry_stop", "max_chunk_size", "n_chunks"],
     )
 
     # read result container
@@ -3550,11 +3550,13 @@ class ChunkedIOHandler(object):
         if n_entries == 0:
             entry_start = 0
             entry_stop = 0
+            n_chunks = 0
         else:
             entry_start = chunk_index * chunk_size
             entry_stop = min((chunk_index + 1) * chunk_size, n_entries)
+            n_chunks = int(math.ceil(n_entries / chunk_size))
 
-        return cls.ChunkPosition(chunk_index, entry_start, entry_stop, chunk_size)
+        return cls.ChunkPosition(chunk_index, entry_start, entry_stop, chunk_size, n_chunks)
 
     @classmethod
     def get_source_handler(
