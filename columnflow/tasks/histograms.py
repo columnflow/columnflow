@@ -239,6 +239,10 @@ class CreateHistograms(_CreateHistograms):
                 events = attach_coffea_behavior(events)
                 events, weight = self.hist_producer_inst(events, task=self)
 
+                if len(events) == 0:
+                    self.publish_message(f"no events found in chunk {pos}")
+                    continue
+
                 # merge category ids and check that they are defined as leaf categories
                 category_ids = ak.concatenate(
                     [Route(c).apply(events) for c in self.category_id_columns],
@@ -261,12 +265,6 @@ class CreateHistograms(_CreateHistograms):
                     if var_key not in histograms:
                         # create the histogram in the first chunk
                         histograms[var_key] = self.hist_producer_inst.run_create_hist(variable_insts, task=self)
-
-                    if len(events) == 0:
-                        self.publish_message(
-                            f"no events found in chunk {pos}",
-                        )
-                        continue
 
                     # mask events and weights when selection expressions are found
                     masked_events = events
