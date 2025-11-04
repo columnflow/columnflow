@@ -37,6 +37,12 @@ class UniteColumns(_UniteColumns):
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
+    keep_columns_key = luigi.Parameter(
+        default=law.NO_STR,
+        description="if the 'keep_columns' auxiliary config entry for the task family 'cf.UniteColumns' is defined as "
+        "a dictionary, this key can selects which of the entries of columns to use; uses all columns when empty; "
+        "default: empty",
+    )
     file_type = luigi.ChoiceParameter(
         default="parquet",
         choices=("parquet", "root"),
@@ -104,7 +110,8 @@ class UniteColumns(_UniteColumns):
 
     @workflow_condition.output
     def output(self):
-        return {"events": self.target(f"data_{self.branch}.{self.file_type}")}
+        key_postfix = "" if self.keep_columns_key in {law.NO_STR, "", None} else f"_{self.keep_columns_key}"
+        return {"events": self.target(f"data_{self.branch}{key_postfix}.{self.file_type}")}
 
     @law.decorator.notify
     @law.decorator.log
@@ -127,7 +134,18 @@ class UniteColumns(_UniteColumns):
         # define columns that will be written
         write_columns: set[Route] = set()
         skip_columns: set[Route] = set()
-        for c in self.config_inst.x.keep_columns.get(self.task_family, ["*"]):
+        keep_struct = self.config_inst.x.keep_columns.get(self.task_family, ["*"])
+        if isinstance(keep_struct, dict):
+            if self.keep_columns_key not in {law.NO_STR, "", None}:
+                if self.keep_columns_key not in keep_struct:
+                    raise KeyError(
+                        f"keep_columns_key '{self.keep_columns_key}' not found in keep_columns config entry for "
+                        f"task family '{self.task_family}', existing keys: {list(keep_struct.keys())}",
+                    )
+                keep_struct = keep_struct[self.keep_columns_key]
+            else:
+                keep_struct = law.util.flatten(keep_struct.values())
+        for c in law.util.make_unique(keep_struct):
             for r in self._expand_keep_column(c):
                 if r.has_tag("skip"):
                     skip_columns.add(r)
