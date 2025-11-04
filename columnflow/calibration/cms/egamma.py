@@ -80,6 +80,7 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
         "run": events.run,
         "pt": coll.pt,
         "ScEta": coll.superclusterEta,
+        "AbsScEta": abs(coll.superclusterEta),
         "r9": coll.r9,
         "seedGain": coll.seedGain,
         **self.cfg.corrector_kwargs,
