@@ -71,13 +71,8 @@ class EGammaCorrectionConfig(TAFConfig):
 def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # gather inputs
     coll = events[self.collection_name]
-
-    if ak.sum(ak.num(coll.pt, axis=-1)) == 0:
-        # skip chunk if no objects are present
-        return events
-
     variable_map = {
-        "run": events.run,
+        "run": events.run if ak.sum(ak.num(coll, axis=1), axis=0) else [],
         "pt": coll.pt,
         "ScEta": coll.superclusterEta,
         "AbsScEta": abs(coll.superclusterEta),
