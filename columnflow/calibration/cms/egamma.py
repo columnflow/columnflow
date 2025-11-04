@@ -23,7 +23,7 @@ import law
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, full_like
+from columnflow.columnar_util import TAFConfig, set_ak_column, full_like
 from columnflow.types import Any
 
 ak = maybe_import("awkward")
@@ -37,7 +37,7 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
 @dataclasses.dataclass
-class EGammaCorrectionConfig:
+class EGammaCorrectionConfig(TAFConfig):
     """
     Container class to describe energy scaling and smearing configurations. Example:
 
@@ -114,22 +114,21 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
             events = set_ak_column(events, f"{self.collection_name}.pt_smear_uncorrected", coll.pt)
             events = set_ak_column(events, f"{self.collection_name}.energyErr_smear_uncorrected", coll.energyErr)
 
-        # helper to compute random variables in the shape of the collection
-        def get_rnd(syst):
-            args = (full_like(coll.pt, 0.0), full_like(coll.pt, 1.0))
-            if self.use_deterministic_seeds:
-                args += (coll.deterministic_seed,)
-                rand_func = self.deterministic_normal[syst]
-            else:
-                # TODO: bit generator could be configurable
-                rand_func = np.random.Generator(np.random.SFC64((events.event + sum(map(ord, syst))).to_list())).normal
-            return ak_random(*args, rand_func=rand_func)
+        # compute random variables in the shape of the collection once
+        rnd_args = (full_like(coll.pt, 0.0), full_like(coll.pt, 1.0))
+        if self.use_deterministic_seeds:
+            rnd_args += (coll.deterministic_seed,)
+            rand_func = self.deterministic_normal
+        else:
+            # TODO: bit generator could be configurable
+            rand_func = np.random.Generator(np.random.SFC64((events.event).to_list())).normal
+        rnd = ak_random(*rnd_args, rand_func=rand_func)
 
         # helper to compute smeared pt and energy error values given a syst
         def apply_smearing(syst):
             # get smeared pt
             smear = self.smear_syst_corrector.evaluate(syst, *get_inputs(self.smear_syst_corrector))
-            smear_factor = 1.0 + smear * get_rnd(syst)
+            smear_factor = 1.0 + smear * rnd
             pt_smeared = coll.pt * smear_factor
             # get smeared energy error
             energy_err_smeared = (((coll.energyErr)**2 + (coll.energy * smear)**2) * smear_factor)**0.5
@@ -224,11 +223,8 @@ def _egamma_scale_smear_setup(
                 for _loc, _scale, _seed in zip(loc, scale, seed)
             ])
 
-        self.deterministic_normal = {
-            "smear": functools.partial(_deterministic_normal, idx_offset=0),
-            "smear_up": functools.partial(_deterministic_normal, idx_offset=1),
-            "smear_down": functools.partial(_deterministic_normal, idx_offset=2),
-        }
+        # each systematic is to be evaluated with the same random number so use a fixed offset
+        self.deterministic_normal = functools.partial(_deterministic_normal, idx_offset=0)
 
 
 electron_scale_smear = _egamma_scale_smear.derive(
