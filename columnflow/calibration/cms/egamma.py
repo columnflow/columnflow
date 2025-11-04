@@ -72,9 +72,10 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
     # gather inputs
     coll = events[self.collection_name]
     variable_map = {
-        "run": events.run,
+        "run": events.run if ak.sum(ak.num(coll, axis=1), axis=0) else [],
         "pt": coll.pt,
         "ScEta": coll.superclusterEta,
+        "AbsScEta": abs(coll.superclusterEta),
         "r9": coll.r9,
         "seedGain": coll.seedGain,
         **self.cfg.corrector_kwargs,
