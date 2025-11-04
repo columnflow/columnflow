@@ -219,8 +219,8 @@ class ReduceEvents(_ReduceEvents):
                     events = self.reducer_inst(events, selection=sel, task=self)
                     n_reduced += len(events)
 
-                # no need to proceed when no events are left
-                if len(events) == 0 and len(output_chunks) > 0:
+                # no need to proceed when no events are left (except for the last chunk to create empty output)
+                if len(events) == 0 and (output_chunks or pos.index < pos.n_chunks - 1):
                     continue
 
                 # remove columns
