@@ -44,14 +44,8 @@ class TECConfig(TAFConfig):
 
 
 @calibrator(
-    uses={
-        # nano columns
-        "nTau", "Tau.pt", "Tau.eta", "Tau.phi", "Tau.mass", "Tau.charge", "Tau.genPartFlav",
-        "Tau.decayMode",
-    },
-    produces={
-        "Tau.pt", "Tau.mass",
-    },
+    uses={"Tau.{pt,eta,phi,mass,genPartFlav,decayMode}"},
+    produces={"Tau.{pt,mass}"},
     # whether to produce also uncertainties
     with_uncertainties=True,
     # toggle for propagation to MET
