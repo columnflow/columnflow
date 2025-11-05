@@ -25,15 +25,23 @@ from columnflow.hist_util import sum_hists
 from columnflow.util import dev_sandbox
 
 
+class VariablesMixinWorkflow(
+    VariablesMixin,
+    law.LocalWorkflow,
+    RemoteWorkflow,
+):
+
+    def control_output_postfix(self) -> str:
+        return f"{super().control_output_postfix()}__vars_{self.variables_repr}"
+
+
 class _CreateHistograms(
     ReducedEventsUser,
     ProducersMixin,
     MLModelsMixin,
     HistProducerMixin,
     ChunkedIOMixin,
-    VariablesMixin,
-    law.LocalWorkflow,
-    RemoteWorkflow,
+    VariablesMixinWorkflow,
 ):
     """
     Base classes for :py:class:`CreateHistograms`.
@@ -342,9 +350,7 @@ class _MergeHistograms(
     ProducersMixin,
     MLModelsMixin,
     HistProducerMixin,
-    VariablesMixin,
-    law.LocalWorkflow,
-    RemoteWorkflow,
+    VariablesMixinWorkflow,
 ):
     """
     Base classes for :py:class:`MergeHistograms`.
@@ -481,9 +487,7 @@ class _MergeShiftedHistograms(
     ProducerClassesMixin,
     MLModelsMixin,
     HistProducerClassMixin,
-    VariablesMixin,
-    law.LocalWorkflow,
-    RemoteWorkflow,
+    VariablesMixinWorkflow,
 ):
     """
     Base classes for :py:class:`MergeShiftedHistograms`.
