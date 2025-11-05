@@ -44,7 +44,7 @@ class TECConfig(TAFConfig):
 
 
 @calibrator(
-    uses={"Tau.{pt,eta,phi,mass,genPartFlav,decayMode}"},
+    uses={"Tau.{pt,eta,phi,mass,charge,genPartFlav,decayMode}"},
     produces={"Tau.{pt,mass}"},
     # whether to produce also uncertainties
     with_uncertainties=True,
