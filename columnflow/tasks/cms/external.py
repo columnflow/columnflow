@@ -67,7 +67,7 @@ class CreatePileupWeights(ConfigTask):
 
         # since this tasks uses stage-in into and stage-out from the sandbox,
         # prepare external files with the staged-in inputs
-        externals.get_files(self.input())
+        externals.get_files_collection(self.input())
 
         # read the mc profile
         mc_profile = self.read_mc_profile_from_cfg(externals.files.pu.mc_profile)

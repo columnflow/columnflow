@@ -462,7 +462,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         self._file_names = None
 
         # cached dict for lazy access to files in fetched bundle
-        self._files = None
+        self._files_collection = None
 
     @classmethod
     def create_unique_basename(cls, path: str | ExternalFile) -> str | dict[str, str]:
@@ -499,8 +499,8 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         return self._file_names
 
-    def get_files(self, output=None) -> DotDict:
-        if self._files is None:
+    def get_files_collection(self, output=None) -> law.SiblingFileCollection:
+        if self._files_collection is None:
             # get the output
             if not output:
                 output = self.output()
@@ -509,17 +509,17 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
                     f"accessing external files from the bundle requires the output of {self} to exist, but it appears "
                     "to be missing",
                 )
-            self._files = output["local_files"].targets
+            self._files_collection = output["local_files"]
 
-        return self._files
+        return self._files_collection
 
     @property
     def files(self) -> DotDict:
-        return self.get_files()
+        return self.get_files_collection().targets
 
     @property
     def files_dir(self) -> law.LocalDirectoryTarget:
-        return law.util.flatten(self.files)[0].parent
+        return self.get_files_collection().dir
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile
