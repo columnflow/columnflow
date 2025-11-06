@@ -3262,7 +3262,11 @@ class ChunkedParquetReader(object):
         meta_options.pop("row_groups", None)
         meta_options.pop("ignore_metadata", None)
         meta_options.pop("columns", None)
-        self.metadata = ak.metadata_from_parquet(path, **meta_options)
+        try:
+            self.metadata = ak.metadata_from_parquet(path, **meta_options)
+        except:
+            logger.error(f"unable to read {path}")
+            raise
 
         # extract row group sizes for chunked reading
         if "col_counts" not in self.metadata:
