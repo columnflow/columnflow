@@ -628,6 +628,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         # unpack the bundle to have local files available
         with self.publish_step(f"unpacking to {outputs['local_files'].dir.abspath} ..."):
+            outputs["local_files"].dir.remove()
             bundle = outputs["bundle"]
             if isinstance(bundle, law.FileCollection):
                 bundle = bundle.random_target()
