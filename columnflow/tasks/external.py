@@ -526,10 +526,14 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         return self.target(f"externals_{self.files_hash}.tgz")
 
     def output(self):
-        local_file = lambda basename: self.local_target(os.path.join(f"externals_{self.files_hash}", basename))
+        def local_target(basename):
+            path = os.path.join(f"externals_{self.files_hash}", basename)
+            is_dir = "." not in basename  # simple heuristic, but type actually checked after unpacking below
+            return self.local_target(path, dir=is_dir)
+
         return DotDict(
             bundle=super().output(),
-            local_files=law.SiblingFileCollection(law.util.map_struct(local_file, self.file_names)),
+            local_files=law.SiblingFileCollection(law.util.map_struct(local_target, self.file_names)),
         )
 
     def trace_transfer_output(self, output):
@@ -628,3 +632,12 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
             if isinstance(bundle, law.FileCollection):
                 bundle = bundle.random_target()
             bundle.load(outputs["local_files"].dir, formatter="tar")
+
+            # check if unpacked files/directories are described by the correct target class
+            for target in outputs["local_files"]._flat_target_list:
+                mismatch = (
+                    (isinstance(target, law.FileSystemFileTarget) and not os.path.isfile(target.abspath)) or
+                    (isinstance(target, law.FileSystemDirectoryTarget) and not os.path.isdir(target.abspath))
+                )
+                if mismatch:
+                    raise Exception(f"mismatching file/directory type of unpacked target {target!r}")
