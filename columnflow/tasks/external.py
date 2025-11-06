@@ -416,8 +416,8 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     This task is intended to download source files for other tasks, such as files containing corrections for objects,
     the "golden" json files, source files for the calculation of pileup weights, and others.
 
-    All information about the relevant external files is extracted from the given ``config_inst``, which must contain
-    the keyword ``external_files`` in the auxiliary information. This can look like this:
+    All information about the relevant external files is extracted from the given ``config_inst``, which must contain an
+    auxiliary field ``external_files`` like the following (all entries are optional and user-defined):
 
     .. code-block:: python
 
@@ -432,7 +432,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
             "electron_sf": ExternalFile(f"{SOURCE_URL}/POG/EGM/{year}{corr_postfix}_UL/electron.json.gz", version="v1"),
         })
 
-    The entries in this DotDict should be :py:class:`ExternalFile` instances.
+    All entries should be :py:class:`ExternalFile` instances.
     """
 
     single_config = True
@@ -440,6 +440,11 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     replicas = luigi.IntParameter(
         default=5,
         description="number of replicas to generate; default: 5",
+    )
+    recreate = luigi.BoolParameter(
+        default=False,
+        significant=False,
+        description="when True, forces the recreation of the bundle even if it exists; default: False",
     )
     user = user_parameter_inst
     version = None
@@ -462,13 +467,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
     @classmethod
     def create_unique_basename(cls, path: str | ExternalFile) -> str | dict[str, str]:
-        """
-        Create a unique basename for a given path. When *path* is an :py:class:`ExternalFile` with one or more subpaths
-        defined, a dictionary mapping subpaths to unique basenames is returned.
-
-        :param path: path or external file object.
-        :return: Unique basename(s).
-        """
         if isinstance(path, str):
             return f"{law.util.create_hash(path)}_{os.path.basename(path)}"
 
@@ -483,11 +481,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
     @property
     def files_hash(self) -> str:
-        """
-        Create a hash based on all external files.
-
-        :return: Hash based on the flattened list of external files in the current config instance.
-        """
         if self._files_hash is None:
             # take the external files and flatten them into a deterministic order, then hash
             def deterministic_flatten(d):
@@ -502,122 +495,133 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
     @property
     def file_names(self) -> DotDict:
-        """
-        Create a unique basename for each external file.
-
-        :return: DotDict of same shape as ``external_files`` DotDict with unique basenames.
-        """
         if self._file_names is None:
             self._file_names = law.util.map_struct(self.create_unique_basename, self.ext_files)
 
         return self._file_names
 
-    def get_files(self, output=None):
+    def get_files(self, output=None) -> DotDict:
         if self._files is None:
             # get the output
             if not output:
                 output = self.output()
-            if not output.exists():
+            if not output["local_files"].exists():
                 raise Exception(
-                    f"accessing external files from the bundle requires the output of {self} to "
-                    "exist, but it appears to be missing",
+                    f"accessing external files from the bundle requires the output of {self} to exist, but it appears "
+                    "to be missing",
                 )
-            if isinstance(output, law.FileCollection):
-                output = output.random_target()
-            self.files_dir = law.LocalDirectoryTarget(is_tmp=True)
-            output.load(self.files_dir, formatter="tar")
-
-            # resolve basenames in the bundle directory and map to local targets
-            def resolve_basename(unique_basename):
-                return self.files_dir.child(unique_basename)
-
-            self._files = law.util.map_struct(resolve_basename, self.file_names)
+            self._files = output["local_files"].targets
 
         return self._files
 
     @property
-    def files(self):
+    def files(self) -> DotDict:
         return self.get_files()
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile
         return self.target(f"externals_{self.files_hash}.tgz")
 
+    def output(self):
+        local_file = lambda basename: self.local_target(os.path.join(f"externals_{self.files_hash}", basename))
+        return DotDict(
+            bundle=super().output(),
+            local_files=law.SiblingFileCollection(law.util.map_struct(local_file, self.file_names)),
+        )
+
+    def trace_transfer_output(self, output):
+        return output["bundle"]
+
     @only_local_env
     @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
     def run(self):
-        # create a tmp dir to work in
-        tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
-        tmp_dir.touch()
+        outputs = self.output()
 
-        # create a scratch directory for temporary downloads that will not be bundled
-        scratch_dir = tmp_dir.child("scratch", type="d")
-        scratch_dir.touch()
+        # remove the bundle if recreating
+        if outputs["bundle"].exists() and self.recreate:
+            outputs["bundle"].remove()
 
-        # progress callback
-        progress = self.create_progress_callback(len(law.util.flatten(self.ext_files)))
+        # bundle only if needed
+        if not outputs["bundle"].exists():
+            # create a tmp dir to work in
+            tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
+            tmp_dir.touch()
 
-        # helper to fetch a single src to dst
-        def fetch(src, dst):
-            if src.startswith(("http://", "https://")):
-                # download via wget
-                wget(src, dst)
-            elif os.path.isfile(src):
-                # copy local file
-                shutil.copy2(src, dst)
-            elif os.path.isdir(src):
-                # copy local dir
-                shutil.copytree(src, dst)
-            else:
-                err = f"cannot fetch {src}"
-                if src.startswith("/") and os.path.isdir("/".join(src.split("/", 2)[:2])):
-                    err += ", file or directory does not exist"
+            # create a scratch directory for temporary downloads that will not be bundled
+            scratch_dir = tmp_dir.child("scratch", type="d")
+            scratch_dir.touch()
+
+            # progress callback
+            progress = self.create_progress_callback(len(law.util.flatten(self.ext_files)))
+
+            # helper to fetch a single src to dst
+            def fetch(src, dst):
+                if src.startswith(("http://", "https://")):
+                    # download via wget
+                    wget(src, dst)
+                elif os.path.isfile(src):
+                    # copy local file
+                    shutil.copy2(src, dst)
+                elif os.path.isdir(src):
+                    # copy local dir
+                    shutil.copytree(src, dst)
                 else:
-                    err += ", resource type is not supported"
-                raise NotImplementedError(err)
+                    err = f"cannot fetch {src}"
+                    if src.startswith("/") and os.path.isdir("/".join(src.split("/", 2)[:2])):
+                        err += ", file or directory does not exist"
+                    else:
+                        err += ", resource type is not supported"
+                    raise NotImplementedError(err)
 
-        # helper function to fetch generic files
-        def fetch_file(ext_file, counter=[0]):
-            if ext_file.subpaths:
-                # copy to scratch dir first in case a subpath is requested
-                basename = self.create_unique_basename(ext_file.location)
-                scratch_dst = os.path.join(scratch_dir.abspath, basename)
-                fetch(ext_file.location, scratch_dst)
-                # when not a directory, assume the file is an archive and unpack it
-                if not os.path.isdir(scratch_dst):
-                    arc_dir = scratch_dir.child(basename.split(".")[0] + "_unpacked", type="d")
-                    self.publish_message(f"unpacking {scratch_dst}")
-                    law.LocalFileTarget(scratch_dst).load(arc_dir)
-                    scratch_src = arc_dir.abspath
+            # helper function to fetch generic files
+            def fetch_file(ext_file, counter=[0]):
+                if ext_file.subpaths:
+                    # copy to scratch dir first in case a subpath is requested
+                    basename = self.create_unique_basename(ext_file.location)
+                    scratch_dst = os.path.join(scratch_dir.abspath, basename)
+                    fetch(ext_file.location, scratch_dst)
+                    # when not a directory, assume the file is an archive and unpack it
+                    if not os.path.isdir(scratch_dst):
+                        arc_dir = scratch_dir.child(basename.split(".")[0] + "_unpacked", type="d")
+                        self.publish_message(f"unpacking {scratch_dst}")
+                        law.LocalFileTarget(scratch_dst).load(arc_dir)
+                        scratch_src = arc_dir.abspath
+                    else:
+                        scratch_src = scratch_dst
+                    # copy all subpaths
+                    basenames = self.create_unique_basename(ext_file)
+                    for name, subpath in ext_file.subpaths.items():
+                        fetch(os.path.join(scratch_src, subpath), os.path.join(tmp_dir.abspath, basenames[name]))
                 else:
-                    scratch_src = scratch_dst
-                # copy all subpaths
-                basenames = self.create_unique_basename(ext_file)
-                for name, subpath in ext_file.subpaths.items():
-                    fetch(os.path.join(scratch_src, subpath), os.path.join(tmp_dir.abspath, basenames[name]))
-            else:
-                # copy directly to the bundle dir
-                src = ext_file.location
-                dst = os.path.join(tmp_dir.abspath, self.create_unique_basename(ext_file.location))
-                fetch(src, dst)
-            # log
-            self.publish_message(f"fetched {ext_file}")
-            progress(counter[0])
-            counter[0] += 1
+                    # copy directly to the bundle dir
+                    src = ext_file.location
+                    dst = os.path.join(tmp_dir.abspath, self.create_unique_basename(ext_file.location))
+                    fetch(src, dst)
+                # log
+                self.publish_message(f"fetched {ext_file}")
+                progress(counter[0])
+                counter[0] += 1
 
-        # fetch all files and cleanup scratch dir
-        law.util.map_struct(fetch_file, self.ext_files)
-        scratch_dir.remove()
+            # fetch all files and cleanup scratch dir
+            law.util.map_struct(fetch_file, self.ext_files)
+            scratch_dir.remove()
 
-        # create the bundle
-        tmp = law.LocalFileTarget(is_tmp="tgz")
-        tmp.dump(tmp_dir, formatter="tar")
+            # create the bundle
+            tmp = law.LocalFileTarget(is_tmp="tgz")
+            tmp.dump(tmp_dir, formatter="tar")
 
-        # log the file size
-        bundle_size = law.util.human_bytes(tmp.stat().st_size, fmt=True)
-        self.publish_message(f"bundle size is {bundle_size}")
+            # log the file size
+            bundle_size = law.util.human_bytes(tmp.stat().st_size, fmt=True)
+            self.publish_message(f"bundle size is {bundle_size}")
 
-        # transfer the result
-        self.transfer(tmp)
+            # transfer the result
+            self.transfer(tmp, outputs["bundle"])
+
+        # unpack the bundle to have local files available
+        with self.publish_step(f"unpacking to {outputs['local_files'].dir.abspath} ..."):
+            bundle = outputs["bundle"]
+            if isinstance(bundle, law.FileCollection):
+                bundle = bundle.random_target()
+            bundle.load(outputs["local_files"].dir, formatter="tar")
