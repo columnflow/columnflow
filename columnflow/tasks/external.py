@@ -462,7 +462,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         self._file_names = None
 
         # cached dict for lazy access to files in fetched bundle
-        self.files_dir = None
         self._files = None
 
     @classmethod
@@ -517,6 +516,10 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     @property
     def files(self) -> DotDict:
         return self.get_files()
+
+    @property
+    def files_dir(self) -> law.LocalDirectoryTarget:
+        return law.util.flatten(self.files)[0].parent
 
     def single_output(self):
         # required by law.tasks.TransferLocalFile
