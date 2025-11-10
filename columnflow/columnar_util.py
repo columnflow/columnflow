@@ -2215,6 +2215,30 @@ class ArrayFunction(Derivable):
 deferred_column = ArrayFunction.DeferredColumn.deferred_column
 
 
+@deferred_column
+def IF_DATA(self: ArrayFunction.DeferredColumn, func: ArrayFunction) -> Any | set[Any]:
+    return self.get() if func.dataset_inst.is_data else None
+
+
+@deferred_column
+def IF_MC(self: ArrayFunction.DeferredColumn, func: ArrayFunction) -> Any | set[Any]:
+    return self.get() if func.dataset_inst.is_mc else None
+
+
+def IF_DATASET_HAS_TAG(*args, negate: bool = False, **kwargs) -> ArrayFunction.DeferredColumn:
+    @deferred_column
+    def deferred(
+        self: ArrayFunction.DeferredColumn,
+        func: ArrayFunction,
+    ) -> Any | set[Any]:
+        return self.get() if func.dataset_inst.has_tag(*args, **kwargs) is not negate else None
+
+    return deferred
+
+
+IF_DATASET_NOT_HAS_TAG = partial(IF_DATASET_HAS_TAG, negate=True)
+
+
 def tagged_column(
     tag: str | Sequence[str] | set[str],
     *routes: Route | Any | set[Route | Any],

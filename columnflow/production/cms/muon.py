@@ -24,6 +24,7 @@ class MuonSFConfig:
     correction: str
     campaign: str = ""
     min_pt: float = 0.0
+    max_pt: float = 0.0
 
     @classmethod
     def new(cls, obj: MuonSFConfig | tuple[str, str]) -> MuonSFConfig:
@@ -37,6 +38,10 @@ class MuonSFConfig:
         if isinstance(obj, dict):
             return cls(**obj)
         raise ValueError(f"cannot convert {obj} to MuonSFConfig")
+
+    def __post_init__(self):
+        if 0.0 < self.max_pt <= self.min_pt:
+            raise ValueError(f"{self.__class__.__name__}: max_pt must be larger than min_pt")
 
 
 @producer(
@@ -83,9 +88,12 @@ def muon_weights(
 
     Optionally, a *muon_mask* can be supplied to compute the scale factor weight based only on a subset of muons.
     """
-    # fold muon mask with minimum pt cut if given
+    # fold muon mask with pt cuts if given
     if self.muon_config.min_pt > 0.0:
         pt_mask = events.Muon.pt >= self.muon_config.min_pt
+        muon_mask = pt_mask if muon_mask is Ellipsis else (pt_mask & muon_mask)
+    if self.muon_config.max_pt > 0.0:
+        pt_mask = events.Muon.pt <= self.muon_config.max_pt
         muon_mask = pt_mask if muon_mask is Ellipsis else (pt_mask & muon_mask)
 
     # prepare input variables
