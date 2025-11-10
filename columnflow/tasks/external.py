@@ -16,6 +16,7 @@ import luigi
 import law
 import order as od
 
+from columnflow import env_is_local
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.parameters import user_parameter_inst
 from columnflow.tasks.framework.decorators import only_local_env
@@ -384,7 +385,7 @@ class ExternalFile:
     """
 
     location: str
-    subpaths: dict[str, str] = field(default_factory=str)
+    subpaths: dict[str, str] = field(default_factory=dict)
     version: str = "v1"
 
     def __str__(self) -> str:
@@ -407,6 +408,11 @@ class ExternalFile:
             if len(resource) == 2:
                 return cls(location=resource[0], version=resource[1])
         raise ValueError(f"invalid resource type and format: {resource}")
+
+    def __getattr__(self, attr: str) -> str:
+        if attr in self.subpaths:
+            return self.subpaths[attr]
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
 
 
 class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
@@ -539,7 +545,6 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
     def trace_transfer_output(self, output):
         return output["bundle"]
 
-    @only_local_env
     @law.decorator.notify
     @law.decorator.log
     @law.decorator.safe_output
@@ -552,6 +557,12 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         # bundle only if needed
         if not outputs["bundle"].exists():
+            if not env_is_local:
+                raise RuntimeError(
+                    f"the output bundle {outputs['bundle'].basename} is missing, but cannot be created in non-local "
+                    "environments",
+                )
+
             # create a tmp dir to work in
             tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
             tmp_dir.touch()
