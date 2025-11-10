@@ -86,9 +86,7 @@ class SelectEvents(_SelectEvents):
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
-        reqs["selector"] = law.util.make_unique(law.util.flatten(
-            self.selector_inst.run_requires(task=self),
-        ))
+        reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires(task=self)))
 
         return reqs
 
