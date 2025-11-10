@@ -49,10 +49,12 @@ class ProduceColumns(_ProduceColumns):
         # require the full merge forest
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
-        # add producer dependent requirements
-        reqs["producer"] = law.util.make_unique(law.util.flatten(
-            self.producer_inst.run_requires(task=self),
-        ))
+        # add producer dependent requirements, drop other produce columns tasks in pilot mode
+        reqs["producer"] = [
+            t
+            for t in law.util.make_unique(law.util.flatten(self.producer_inst.run_requires(task=self)))
+            if not self.pilot or not isinstance(t, self.__class__)
+        ]
 
         return reqs
 
