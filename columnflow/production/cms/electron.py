@@ -12,7 +12,7 @@ import law
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, full_like
+from columnflow.columnar_util import set_ak_column, full_like, flat_np_view
 from columnflow.types import Any, Callable
 
 np = maybe_import("numpy")
@@ -26,12 +26,15 @@ class ElectronSFConfig:
     working_point: str | dict[str, Callable] = ""
     hlt_path: str = ""
     min_pt: float = 0.0
+    max_pt: float = 0.0
 
     def __post_init__(self) -> None:
         if not self.working_point and not self.hlt_path:
             raise ValueError("either working_point or hlt_path must be set")
         if self.working_point and self.hlt_path:
             raise ValueError("only one of working_point or hlt_path must be set")
+        if 0.0 < self.max_pt <= self.min_pt:
+            raise ValueError(f"{self.__class__.__name__}: max_pt must be larger than min_pt")
 
     @classmethod
     def new(cls, obj: ElectronSFConfig | tuple[str, str, str]) -> ElectronSFConfig:
@@ -109,9 +112,12 @@ def electron_weights(
     Optionally, an *electron_mask* can be supplied to compute the scale factor weight based only on a subset of
     electrons.
     """
-    # fold electron mask with minimum pt cut if given
+    # fold electron mask with pt cuts if given
     if self.electron_config.min_pt > 0.0:
         pt_mask = events.Electron.pt >= self.electron_config.min_pt
+        electron_mask = pt_mask if electron_mask is Ellipsis else (pt_mask & electron_mask)
+    if self.electron_config.max_pt > 0.0:
+        pt_mask = events.Electron.pt <= self.electron_config.max_pt
         electron_mask = pt_mask if electron_mask is Ellipsis else (pt_mask & electron_mask)
 
     # prepare input variables
@@ -146,6 +152,7 @@ def electron_weights(
         elif isinstance(wp, dict):
             # mapping of wps to masks, evaluate per wp and combine
             sf = full_like(eta, 1.0)
+            sf_flat = flat_np_view(sf)
             for _wp, mask_fn in wp.items():
                 mask = mask_fn(variable_map)
                 variable_map_syst_wp = variable_map_syst | {"WorkingPoint": _wp}
@@ -158,7 +165,7 @@ def electron_weights(
                     )
                     for inp in self.electron_sf_corrector.inputs
                 ]
-                sf[mask] = self.electron_sf_corrector.evaluate(*inputs)
+                sf_flat[flat_np_view(mask)] = flat_np_view(self.electron_sf_corrector.evaluate(*inputs))
         else:
             raise ValueError(f"unsupported working point type {type(variable_map['WorkingPoint'])}")
 

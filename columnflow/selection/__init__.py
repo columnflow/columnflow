@@ -26,6 +26,10 @@ class Selector(TaskArrayFunction):
 
     exposed = False
 
+    # register attributes for arguments accepted by decorator
+    mc_only: bool = False
+    data_only: bool = False
+
     def __init__(self: Selector, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
