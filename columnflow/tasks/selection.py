@@ -85,10 +85,12 @@ class SelectEvents(_SelectEvents):
             t = self.reqs.CalibrateEvents.req(self)
             reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
-        # add selector dependent requirements
-        reqs["selector"] = law.util.make_unique(law.util.flatten(
-            self.selector_inst.run_requires(task=self),
-        ))
+        # add selector dependent requirements, dropping some tasks in pilot mode
+        reqs["selector"] = [
+            t
+            for t in law.util.make_unique(law.util.flatten(self.selector_inst.run_requires(task=self)))
+            if not self.pilot or not isinstance(t, (self.__class__, self.reqs.CalibrateEvents))
+        ]
 
         return reqs
 
