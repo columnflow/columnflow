@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import inspect
 
-from columnflow.types import Callable
+from columnflow.calibration import TaskArrayFunctionWithCalibratorRequirements
 from columnflow.util import DerivableMeta
-from columnflow.columnar_util import TaskArrayFunction
+from columnflow.types import Callable, Sequence
 
 
-class Reducer(TaskArrayFunction):
+class Reducer(TaskArrayFunctionWithCalibratorRequirements):
     """
     Base class for all reducers.
     """
@@ -31,6 +31,7 @@ class Reducer(TaskArrayFunction):
         bases: tuple = (),
         mc_only: bool = False,
         data_only: bool = False,
+        require_calibrators: Sequence[str] | set[str] | None = None,
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
@@ -49,6 +50,7 @@ class Reducer(TaskArrayFunction):
             for real data.
         :param data_only: Boolean flag indicating that this reducer should only run on real data and skipped for Monte
             Carlo simulation.
+        :param require_calibrators: Sequence of names of calibrators to add to the requirements.
         :return: New reducer subclass.
         """
         def decorator(func: Callable) -> DerivableMeta:
@@ -58,6 +60,7 @@ class Reducer(TaskArrayFunction):
                 "call_func": func,
                 "mc_only": mc_only,
                 "data_only": data_only,
+                "require_calibrators": require_calibrators,
             }
 
             # get the module name

@@ -60,9 +60,7 @@ class CalibrateEvents(_CalibrateEvents):
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
         # add calibrator dependent requirements
-        reqs["calibrator"] = law.util.make_unique(law.util.flatten(
-            self.calibrator_inst.run_requires(task=self),
-        ))
+        reqs["calibrator"] = law.util.make_unique(law.util.flatten(self.calibrator_inst.run_requires(task=self)))
 
         return reqs
 
