@@ -109,10 +109,8 @@ class CreateHistograms(_CreateHistograms):
                     for ml_model_inst in self.ml_model_insts
                 ]
 
-            # add hist_producer dependent requirements
-            reqs["hist_producer"] = law.util.make_unique(law.util.flatten(
-                self.hist_producer_inst.run_requires(task=self),
-            ))
+        # add hist producer dependent requirements
+        reqs["hist_producer"] = law.util.make_unique(law.util.flatten(self.hist_producer_inst.run_requires(task=self)))
 
         return reqs
 
