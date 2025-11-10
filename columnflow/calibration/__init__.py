@@ -20,6 +20,10 @@ class Calibrator(TaskArrayFunction):
 
     exposed = True
 
+    # register attributes for arguments accepted by decorator
+    mc_only: bool = False
+    data_only: bool = False
+
     @classmethod
     def calibrator(
         cls,

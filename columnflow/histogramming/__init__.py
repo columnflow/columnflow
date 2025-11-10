@@ -57,6 +57,10 @@ class HistProducer(TaskArrayFunction):
     skip_compatibility_check = False
     exposed = True
 
+    # register attributes for arguments accepted by decorator
+    mc_only: bool = False
+    data_only: bool = False
+
     @classmethod
     def hist_producer(
         cls,
