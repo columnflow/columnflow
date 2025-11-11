@@ -13,6 +13,7 @@ import law
 
 from columnflow import __version__ as cf_version
 from columnflow.inference import InferenceModel, ParameterType, ParameterTransformation, FlowStrategy
+from columnflow.hist_util import sum_hists
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div, maybe_int
 from columnflow.types import TYPE_CHECKING, Sequence, Any, Union, Hashable
 
@@ -615,7 +616,7 @@ class DatacardWriter(object):
                     continue
 
                 # helper to sum over them for a given shift key and an optional fallback
-                def sum_hists(key: Hashable, fallback_key: Hashable | None = None) -> hist.Hist:
+                def get_hist_sum(key: Hashable, fallback_key: Hashable | None = None) -> hist.Hist:
                     def get(hd: dict[Hashable, hist.Hist]) -> hist.Hist:
                         if key in hd:
                             return hd[key]
@@ -624,7 +625,7 @@ class DatacardWriter(object):
                         raise Exception(
                             f"'{key}' shape for process '{proc_name}' in category '{cat_name}' misconfigured: {hd}",
                         )
-                    return sum(map(get, hists[1:]), get(hists[0]).copy())
+                    return sum_hists(map(get, hists))
 
                 # helper to extract sum of hists, apply scale, handle flow and fill empty bins
                 def load(
@@ -633,7 +634,7 @@ class DatacardWriter(object):
                     fallback_key: Hashable | None = None,
                     scale: float = 1.0,
                 ) -> hist.Hist:
-                    h = sum_hists(hist_key, fallback_key) * scale
+                    h = get_hist_sum(hist_key, fallback_key) * scale
                     handle_flow(cat_obj, h, hist_name)
                     fill_empty(cat_obj, h)
                     return h
@@ -822,7 +823,7 @@ class DatacardWriter(object):
                 if not h_data:
                     proc_str = ",".join(map(str, cat_obj.data_from_processes))
                     raise Exception(f"none of requested processes '{proc_str}' found to create fake data")
-                h_data = sum(h_data[1:], h_data[0].copy())
+                h_data = sum_hists(h_data)
                 data_name = data_pattern.format(category=cat_name)
                 fill_empty(cat_obj, h_data)
                 handle_flow(cat_obj, h_data, data_name)
@@ -841,7 +842,7 @@ class DatacardWriter(object):
                     h_data.append(proc_hists["data"][config_name]["nominal"])
 
                 # simply save the data histogram that was already built from the requested datasets
-                h_data = sum(h_data[1:], h_data[0].copy())
+                h_data = sum_hists(h_data)
                 data_name = data_pattern.format(category=cat_name)
                 handle_flow(cat_obj, h_data, data_name)
                 out_file[data_name] = h_data

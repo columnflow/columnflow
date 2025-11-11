@@ -60,6 +60,10 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
         - ``w_children``: list of W boson decay products, consistent ordering w.r.t. ``w``, the first entry is the
             down-type quark or charged lepton, the second entry is the up-type quark or neutrino, and additional decay
             products (e.g photons) are appended afterwards
+        - ``w_tau_children``: list of decay products from tau lepton decays stemming from W boson decays, however,
+            skipping the W boson from the tau lepton decay itself; the first entry is the tau neutrino, the second and
+            third entries are either the charged lepton and neutrino, or quarks or hadrons sorted by ascending absolute
+            pdg id; additional decay products (e.g photons) are appended afterwards
     """
     # helper to extract unique values
     unique_set = lambda a: set(np.unique(ak.flatten(a, axis=None)))
@@ -104,6 +108,18 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     w_children_hard = w_children_hard[ak.argsort(-(w_children_hard.pdgId % 2), axis=2)]
     w_children = ak.concatenate([w_children_hard, w_children_rest], axis=2)
 
+    # further distinguish tau decays in w_children
+    w_tau_children = ak.drop_none(w_children[abs(w_children.pdgId) == 15].distinctChildrenDeep)
+    # sort: nu tau first, photons last, rest in between sorted by ascending absolute pdgId
+    w_tau_nu_mask = abs(w_tau_children.pdgId) == 16
+    w_tau_photon_mask = w_tau_children.pdgId == 22
+    w_tau_rest = w_tau_children[~(w_tau_nu_mask | w_tau_photon_mask)]
+    w_tau_rest = w_tau_rest[ak.argsort(abs(w_tau_rest.pdgId), axis=3, ascending=True)]
+    w_tau_children = ak.concatenate(
+        [w_tau_children[w_tau_nu_mask], w_tau_rest, w_tau_children[w_tau_photon_mask]],
+        axis=3,
+    )
+
     # zip into a single array with named fields
     gen_top = ak.zip(
         {
@@ -111,6 +127,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
             "b": transform_gen_part(b, depth_limit=2),
             "w": transform_gen_part(w, depth_limit=2),
             "w_children": transform_gen_part(w_children, depth_limit=3),
+            "w_tau_children": transform_gen_part(w_tau_children, depth_limit=4),
         },
         depth_limit=1,
     )

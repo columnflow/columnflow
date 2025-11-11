@@ -8,21 +8,23 @@ from __future__ import annotations
 
 import law
 
-from dataclasses import dataclass
+import dataclasses
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array
+from columnflow.columnar_util import set_ak_column
 from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 
 
-@dataclass
+@dataclasses.dataclass
 class MuonSFConfig:
     correction: str
     campaign: str = ""
+    min_pt: float = 0.0
+    max_pt: float = 0.0
 
     @classmethod
     def new(cls, obj: MuonSFConfig | tuple[str, str]) -> MuonSFConfig:
@@ -37,18 +39,23 @@ class MuonSFConfig:
             return cls(**obj)
         raise ValueError(f"cannot convert {obj} to MuonSFConfig")
 
+    def __post_init__(self):
+        if 0.0 < self.max_pt <= self.min_pt:
+            raise ValueError(f"{self.__class__.__name__}: max_pt must be larger than min_pt")
+
 
 @producer(
     uses={"Muon.{pt,eta}"},
-    # produces in the init
+    # produces defined in init
     # only run on mc
     mc_only=True,
     # function to determine the correction file
     get_muon_file=(lambda self, external_files: external_files.muon_sf),
     # function to determine the muon weight config
-    get_muon_config=(lambda self: MuonSFConfig.new(self.config_inst.x.muon_sf_names)),
+    get_muon_config=(lambda self: MuonSFConfig.new(self.config_inst.x("muon_sf", self.config_inst.x("muon_sf_names", None)))),  # noqa: E501
+    # name of the saved weight column
     weight_name="muon_weight",
-    supported_versions=(1, 2),
+    supported_versions={1, 2},
 )
 def muon_weights(
     self: Producer,
@@ -57,8 +64,7 @@ def muon_weights(
     **kwargs,
 ) -> ak.Array:
     """
-    Creates muon weights using the correctionlib. Requires an external file in the config under
-    ``muon_sf``:
+    Creates muon weights using the correctionlib. Requires an external file in the config under ``muon_sf``:
 
     .. code-block:: python
 
@@ -66,33 +72,37 @@ def muon_weights(
             "muon_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/MUO/2017_UL/muon_z.json.gz",  # noqa
         })
 
-    *get_muon_file* can be adapted in a subclass in case it is stored differently in the external
-    files.
+    *get_muon_file* can be adapted in a subclass in case it is stored differently in the external files.
 
-    The name of the correction set and the year string for the weight evaluation should be given as
-    an auxiliary entry in the config:
+    The name of the correction set and the year string for the weight evaluation should be given as an auxiliary entry
+    in the config:
 
     .. code-block:: python
 
-        cfg.x.muon_sf_names = MuonSFConfig(
+        cfg.x.muon_sf = MuonSFConfig(
             correction="NUM_TightRelIso_DEN_TightIDandIPCut",
             campaign="2017_UL",
         )
 
     *get_muon_config* can be adapted in a subclass in case it is stored differently in the config.
 
-    Optionally, a *muon_mask* can be supplied to compute the scale factor weight based only on a
-    subset of muons.
+    Optionally, a *muon_mask* can be supplied to compute the scale factor weight based only on a subset of muons.
     """
-    # flat eta and pt views
-    eta = flat_np_view(events.Muon["eta"][muon_mask], axis=1)
-    pt = flat_np_view(events.Muon["pt"][muon_mask], axis=1)
+    # fold muon mask with pt cuts if given
+    if self.muon_config.min_pt > 0.0:
+        pt_mask = events.Muon.pt >= self.muon_config.min_pt
+        muon_mask = pt_mask if muon_mask is Ellipsis else (pt_mask & muon_mask)
+    if self.muon_config.max_pt > 0.0:
+        pt_mask = events.Muon.pt <= self.muon_config.max_pt
+        muon_mask = pt_mask if muon_mask is Ellipsis else (pt_mask & muon_mask)
 
+    # prepare input variables
+    muons = events.Muon[muon_mask]
     variable_map = {
         "year": self.muon_config.campaign,
-        "eta": eta,
-        "abseta": abs(eta),
-        "pt": pt,
+        "eta": muons.eta,
+        "abseta": abs(muons.eta),
+        "pt": muons.pt,
     }
 
     # loop over systematics
@@ -108,10 +118,7 @@ def muon_weights(
             "ValType": syst,  # syst key in 2017
         }
         inputs = [variable_map_syst[inp.name] for inp in self.muon_sf_corrector.inputs]
-        sf_flat = self.muon_sf_corrector(*inputs)
-
-        # add the correct layout to it
-        sf = layout_ak_array(sf_flat, events.Muon["pt"][muon_mask])
+        sf = self.muon_sf_corrector.evaluate(*inputs)
 
         # create the product over all muons in one event
         weight = ak.prod(sf, axis=1, mask_identity=False)

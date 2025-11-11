@@ -672,6 +672,9 @@ def create_category_combinations(
                 cat = od.Category(name=cat_name, **kwargs)
                 created_categories[cat_name] = cat
 
+                # add a tag to denote this category was auto-created
+                cat.add_tag("auto_created_by_combinations")
+
                 # ID uniqueness check: raise an error when a non-unique id is detected for a new category
                 if isinstance(kwargs["id"], int):
                     if kwargs["id"] in unique_ids_cache:
@@ -727,14 +730,21 @@ def create_category_combinations(
     return len(created_categories)
 
 
-def track_category_changes(config: od.Config, summary_path: str | None = None) -> None:
+def track_category_changes(
+    config: od.Config,
+    summary_path: str | None = None,
+    skip_auto_created: bool = False,
+) -> None:
     """
     Scans the categories in *config* and saves a summary in a file located at *summary_path*. If the file exists,
     the summary from a previous run is loaded first and compare to the current categories. If changes are found, a
     warning is shown with details about these changes.
 
+    Categories automatically created via :py:func:`create_category_combinations` can be skipped via *skip_auto_created*.
+
     :param config: :py:class:`~order.config.Config` instance to scan for categories.
     :param summary_path: Path to the summary file. Defaults to "$LAW_HOME/category_summary_{config.name}.json".
+    :param skip_auto_created: If *True*, categories with the tag "auto_created_by_combinations" are skipped.
     """
     # build summary file as law target
     if not summary_path:
@@ -742,7 +752,11 @@ def track_category_changes(config: od.Config, summary_path: str | None = None) -
     summary_file = law.LocalFileTarget(summary_path)
 
     # gather category info
-    cat_pairs = sorted((cat.name, cat.id) for cat, *_ in config.walk_categories(include_self=True))
+    cat_pairs = sorted(
+        (cat.name, cat.id)
+        for cat, *_ in config.walk_categories(include_self=True)
+        if not skip_auto_created or not cat.has_tag("auto_created_by_combinations")
+    )
     cat_summary = {
         "hash": law.util.create_hash(cat_pairs),
         "categories": dict(cat_pairs),

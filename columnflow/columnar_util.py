@@ -16,6 +16,7 @@ import time
 import enum
 import inspect
 import threading
+import dataclasses
 import multiprocessing
 import multiprocessing.pool
 from functools import partial
@@ -2214,6 +2215,30 @@ class ArrayFunction(Derivable):
 deferred_column = ArrayFunction.DeferredColumn.deferred_column
 
 
+@deferred_column
+def IF_DATA(self: ArrayFunction.DeferredColumn, func: ArrayFunction) -> Any | set[Any]:
+    return self.get() if func.dataset_inst.is_data else None
+
+
+@deferred_column
+def IF_MC(self: ArrayFunction.DeferredColumn, func: ArrayFunction) -> Any | set[Any]:
+    return self.get() if func.dataset_inst.is_mc else None
+
+
+def IF_DATASET_HAS_TAG(*args, negate: bool = False, **kwargs) -> ArrayFunction.DeferredColumn:
+    @deferred_column
+    def deferred(
+        self: ArrayFunction.DeferredColumn,
+        func: ArrayFunction,
+    ) -> Any | set[Any]:
+        return self.get() if func.dataset_inst.has_tag(*args, **kwargs) is not negate else None
+
+    return deferred
+
+
+IF_DATASET_NOT_HAS_TAG = partial(IF_DATASET_HAS_TAG, negate=True)
+
+
 def tagged_column(
     tag: str | Sequence[str] | set[str],
     *routes: Route | Any | set[Route | Any],
@@ -2923,6 +2948,19 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         return min((s for s in sizes if isinstance(s, int)), default=None)
 
 
+@dataclasses.dataclass
+class TAFConfig:
+
+    def copy(self, **kwargs) -> TAFConfig:
+        """
+        Returns a copy of this TAFConfig instance, updated by any given *kwargs*.
+
+        :param kwargs: Attributes to update in the copied instance.
+        :return: The copied and updated TAFConfig instance.
+        """
+        return self.__class__(self.__dict__ | kwargs)
+
+
 class NoThreadPool(object):
     """
     Dummy implementation that mimics parts of the usual thread pool interface but instead of
@@ -3248,7 +3286,11 @@ class ChunkedParquetReader(object):
         meta_options.pop("row_groups", None)
         meta_options.pop("ignore_metadata", None)
         meta_options.pop("columns", None)
-        self.metadata = ak.metadata_from_parquet(path, **meta_options)
+        try:
+            self.metadata = ak.metadata_from_parquet(path, **meta_options)
+        except:
+            logger.error(f"unable to read {path}")
+            raise
 
         # extract row group sizes for chunked reading
         if "col_counts" not in self.metadata:
@@ -3430,7 +3472,7 @@ class ChunkedIOHandler(object):
     # chunk position container
     ChunkPosition = namedtuple(
         "ChunkPosition",
-        ["index", "entry_start", "entry_stop", "max_chunk_size"],
+        ["index", "entry_start", "entry_stop", "max_chunk_size", "n_chunks"],
     )
 
     # read result container
@@ -3536,11 +3578,13 @@ class ChunkedIOHandler(object):
         if n_entries == 0:
             entry_start = 0
             entry_stop = 0
+            n_chunks = 0
         else:
             entry_start = chunk_index * chunk_size
             entry_stop = min((chunk_index + 1) * chunk_size, n_entries)
+            n_chunks = int(math.ceil(n_entries / chunk_size))
 
-        return cls.ChunkPosition(chunk_index, entry_start, entry_stop, chunk_size)
+        return cls.ChunkPosition(chunk_index, entry_start, entry_stop, chunk_size, n_chunks)
 
     @classmethod
     def get_source_handler(

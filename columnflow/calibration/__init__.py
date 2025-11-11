@@ -8,17 +8,54 @@ from __future__ import annotations
 
 import inspect
 
-from columnflow.types import Callable
+import law
+
 from columnflow.util import DerivableMeta
 from columnflow.columnar_util import TaskArrayFunction
+from columnflow.types import Callable, Sequence, Any
 
 
-class Calibrator(TaskArrayFunction):
+class TaskArrayFunctionWithCalibratorRequirements(TaskArrayFunction):
+
+    require_calibrators: Sequence[str] | set[str] | None = None
+
+    def _req_calibrator(self, task: law.Task, calibrator: str) -> Any:
+        # hook to customize how required calibrators are requested
+        from columnflow.tasks.calibration import CalibrateEvents
+        return CalibrateEvents.req_other_calibrator(task, calibrator=calibrator)
+
+    def requires_func(self, task: law.Task, reqs: dict, **kwargs) -> None:
+        # no requirements for workflows in pilot mode
+        if callable(getattr(task, "is_workflow", None)) and task.is_workflow() and getattr(task, "pilot", False):
+            return
+
+        # add required calibrators when set
+        if (calibs := self.require_calibrators):
+            reqs["required_calibrators"] = {calib: self._req_calibrator(task, calib) for calib in calibs}
+
+    def setup_func(
+        self,
+        task: law.Task,
+        reqs: dict,
+        inputs: dict,
+        reader_targets: law.util.InsertableDict,
+        **kwargs,
+    ) -> None:
+        if "required_calibrators" in inputs:
+            for calib, inp in inputs["required_calibrators"].items():
+                reader_targets[f"required_calibrator_{calib}"] = inp["columns"]
+
+
+class Calibrator(TaskArrayFunctionWithCalibratorRequirements):
     """
     Base class for all calibrators.
     """
 
     exposed = True
+
+    # register attributes for arguments accepted by decorator
+    mc_only: bool = False
+    data_only: bool = False
 
     @classmethod
     def calibrator(
@@ -27,25 +64,26 @@ class Calibrator(TaskArrayFunction):
         bases: tuple = (),
         mc_only: bool = False,
         data_only: bool = False,
+        require_calibrators: Sequence[str] | set[str] | None = None,
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
-        Decorator for creating a new :py:class:`~.Calibrator` subclass with additional, optional
-        *bases* and attaching the decorated function to it as ``call_func``.
+        Decorator for creating a new :py:class:`~.Calibrator` subclass with additional, optional *bases* and attaching
+        the decorated function to it as ``call_func``.
 
-        When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by
-        other calibrators, selectors and producers in case they are evalauted on a
-        :py:class:`order.Dataset` (using the :py:attr:`dataset_inst` attribute) whose ``is_mc``
-        (``is_data``) attribute is *False*.
+        When *mc_only* (*data_only*) is *True*, the calibrator is skipped and not considered by other calibrators,
+        selectors and producers in case they are evalauted on a :py:class:`order.Dataset` (using the
+        :py:attr:`dataset_inst` attribute) whose ``is_mc`` (``is_data``) attribute is *False*.
 
         All additional *kwargs* are added as class members of the new subclasses.
 
         :param func: Function to be wrapped and integrated into new :py:class:`Calibrator` class.
         :param bases: Additional bases for the new :py:class:`Calibrator`.
-        :param mc_only: Boolean flag indicating that this :py:class:`Calibrator` should only run on
-            Monte Carlo simulation and skipped for real data.
-        :param data_only: Boolean flag indicating that this :py:class:`Calibrator` should only run
-            on real data and skipped for Monte Carlo simulation.
+        :param mc_only: Boolean flag indicating that this :py:class:`Calibrator` should only run on Monte Carlo
+            simulation and skipped for real data.
+        :param data_only: Boolean flag indicating that this :py:class:`Calibrator` should only run on real data and
+            skipped for Monte Carlo simulation.
+        :param require_calibrators: Sequence of names of other calibrators to add to the requirements.
         :return: New :py:class:`Calibrator` subclass.
         """
         def decorator(func: Callable) -> DerivableMeta:
@@ -55,6 +93,7 @@ class Calibrator(TaskArrayFunction):
                 "call_func": func,
                 "mc_only": mc_only,
                 "data_only": data_only,
+                "require_calibrators": require_calibrators,
             }
 
             # get the module name

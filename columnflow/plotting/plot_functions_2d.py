@@ -16,6 +16,7 @@ import law
 import order as od
 
 from columnflow.util import maybe_import
+from columnflow.hist_util import sum_hists
 from columnflow.plotting.plot_util import (
     remove_residual_axis,
     apply_variable_settings,
@@ -81,7 +82,7 @@ def plot_2d(
         extremes = "color"
 
     # add all processes into 1 histogram
-    h_sum = sum(list(hists.values())[1:], list(hists.values())[0].copy())
+    h_sum = sum_hists(hists.values())
     if shape_norm:
         h_sum = h_sum / h_sum.sum().value
 
