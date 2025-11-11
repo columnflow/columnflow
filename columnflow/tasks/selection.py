@@ -83,7 +83,7 @@ class SelectEvents(_SelectEvents):
         elif self.calibrator_insts:
             # pass-through pilot workflow requirements of upstream task
             t = self.reqs.CalibrateEvents.req(self)
-            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+            law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add selector dependent requirements
         reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires(task=self)))

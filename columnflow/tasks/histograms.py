@@ -108,6 +108,10 @@ class CreateHistograms(_CreateHistograms):
                     self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
                     for ml_model_inst in self.ml_model_insts
                 ]
+        elif self.producer_insts:
+            # pass-through pilot workflow requirements of upstream task
+            t = self.reqs.ProduceColumns.req(self)
+            law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
 
         # add hist producer dependent requirements
         reqs["hist_producer"] = law.util.make_unique(law.util.flatten(self.hist_producer_inst.run_requires(task=self)))
