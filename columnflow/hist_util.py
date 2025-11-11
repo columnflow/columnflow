@@ -14,7 +14,7 @@ import order as od
 
 from columnflow.columnar_util import flat_np_view
 from columnflow.util import maybe_import
-from columnflow.types import TYPE_CHECKING, Any
+from columnflow.types import TYPE_CHECKING, Any, Sequence
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -332,3 +332,37 @@ def update_ax_labels(hists: list[hist.Hist], config_inst: od.Config, variable_na
                 h.axes[var_name].label = label
             else:
                 raise ValueError(f"variable '{var_name}' not found in histogram axes: {h.axes}")
+
+                
+def sum_hists(hists: Sequence[hist.Hist]) -> hist.Hist:
+    """
+    Sums a sequence of histograms into a new histogram. In case axis labels differ, which typically leads to errors
+    ("axes not mergable"), the labels of the first histogram are used.
+
+    :param hists: The histograms to sum.
+    :return: The summed histogram.
+    """
+    hists = list(hists)
+    if not hists:
+        raise ValueError("no histograms given for summation")
+
+    # copy the first histogram
+    h_sum = hists[0].copy()
+    if len(hists) == 1:
+        return h_sum
+
+    # store labels of first histogram
+    axis_labels = {ax.name: ax.label for ax in h_sum.axes}
+
+    for h in hists[1:]:
+        # align axis labels if needed, only copy if necessary
+        h_aligned_labels = None
+        for ax in h.axes:
+            if ax.name not in axis_labels or ax.label == axis_labels[ax.name]:
+                continue
+            if h_aligned_labels is None:
+                h_aligned_labels = h.copy()
+            h_aligned_labels.axes[ax.name].label = axis_labels[ax.name]
+        h_sum = h_sum + (h if h_aligned_labels is None else h_aligned_labels)
+
+    return h_sum

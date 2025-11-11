@@ -51,7 +51,7 @@ def _load_nano_root(fname: str, treepath: str | None = None, **kwargs) -> ak.Arr
     return coffea.nanoevents.NanoEventsFactory.from_root(
         source,
         treepath=treepath,
-        delayed=False,
+        mode="eager",
         runtime_cache=None,
         persistent_cache=None,
     ).events()

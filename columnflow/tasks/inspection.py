@@ -26,17 +26,42 @@ class InspectHistograms(HistogramsUserSingleShiftBase):
         return {"always_incomplete_dummy": self.target("dummy.txt")}
 
     def run(self):
+        """
+        Loads histograms for all configs, variables, and datasets,
+        sums them up for each variable and
+        slices them according to the processes, categories, and shift,
+        The resulting histograms are stored in a dictionary with variable names as keys.
+        If `debugger` is set to True, an IPython debugger session is started for
+        interactive inspection of the histograms.
+        """
+        inputs = self.input()
+        shifts = {self.shift, "nominal"}
         hists = {}
 
-        for dataset in self.datasets:
-            for variable in self.variables:
-                h_in = self.load_histogram(dataset, variable)
-                h_in = self.slice_histogram(h_in, self.processes, self.categories, self.shift)
+        for variable in self.variables:
+            for i, config_inst in enumerate(self.config_insts):
+                hist_per_config = None
+                sub_processes = self.processes[i]
+                for dataset in self.datasets[i]:
+                    # sum over all histograms of the same variable and config
+                    if hist_per_config is None:
+                        hist_per_config = self.load_histogram(inputs, config_inst, dataset, variable)
+                    else:
+                        hist_per_config += self.load_histogram(inputs, config_inst, dataset, variable)
+
+                # slice histogram per config according to the sub_processes and categories
+                hist_per_config = self.slice_histogram(
+                    histogram=hist_per_config,
+                    config_inst=config_inst,
+                    processes=sub_processes,
+                    categories=self.categories,
+                    shifts=shifts,
+                )
 
                 if variable in hists.keys():
-                    hists[variable] += h_in
+                    hists[variable] += hist_per_config
                 else:
-                    hists[variable] = h_in
+                    hists[variable] = hist_per_config
 
         if self.debugger:
             from IPython import embed
@@ -57,18 +82,42 @@ class InspectShiftedHistograms(HistogramsUserMultiShiftBase):
         return {"always_incomplete_dummy": self.target("dummy.txt")}
 
     def run(self):
+        """
+        Loads histograms for all configs, variables, and datasets,
+        sums them up for each variable and
+        slices them according to the processes, categories, and shift,
+        The resulting histograms are stored in a dictionary with variable names as keys.
+        If `debugger` is set to True, an IPython debugger session is started for
+        interactive inspection of the histograms.
+        """
+        inputs = self.input()
         shifts = ["nominal"] + self.shifts
         hists = {}
 
-        for dataset in self.datasets:
-            for variable in self.variables:
-                h_in = self.load_histogram(dataset, variable)
-                h_in = self.slice_histogram(h_in, self.processes, self.categories, shifts)
+        for variable in self.variables:
+            for i, config_inst in enumerate(self.config_insts):
+                hist_per_config = None
+                sub_processes = self.processes[i]
+                for dataset in self.datasets[i]:
+                    # sum over all histograms of the same variable and config
+                    if hist_per_config is None:
+                        hist_per_config = self.load_histogram(inputs, config_inst, dataset, variable)
+                    else:
+                        hist_per_config += self.load_histogram(inputs, config_inst, dataset, variable)
+
+                # slice histogram per config according to the sub_processes and categories
+                hist_per_config = self.slice_histogram(
+                    histogram=hist_per_config,
+                    config_inst=config_inst,
+                    processes=sub_processes,
+                    categories=self.categories,
+                    shifts=shifts,
+                )
 
                 if variable in hists.keys():
-                    hists[variable] += h_in
+                    hists[variable] += hist_per_config
                 else:
-                    hists[variable] = h_in
+                    hists[variable] = hist_per_config
 
         if self.debugger:
             from IPython import embed

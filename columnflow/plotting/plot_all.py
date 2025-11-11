@@ -365,13 +365,17 @@ def plot_all(
     rax = None
     grid_spec = {"left": 0.15, "right": 0.95, "top": 0.95, "bottom": 0.1}
     grid_spec |= style_config.get("gridspec_cfg", {})
+
+    # Get figure size from style_config, with default values
+    subplots_cfg = style_config.get("subplots_cfg", {})
+
     if not skip_ratio:
         grid_spec = {"height_ratios": [3, 1], "hspace": 0, **grid_spec}
-        fig, axs = plt.subplots(2, 1, gridspec_kw=grid_spec, sharex=True)
+        fig, axs = plt.subplots(2, 1, gridspec_kw=grid_spec, sharex=True, **subplots_cfg)
         (ax, rax) = axs
     else:
         grid_spec.pop("height_ratios", None)
-        fig, ax = plt.subplots(gridspec_kw=grid_spec)
+        fig, ax = plt.subplots(gridspec_kw=grid_spec, **subplots_cfg)
         axs = (ax,)
 
     # invoke all plots methods

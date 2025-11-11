@@ -74,14 +74,13 @@ class ReduceEvents(_ReduceEvents):
                 if calibrator_inst.produced_columns
             ]
             reqs["selection"] = self.reqs.SelectEvents.req(self)
-            # reducer dependent requirements
-            reqs["reducer"] = law.util.make_unique(law.util.flatten(
-                self.reducer_inst.run_requires(task=self),
-            ))
         else:
             # pass-through pilot workflow requirements of upstream task
             t = self.reqs.SelectEvents.req(self)
-            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+            law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+
+        # add reducer dependent requirements
+        reqs["reducer"] = law.util.make_unique(law.util.flatten(self.reducer_inst.run_requires(task=self)))
 
         return reqs
 
@@ -213,11 +212,15 @@ class ReduceEvents(_ReduceEvents):
                 )
 
                 # invoke the reducer
-                if len(events):
+                if len(events) > 0:
                     n_all += len(events)
                     events = attach_coffea_behavior(events)
                     events = self.reducer_inst(events, selection=sel, task=self)
                     n_reduced += len(events)
+
+                # no need to proceed when no events are left (except for the last chunk to create empty output)
+                if len(events) == 0 and (output_chunks or pos.index < pos.n_chunks - 1):
+                    continue
 
                 # remove columns
                 events = route_filter(events)

@@ -8,14 +8,14 @@ from __future__ import annotations
 
 import functools
 import itertools
-from dataclasses import dataclass, field
+import dataclasses
 
 import law
 
 from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import propagate_met
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, flat_np_view, ak_copy
+from columnflow.columnar_util import TAFConfig, set_ak_column, flat_np_view, ak_copy
 from columnflow.types import Any
 
 ak = maybe_import("awkward")
@@ -26,11 +26,11 @@ np = maybe_import("numpy")
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
-@dataclass
-class TECConfig:
+@dataclasses.dataclass
+class TECConfig(TAFConfig):
     tagger: str
     correction_set: str = "tau_energy_scale"
-    corrector_kwargs: dict[str, Any] = field(default_factory=dict)
+    corrector_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def new(cls, obj: TECConfig | tuple[str] | dict[str, str]) -> TECConfig:
@@ -44,14 +44,8 @@ class TECConfig:
 
 
 @calibrator(
-    uses={
-        # nano columns
-        "nTau", "Tau.pt", "Tau.eta", "Tau.phi", "Tau.mass", "Tau.charge", "Tau.genPartFlav",
-        "Tau.decayMode",
-    },
-    produces={
-        "Tau.pt", "Tau.mass",
-    },
+    uses={"Tau.{pt,eta,phi,mass,charge,genPartFlav,decayMode}"},
+    produces={"Tau.{pt,mass}"},
     # whether to produce also uncertainties
     with_uncertainties=True,
     # toggle for propagation to MET
@@ -142,17 +136,12 @@ def tec(
         scales_down = np.ones_like(dm_mask, dtype=np.float32)
         scales_down[dm_mask] = self.tec_corrector(*args, "down")
 
-    # custom adjustment 1: reset where the matching value is unhandled
-    # custom adjustment 2: reset electrons faking taus where the pt is too small
-    mask1 = (match < 1) | (match > 5)
-    mask2 = ((match == 1) | (match == 3)) & (pt <= 20.0)
-
-    # apply reset masks
-    mask = mask1 | mask2
-    scales_nom[mask] = 1.0
+    # custom adjustment: reset where the matching value is unhandled
+    reset_mask = (match < 1) | (match > 5)
+    scales_nom[reset_mask] = 1.0
     if self.with_uncertainties:
-        scales_up[mask] = 1.0
-        scales_down[mask] = 1.0
+        scales_up[reset_mask] = 1.0
+        scales_down[reset_mask] = 1.0
 
     # create varied collections per decay mode
     if self.with_uncertainties:
@@ -263,7 +252,7 @@ def tec_setup(
     self.tec_corrector = load_correction_set(tau_file)[self.tec_cfg.correction_set]
 
     # check versions
-    assert self.tec_corrector.version in [0, 1]
+    assert self.tec_corrector.version in {0, 1, 2}
 
 
 tec_nominal = tec.derive("tec_nominal", cls_dict={"with_uncertainties": False})

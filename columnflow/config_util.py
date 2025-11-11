@@ -333,16 +333,27 @@ def get_shift_from_configs(configs: list[od.Config], shift: str | od.Shift, sile
 
 def get_shifts_from_sources(config: od.Config, *shift_sources: Sequence[str]) -> list[od.Shift]:
     """
-    Takes a *config* object and returns a list of shift instances for both directions given a
-    sequence *shift_sources*.
+    Takes a *config* object and returns a list of shift instances for both directions given a sequence of
+    *shift_sources*. Each source should be the name of a shift source (no direction suffix) or a pattern.
+
+    :param config: :py:class:`order.Config` object from which to retrieve the shifts.
+    :param shift_sources: Sequence of shift source names or patterns.
+    :return: List of :py:class:`order.Shift` instances obtained from the given sources.
     """
-    return sum(
-        (
-            [config.get_shift(f"{s}_{od.Shift.UP}"), config.get_shift(f"{s}_{od.Shift.DOWN}")]
-            for s in shift_sources
-        ),
-        [],
-    )
+    # since each passed source can be a pattern, all existing sources need to be checked
+    # however, the order should be preserved, so loop through each pattern and check for matching sources
+    existing_sources = {shift.source for shift in config.shifts}
+    found_sources = set()
+    shifts = []
+    for pattern in shift_sources:
+        for source in existing_sources:
+            if source not in found_sources and law.util.multi_match(source, pattern):
+                found_sources.add(source)
+                shifts += [
+                    config.get_shift(f"{source}_{od.Shift.UP}"),
+                    config.get_shift(f"{source}_{od.Shift.DOWN}"),
+                ]
+    return shifts
 
 
 def group_shifts(
@@ -661,6 +672,9 @@ def create_category_combinations(
                 cat = od.Category(name=cat_name, **kwargs)
                 created_categories[cat_name] = cat
 
+                # add a tag to denote this category was auto-created
+                cat.add_tag("auto_created_by_combinations")
+
                 # ID uniqueness check: raise an error when a non-unique id is detected for a new category
                 if isinstance(kwargs["id"], int):
                     if kwargs["id"] in unique_ids_cache:
@@ -716,14 +730,21 @@ def create_category_combinations(
     return len(created_categories)
 
 
-def track_category_changes(config: od.Config, summary_path: str | None = None) -> None:
+def track_category_changes(
+    config: od.Config,
+    summary_path: str | None = None,
+    skip_auto_created: bool = False,
+) -> None:
     """
     Scans the categories in *config* and saves a summary in a file located at *summary_path*. If the file exists,
     the summary from a previous run is loaded first and compare to the current categories. If changes are found, a
     warning is shown with details about these changes.
 
+    Categories automatically created via :py:func:`create_category_combinations` can be skipped via *skip_auto_created*.
+
     :param config: :py:class:`~order.config.Config` instance to scan for categories.
     :param summary_path: Path to the summary file. Defaults to "$LAW_HOME/category_summary_{config.name}.json".
+    :param skip_auto_created: If *True*, categories with the tag "auto_created_by_combinations" are skipped.
     """
     # build summary file as law target
     if not summary_path:
@@ -731,7 +752,11 @@ def track_category_changes(config: od.Config, summary_path: str | None = None) -
     summary_file = law.LocalFileTarget(summary_path)
 
     # gather category info
-    cat_pairs = sorted((cat.name, cat.id) for cat, *_ in config.walk_categories(include_self=True))
+    cat_pairs = sorted(
+        (cat.name, cat.id)
+        for cat, *_ in config.walk_categories(include_self=True)
+        if not skip_auto_created or not cat.has_tag("auto_created_by_combinations")
+    )
     cat_summary = {
         "hash": law.util.create_hash(cat_pairs),
         "categories": dict(cat_pairs),
