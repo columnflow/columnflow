@@ -25,6 +25,11 @@ class TaskArrayFunctionWithProducerRequirements(TaskArrayFunction):
         return ProduceColumns.req_other_producer(task, producer=producer)
 
     def requires_func(self, task: law.Task, reqs: dict, **kwargs) -> None:
+        # no requirements for workflows in pilot mode
+        if callable(getattr(task, "is_workflow", None)) and task.is_workflow() and getattr(task, "pilot", False):
+            return
+
+        # add required producers when set
         if (prods := self.require_producers):
             reqs["required_producers"] = {prod: self._req_producer(task, prod) for prod in prods}
 
