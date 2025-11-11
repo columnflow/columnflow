@@ -333,7 +333,7 @@ def update_ax_labels(hists: list[hist.Hist], config_inst: od.Config, variable_na
             else:
                 raise ValueError(f"variable '{var_name}' not found in histogram axes: {h.axes}")
 
-                
+
 def sum_hists(hists: Sequence[hist.Hist]) -> hist.Hist:
     """
     Sums a sequence of histograms into a new histogram. In case axis labels differ, which typically leads to errors
