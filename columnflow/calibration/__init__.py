@@ -10,8 +10,8 @@ import inspect
 
 import law
 
-from columnflow.columnar_util import TaskArrayFunction
 from columnflow.util import DerivableMeta
+from columnflow.columnar_util import TaskArrayFunction
 from columnflow.types import Callable, Sequence, Any
 
 
@@ -25,6 +25,11 @@ class TaskArrayFunctionWithCalibratorRequirements(TaskArrayFunction):
         return CalibrateEvents.req_other_calibrator(task, calibrator=calibrator)
 
     def requires_func(self, task: law.Task, reqs: dict, **kwargs) -> None:
+        # no requirements for workflows in pilot mode
+        if callable(getattr(task, "is_workflow", None)) and task.is_workflow() and getattr(task, "pilot", False):
+            return
+
+        # add required calibrators when set
         if (calibs := self.require_calibrators):
             reqs["required_calibrators"] = {calib: self._req_calibrator(task, calib) for calib in calibs}
 
