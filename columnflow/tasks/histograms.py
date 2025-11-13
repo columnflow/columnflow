@@ -159,7 +159,7 @@ class CreateHistograms(_CreateHistograms):
         import numpy as np
         import awkward as ak
         from columnflow.columnar_util import (
-            Route, update_ak_array, add_ak_aliases, has_ak_column, attach_coffea_behavior,
+            Route, update_ak_array, add_ak_aliases, has_ak_column, attach_coffea_behavior, ak_concatenate_safe,
         )
 
         # prepare inputs
@@ -254,7 +254,7 @@ class CreateHistograms(_CreateHistograms):
                     continue
 
                 # merge category ids and check that they are defined as leaf categories
-                category_ids = ak.concatenate(
+                category_ids = ak_concatenate_safe(
                     [Route(c).apply(events) for c in self.category_id_columns],
                     axis=-1,
                 )
