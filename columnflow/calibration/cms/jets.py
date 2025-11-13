@@ -14,7 +14,7 @@ from columnflow.calibration import Calibrator, calibrator
 from columnflow.calibration.util import ak_random, propagate_met, sum_transverse
 from columnflow.production.util import attach_coffea_behavior
 from columnflow.util import UNSET, maybe_import, DotDict, load_correction_set
-from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_column as optional
+from columnflow.columnar_util import set_ak_column, layout_ak_array, optional_column as optional, ak_concatenate_safe
 from columnflow.types import TYPE_CHECKING, Any
 
 np = maybe_import("numpy")
@@ -861,11 +861,11 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)
-    jer = ak.concatenate(
+    jer = ak_concatenate_safe(
         [jer[v][..., None] for v in self.jer_variations + self.jec_variations],
         axis=-1,
     )
-    jersf = ak.concatenate(
+    jersf = ak_concatenate_safe(
         [jersf[v][..., None] for v in self.jer_variations + self.jec_variations],
         axis=-1,
     )
@@ -906,7 +906,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     else:
         # concatenate varied pt values for broadcasting
         pt_names = ["pt" for _ in self.jer_variations] + [f"pt_{jec_var}" for jec_var in self.jec_variations]
-        match_pt = ak.concatenate([events[jet_name][pt_name][..., None] for pt_name in pt_names], axis=-1)
+        match_pt = ak_concatenate_safe([events[jet_name][pt_name][..., None] for pt_name in pt_names], axis=-1)
     pt_relative_diff = 1 - matched_gen_jet.pt / match_pt
 
     # test if matched gen jets are within 3 * resolution
