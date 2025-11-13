@@ -1344,7 +1344,7 @@ def flat_np_view(ak_array: ak.Array, axis: int | None = None) -> np.array:
 
         Note that the returned numpy array is a view and in-place value assignments will not necessarily be propagated
         back to the underlying awkward array. The conditions under which propagation can occur are limited: the
-        underlying array should be the immediate results of a masked array and it should not have optional types.
+        underlying array should not be the immediate results of a masked array and it should not have optional types.
         However, this is implementation dependent and might change with future releases of awkward.
     """
     return np.asarray(ak.flatten(ak_array, axis=axis))
