@@ -1335,10 +1335,12 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
     return ak.unflatten(ak.flatten(data_array, axis=None), ak.num(layout_array, axis=1), axis=0)
 
 
-def flat_np_view(ak_array: ak.Array, axis: int | None = None) -> np.array:
+def flat_np_view(ak_array: ak.Array, axis: int | None = None, copy: bool = False) -> np.array:
     """
     Takes an *ak_array* and returns a fully flattened numpy view. The flattening is applied along
     *axis*. See *ak.flatten* for more info.
+
+    If *copy* is *True*, a full copy of the numpy array is returned instead of a view.
 
     .. note::
 
@@ -1347,7 +1349,8 @@ def flat_np_view(ak_array: ak.Array, axis: int | None = None) -> np.array:
         underlying array should not be the immediate results of a masked array and it should not have optional types.
         However, this is implementation dependent and might change with future releases of awkward.
     """
-    return np.asarray(ak.flatten(ak_array, axis=axis))
+    np_func = np.array if copy else np.asarray
+    return np_func(ak.flatten(ak_array, axis=axis))
 
 
 def ak_copy(ak_array: ak.Array) -> ak.Array:
