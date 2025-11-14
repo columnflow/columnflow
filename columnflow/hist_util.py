@@ -12,7 +12,7 @@ import functools
 import law
 import order as od
 
-from columnflow.columnar_util import flat_np_view
+from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.util import maybe_import
 from columnflow.types import TYPE_CHECKING, Any, Sequence
 
@@ -71,10 +71,11 @@ def fill_hist(
 
     # correct last bin values
     for ax in correct_last_bin_axes:
-        right_egde_mask = ak.flatten(data[ax.name], axis=None) == ax.edges[-1]
+        flat_values = flat_np_view(data[ax.name])
+        right_egde_mask = flat_values == ax.edges[-1]
         if np.any(right_egde_mask):
-            data[ax.name] = ak.copy(data[ax.name])
-            flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
+            flat_values = np.where(right_egde_mask, flat_values - ax.widths[-1] * 1e-5, flat_values)
+            data[ax.name] = layout_ak_array(flat_values, data[ax.name])
 
     # check if conversion to records is needed
     arr_types = (ak.Array, np.ndarray)
@@ -306,6 +307,32 @@ def add_missing_shifts(
             h.fill(*dummy_fill, weight=0)
             # TODO: this might skip overflow and underflow bins
             h[{str_axis: hist.loc(missing_shift)}] = nominal.view()
+
+
+def update_ax_labels(hists: list[hist.Hist], config_inst: od.Config, variable_name: str) -> None:
+    """
+    Helper function to update the axis labels of histograms based on variable instances from
+    the *config_inst*.
+
+    :param hists: List of histograms to update.
+    :param config_inst: Configuration instance containing variable definitions.
+    :param variable_name: Name of the variable to update labels for, formatted as a string
+                         with variable names separated by hyphens (e.g., "var1-var2").
+    :raises ValueError: If a variable name is not found in the histogram axes.
+    """
+    labels = {}
+    for var_name in variable_name.split("-"):
+        var_inst = config_inst.get_variable(var_name, None)
+        if var_inst:
+            labels[var_name] = var_inst.x_title
+
+    for h in hists:
+        for var_name, label in labels.items():
+            ax_names = [ax.name for ax in h.axes]
+            if var_name in ax_names:
+                h.axes[var_name].label = label
+            else:
+                raise ValueError(f"variable '{var_name}' not found in histogram axes: {h.axes}")
 
 
 def sum_hists(hists: Sequence[hist.Hist]) -> hist.Hist:

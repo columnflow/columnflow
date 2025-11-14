@@ -54,7 +54,7 @@ class EGammaCorrectionConfig(TAFConfig):
     smear_syst_correction_set: str
     scale_compound: bool = False
     smear_syst_compound: bool = False
-    systs: list[str] = dataclasses.field(default_factory=list)
+    systs: list[str] = dataclasses.field(default_factory=lambda: ["scale_down", "scale_up", "smear_down", "smear_up"])
     corrector_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 

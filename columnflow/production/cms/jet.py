@@ -12,7 +12,7 @@ import law
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set
-from columnflow.columnar_util import set_ak_column, layout_ak_array, flat_np_view
+from columnflow.columnar_util import set_ak_column, layout_ak_array, flat_np_view, ak_concatenate_safe
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -109,7 +109,7 @@ def jet_id(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         jet_id_flat[valid_mask] |= id_flag << (pass_bit - 1)
 
     # apply correct layout
-    jet_id = layout_ak_array(jet_id_flat, events[self.jet_name].eta)
+    jet_id = layout_ak_array(jet_id_flat, events[self.jet_name])
 
     # store them
     events = set_ak_column(events, f"{self.jet_name}.jetId", jet_id, value_type=np.uint8)
@@ -208,8 +208,8 @@ def msoftdrop(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         valid_subjet = padded_subjet[valid_subjet_idxs]
         valid_subjets.append(ak.singletons(valid_subjet, axis=-1))
 
-    # merge lists for all sibjet index columns
-    valid_subjets = ak.concatenate(valid_subjets, axis=-1)
+    # merge lists for all subjet index columns
+    valid_subjets = ak_concatenate_safe(valid_subjets, axis=-1)
 
     # attach coffea behavior so we can do LV arithmetic
     valid_subjets = ak.with_name(

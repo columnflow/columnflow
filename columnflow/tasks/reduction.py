@@ -74,14 +74,13 @@ class ReduceEvents(_ReduceEvents):
                 if calibrator_inst.produced_columns
             ]
             reqs["selection"] = self.reqs.SelectEvents.req(self)
-            # reducer dependent requirements
-            reqs["reducer"] = law.util.make_unique(law.util.flatten(
-                self.reducer_inst.run_requires(task=self),
-            ))
         else:
             # pass-through pilot workflow requirements of upstream task
             t = self.reqs.SelectEvents.req(self)
-            reqs = law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+            law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+
+        # add reducer dependent requirements
+        reqs["reducer"] = law.util.make_unique(law.util.flatten(self.reducer_inst.run_requires(task=self)))
 
         return reqs
 

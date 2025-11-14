@@ -38,6 +38,11 @@ default_repr_max_len = law.config.get_expanded_int("analysis", "repr_max_len")
 default_repr_max_count = law.config.get_expanded_int("analysis", "repr_max_count")
 default_repr_hash_len = law.config.get_expanded_int("analysis", "repr_hash_len")
 
+# cached and parsed sections of the law config for faster lookup
+_cfg_outputs_dict = None
+_cfg_versions_dict = None
+_cfg_resources_dict = None
+
 # placeholder to denote a default value that is resolved dynamically
 RESOLVE_DEFAULT = "DEFAULT"
 
@@ -130,11 +135,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     exclude_params_branch = {"user"}
     exclude_params_workflow = {"user", "notify_slack", "notify_mattermost", "notify_custom"}
 
-    # cached and parsed sections of the law config for faster lookup
-    _cfg_outputs_dict = None
-    _cfg_versions_dict = None
-    _cfg_resources_dict = None
-
     @classmethod
     def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().modify_param_values(params)
@@ -197,7 +197,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             not law.parser.global_cmdline_values().get(f"{cls.task_family}_version") and
             (
                 cls.task_family != inst.task_family or
-                freeze(cls.get_config_lookup_keys(params)) != freeze(inst.get_config_lookup_keys(params))
+                freeze(cls.get_config_lookup_keys(params)) != freeze(inst.get_config_lookup_keys(inst))
             )
         ):
             default_version = cls.get_default_version(inst, params)
@@ -233,17 +233,19 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                         d[part] = {"*": d[part]}
                     d = d[part]
                 else:
-                    # assign value to the last nesting level
-                    if part in d and isinstance(d[part], dict):
-                        d[part]["*"] = value
-                    else:
+                    # assign value to the last nesting level, do not overwrite
+                    if part not in d:
                         d[part] = value
+                    elif isinstance(d[part], dict):
+                        d[part]["*"] = value
 
         return items_dict
 
     @classmethod
     def _get_cfg_outputs_dict(cls) -> dict[str, Any]:
-        if cls._cfg_outputs_dict is None and law.config.has_section("outputs"):
+        global _cfg_outputs_dict
+
+        if _cfg_outputs_dict is None and law.config.has_section("outputs"):
             # collect config item pairs
             skip_keys = {"wlcg_file_systems", "lfn_sources"}
             items = [
@@ -251,26 +253,30 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 for key, value in law.config.items("outputs")
                 if value and key not in skip_keys
             ]
-            cls._cfg_outputs_dict = cls._structure_cfg_items(items)
+            _cfg_outputs_dict = cls._structure_cfg_items(items)
 
-        return cls._cfg_outputs_dict
+        return _cfg_outputs_dict
 
     @classmethod
     def _get_cfg_versions_dict(cls) -> dict[str, Any]:
-        if cls._cfg_versions_dict is None and law.config.has_section("versions"):
+        global _cfg_versions_dict
+
+        if _cfg_versions_dict is None and law.config.has_section("versions"):
             # collect config item pairs
             items = [
                 (key, value)
                 for key, value in law.config.items("versions")
                 if value
             ]
-            cls._cfg_versions_dict = cls._structure_cfg_items(items)
+            _cfg_versions_dict = cls._structure_cfg_items(items)
 
-        return cls._cfg_versions_dict
+        return _cfg_versions_dict
 
     @classmethod
     def _get_cfg_resources_dict(cls) -> dict[str, Any]:
-        if cls._cfg_resources_dict is None and law.config.has_section("resources"):
+        global _cfg_resources_dict
+
+        if _cfg_resources_dict is None and law.config.has_section("resources"):
             # helper to split resource values into key-value pairs themselves
             def parse(key: str, value: str) -> tuple[str, list[tuple[str, Any]]]:
                 params = []
@@ -294,9 +300,9 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 for key, value in law.config.items("resources")
                 if value and not key.startswith("_")
             ]
-            cls._cfg_resources_dict = cls._structure_cfg_items(items)
+            _cfg_resources_dict = cls._structure_cfg_items(items)
 
-        return cls._cfg_resources_dict
+        return _cfg_resources_dict
 
     @classmethod
     def get_default_version(cls, inst: AnalysisTask, params: dict[str, Any]) -> str | None:

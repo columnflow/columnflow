@@ -50,9 +50,7 @@ class ProduceColumns(_ProduceColumns):
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         # add producer dependent requirements
-        reqs["producer"] = law.util.make_unique(law.util.flatten(
-            self.producer_inst.run_requires(task=self),
-        ))
+        reqs["producer"] = law.util.make_unique(law.util.flatten(self.producer_inst.run_requires(task=self)))
 
         return reqs
 
