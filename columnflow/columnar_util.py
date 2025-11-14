@@ -1349,7 +1349,8 @@ def flat_np_view(ak_array: ak.Array, axis: int | None = None, copy: bool = False
         underlying array should not be the immediate results of a masked array and it should not have optional types.
         However, this is implementation dependent and might change with future releases of awkward.
     """
-    return np.asarray(ak.flatten(ak_array, axis=axis))
+    np_func = np.array if copy else np.asarray
+    return np_func(ak.flatten(ak_array, axis=axis))
 
 
 def ak_copy(ak_array: ak.Array) -> ak.Array:
