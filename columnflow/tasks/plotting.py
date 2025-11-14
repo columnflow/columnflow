@@ -121,11 +121,11 @@ class PlotVariablesBase(_PlotVariablesBase):
             requested_shifts_per_dataset: dict[od.Dataset, list[od.Shift]] = {}
             for dataset_inst in dataset_insts:
                 _req = reqs[config_inst.name][dataset_inst.name]
-                if hasattr(_req, "shift") and _req.shift:
-                    # when a shift is found, use it
+                if isinstance(_req, ShiftTask):
+                    # when requirement is ShiftTask, get the single shift
                     requested_shifts = [_req.shift]
-                elif hasattr(_req, "shift_sources") and _req.shift_sources:
-                    # when no shift is found, check for shift sources and expand to up/down variations
+                elif isinstance(_req, ShiftSourcesMixin):
+                    # when requirement is ShiftSourcesMixin, get all shifts from sources
                     requested_shifts = ["nominal", *[
                         f"{shift}_{direction}"
                         for shift in _req.shift_sources
