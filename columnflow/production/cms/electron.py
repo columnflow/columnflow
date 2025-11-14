@@ -12,7 +12,7 @@ import law
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, full_like, flat_np_view
+from columnflow.columnar_util import set_ak_column, full_like, flat_np_view, layout_ak_array
 from columnflow.types import Any, Callable
 
 np = maybe_import("numpy")
@@ -151,8 +151,7 @@ def electron_weights(
             sf = self.electron_sf_corrector.evaluate(*inputs)
         elif isinstance(wp, dict):
             # mapping of wps to masks, evaluate per wp and combine
-            sf = full_like(eta, 1.0)
-            sf_flat = flat_np_view(sf)
+            sf_flat = flat_np_view(full_like(eta, 1.0))
             for _wp, mask_fn in wp.items():
                 mask = mask_fn(variable_map)
                 variable_map_syst_wp = variable_map_syst | {"WorkingPoint": _wp}
@@ -166,6 +165,7 @@ def electron_weights(
                     for inp in self.electron_sf_corrector.inputs
                 ]
                 sf_flat[flat_np_view(mask)] = flat_np_view(self.electron_sf_corrector.evaluate(*inputs))
+            sf = layout_ak_array(sf_flat, eta)
         else:
             raise ValueError(f"unsupported working point type {type(variable_map['WorkingPoint'])}")
 

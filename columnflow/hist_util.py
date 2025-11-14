@@ -12,7 +12,7 @@ import functools
 import law
 import order as od
 
-from columnflow.columnar_util import flat_np_view
+from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.util import maybe_import
 from columnflow.types import TYPE_CHECKING, Any, Sequence
 
@@ -71,10 +71,11 @@ def fill_hist(
 
     # correct last bin values
     for ax in correct_last_bin_axes:
-        right_egde_mask = ak.flatten(data[ax.name], axis=None) == ax.edges[-1]
+        flat_values = flat_np_view(data[ax.name])
+        right_egde_mask = flat_values == ax.edges[-1]
         if np.any(right_egde_mask):
-            data[ax.name] = ak.copy(data[ax.name])
-            flat_np_view(data[ax.name])[right_egde_mask] -= ax.widths[-1] * 1e-5
+            flat_values = np.where(right_egde_mask, flat_values - ax.widths[-1] * 1e-5, flat_values)
+            data[ax.name] = layout_ak_array(flat_values, data[ax.name])
 
     # check if conversion to records is needed
     arr_types = (ak.Array, np.ndarray)

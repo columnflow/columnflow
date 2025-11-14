@@ -109,7 +109,7 @@ def jet_id(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         jet_id_flat[valid_mask] |= id_flag << (pass_bit - 1)
 
     # apply correct layout
-    jet_id = layout_ak_array(jet_id_flat, events[self.jet_name].eta)
+    jet_id = layout_ak_array(jet_id_flat, events[self.jet_name])
 
     # store them
     events = set_ak_column(events, f"{self.jet_name}.jetId", jet_id, value_type=np.uint8)
