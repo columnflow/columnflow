@@ -10,7 +10,7 @@ import os
 import time
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+import dataclasses
 
 import luigi
 import law
@@ -21,7 +21,7 @@ from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTas
 from columnflow.tasks.framework.parameters import user_parameter_inst
 from columnflow.tasks.framework.decorators import only_local_env
 from columnflow.util import wget, DotDict
-from columnflow.types import Sequence
+from columnflow.types import Sequence, ClassVar
 
 
 logger = law.logger.get_logger(__name__)
@@ -369,7 +369,7 @@ Wrapper task to get LFNs for multiple datasets.
 )
 
 
-@dataclass
+@dataclasses.dataclass
 class ExternalFile:
     """
     Container object to define an external file resource that is understood by (e.g.)
@@ -385,11 +385,24 @@ class ExternalFile:
     """
 
     location: str
-    subpaths: dict[str, str] = field(default_factory=dict)
+    subpaths: dict[str, str] = dataclasses.field(default_factory=dict)
     version: str = "v1"
 
+    single: bool = dataclasses.field(init=False, default=False)
+    single_key: ClassVar[str] = "_single_key"
+
+    def __post_init__(self) -> None:
+        if isinstance(self.subpaths, str):
+            self.subpaths = DotDict({self.single_key: self.subpaths})
+            self.single = True
+
     def __str__(self) -> str:
-        sub = (" / " + ",".join(f"{n}={p}" for n, p in self.subpaths.items())) if self.subpaths else ""
+        sub = ""
+        if self.subpaths:
+            if self.single:
+                sub = f"/{self.subpaths[self.single_key]}"
+            else:
+                sub = " / " + ",".join(f"{n}={p}" for n, p in self.subpaths.items())
         return f"{self.location}{sub} ({self.version})"
 
     @classmethod
@@ -477,6 +490,11 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
         # path must be an ExternalFile
         if path.subpaths:
+            # single mode
+            if path.single:
+                return cls.create_unique_basename(os.path.join(path.location, path.subpaths[path.single_key]))
+
+            # multiple subpaths
             return type(path.subpaths)(
                 (name, cls.create_unique_basename(os.path.join(path.location, subpath)))
                 for name, subpath in path.subpaths.items()
@@ -609,9 +627,15 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
                     else:
                         scratch_src = scratch_dst
                     # copy all subpaths
-                    basenames = self.create_unique_basename(ext_file)
-                    for name, subpath in ext_file.subpaths.items():
-                        fetch(os.path.join(scratch_src, subpath), os.path.join(tmp_dir.abspath, basenames[name]))
+                    if ext_file.single:
+                        fetch(
+                            os.path.join(scratch_src, ext_file.subpaths[ext_file.single_key]),
+                            os.path.join(tmp_dir.abspath, self.create_unique_basename(ext_file)),
+                        )
+                    else:
+                        basenames = self.create_unique_basename(ext_file)
+                        for name, subpath in ext_file.subpaths.items():
+                            fetch(os.path.join(scratch_src, subpath), os.path.join(tmp_dir.abspath, basenames[name]))
                 else:
                     # copy directly to the bundle dir
                     src = ext_file.location
