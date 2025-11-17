@@ -28,6 +28,7 @@ class BTagSFConfig:
     jec_sources: list[str]
     discriminator: str = ""  # when empty, set in post init based on correction set
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
+    systs: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         cs = self.correction_set.lower()
@@ -36,6 +37,8 @@ class BTagSFConfig:
                 self.discriminator = "btagDeepFlavB"
             elif "particlenet" in cs:
                 self.discriminator = "btagPNetB"
+            elif "upart" in cs:
+                self.discriminator = "btagUParTAK4B"
             else:
                 raise NotImplementedError(
                     "cannot identify btag discriminator for correction set "
@@ -45,7 +48,8 @@ class BTagSFConfig:
         # warn about potentially wrong column usage
         if (
             ("deepjet" in cs and "pnet" in self.discriminator) or
-            ("particlenet" in cs and "deepflav" in self.discriminator)
+            ("particlenet" in cs and "deepflav" in self.discriminator) or 
+            ("upart" in cs and "upart" in self.discriminator)
         ):
             logger.warning(
                 f"using btag column '{self.discriminator}' for btag sf corrector "
@@ -247,7 +251,7 @@ def btag_weights(
     if shift_inst.is_nominal:
         # nominal weight and those of all method intrinsic uncertainties
         events = add_weight("central", None, self.weight_name)
-        for syst_name, col_name in self.btag_uncs.items():
+        for syst_name, col_name in self.btag_config.systs.items():
             for direction in ["up", "down"]:
                 events = add_weight(
                     syst_name,
@@ -304,23 +308,23 @@ def btag_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
     )
 
     # names of method-intrinsic uncertainties, mapped to how they are namend in produced columns
-    self.btag_uncs = {
-        "hf": "hf",
-        "lf": "lf",
-        "hfstats1": "hfstats1",
-        "hfstats2": "hfstats2",
-        "lfstats1": "lfstats1",
-        "lfstats2": "lfstats2",
-        "cferr1": "cferr1",
-        "cferr2": "cferr2",
-    }
+    # self.btag_uncs = {
+    #     "hf": "hf",
+    #     "lf": "lf",
+    #     "hfstats1": "hfstats1",
+    #     "hfstats2": "hfstats2",
+    #     "lfstats1": "lfstats1",
+    #     "lfstats2": "lfstats2",
+    #     "cferr1": "cferr1",
+    #     "cferr2": "cferr2",
+    # }
 
     # add uncertainty sources of the method itself
     if shift_inst.is_nominal:
         # nominal column
         self.produces.add(self.weight_name)
         # all varied columns
-        for col_name in self.btag_uncs.values():
+        for col_name in self.btag_config.systs.values():
             self.produces.add(f"{self.weight_name}_{col_name}_{{up,down}}")
     elif self.shift_is_known_jec_source:
         # jec varied column
