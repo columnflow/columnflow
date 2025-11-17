@@ -40,6 +40,8 @@ def cf_default_keep_columns_post_init(self: Reducer, task: law.Task, **kwargs) -
     check_used_columns=False,
     # whether to add cf_default_keep_columns as a dependency to achieve backwards compatibility
     add_keep_columns=True,
+    # whether to register the shifts of the upstream selector as shifts of this reducer
+    mirror_selector_shifts=True,
 )
 def cf_default(self: Reducer, events: ak.Array, selection: ak.Array, task: law.Task, **kwargs) -> ak.Array:
     # build the event mask
@@ -60,6 +62,10 @@ def cf_default_init(self: Reducer, **kwargs) -> None:
     if self.add_keep_columns:
         self.uses.add(cf_default_keep_columns.PRODUCES)
         self.produces.add(cf_default_keep_columns.PRODUCES)
+
+    # mirror selector shifts
+    if self.mirror_selector_shifts and "selector_shifts" in self.inst_dict:
+        self.shifts |= self.selector_shifts
 
 
 @cf_default.post_init

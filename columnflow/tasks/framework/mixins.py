@@ -766,7 +766,13 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
 
     @classmethod
     def get_reducer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
-        return cls.get_array_function_dict(params)
+        d = cls.get_array_function_dict(params)
+
+        # special case: add selector shifts
+        if (selector_inst := params.get("selector_inst")):
+            d["selector_shifts"] = selector_inst.all_shifts
+
+        return d
 
     @classmethod
     def build_reducer_inst(
