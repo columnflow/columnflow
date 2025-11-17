@@ -303,7 +303,20 @@ class DatacardWriter(object):
                     if param_obj.effect_precision <= 0
                     else param_obj.effect_precision
                 )
-                rnd = lambda f: round(f, effect_precision)
+
+                def rnd(f: float | int) -> float:
+                    r = round(f, effect_precision)
+
+                    # warn in case the precision is too low for the effect
+                    if abs(1.0 - f) < 10**(-effect_precision):
+                        logger.warning(
+                            f"the effect value '{f}' is rounded to '{r}' which probably leads to loosing its intended "
+                            f"impact; consider choosing an effect precision higher than the current value of "
+                            f"{effect_precision} for the paremeter '{param_name}' acting on process '{proc_name}' in "
+                            f"category '{cat_name}'",
+                        )
+
+                    return r
 
                 # update and transform effects
                 if param_obj.type.is_rate:
