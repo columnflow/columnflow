@@ -141,6 +141,18 @@ class ReduceEvents(_ReduceEvents):
             inputs=luigi.task.getpaths(reducer_reqs),
         )
 
+        # special case for reducers: issue a warning in case the upstream selector has shifts registered that are not
+        # known to the reducer, meaning that requested shifts would be known as global but not local ones, leading to
+        # the nominal behavior in the event chunk loop below, especially regarding alias handling
+        if (missing_reducer_shifts := self.selector_inst.all_shifts - self.reducer_inst.all_shifts):
+            self.logger.warning(
+                f"the upstream selector '{self.selector_inst.cls_name}' has {len(missing_reducer_shifts)} shifts "
+                f"registered that are not known to this reducer '{self.reducer_inst.cls_name}'; please check your "
+                "reducer as this is probably a misconfiguration and can lead to mismatches between event selection and "
+                "reduction, especially when shift-specific aliases are to be applied; missing shifts:\n"
+                f"{', '.join(sorted(missing_reducer_shifts))}",
+            )
+
         # create a temp dir for saving intermediate files
         tmp_dir = law.LocalDirectoryTarget(is_tmp=True)
         tmp_dir.touch()
