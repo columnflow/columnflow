@@ -392,9 +392,12 @@ class ExternalFile:
     single_key: ClassVar[str] = "_single_key"
 
     def __post_init__(self) -> None:
+        # convert different types of subpaths to dict
         if isinstance(self.subpaths, str):
             self.subpaths = DotDict({self.single_key: self.subpaths})
             self.single = True
+        elif isinstance(self.subpaths, (list, tuple)):
+            self.subpaths = DotDict(zip(enumerate(self.subpaths)))
 
     def __str__(self) -> str:
         sub = ""
