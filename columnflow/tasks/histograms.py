@@ -548,17 +548,19 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
         outputs = self.output()["hists"].targets
 
         for variable_name, outp in self.iter_progress(outputs.items(), len(outputs)):
+            # verbosely load input histograms
+            with self.publish_step(f"loading histograms for '{variable_name}' ..."):
+                variable_hists = []
+                for coll in inputs.values():
+                    try:
+                        variable_hists.append(coll["hists"].targets[variable_name].load(formatter="pickle"))
+                    except:
+                        self.logger.error(f"cannot read {coll['hists'].targets[variable_name].abspath}")
+                        raise
+
+            # merge and write the output
             with self.publish_step(f"merging histograms for '{variable_name}' ..."):
-                # load hists
-                variable_hists = [
-                    coll["hists"].targets[variable_name].load(formatter="pickle")
-                    for coll in inputs.values()
-                ]
-
-                # update axis labels from variable insts for consistency
                 update_ax_labels(variable_hists, self.config_inst, variable_name)
-
-                # merge and write the output
                 merged = sum_hists(variable_hists)
                 outp.dump(merged, formatter="pickle")
 
