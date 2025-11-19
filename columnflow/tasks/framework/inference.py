@@ -38,10 +38,10 @@ class SerializeInferenceModelBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
+
     # support multiple configs
     single_config = False
-
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -195,7 +195,7 @@ class SerializeInferenceModelBase(
 
     def _hist_requirements(self, **kwargs):
         # gather data from inference model to define requirements in the structure
-        # config_name -> dataset_name -> [MergeHistogramsTask]
+        # config_name -> dataset_name -> MergeHistogramsTask
         reqs = {}
         for config_inst, data in self.combined_config_data.items():
             reqs[config_inst.name] = {}

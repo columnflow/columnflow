@@ -565,10 +565,8 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
 
     def control_output_postfix(self) -> str:
         postfix = super().control_output_postfix()
-
         if self.shift_source_chunk_size > 0:
             postfix += f"__sscs{self.shift_source_chunk_size}"
-
         return postfix
 
     @law.decorator.notify
