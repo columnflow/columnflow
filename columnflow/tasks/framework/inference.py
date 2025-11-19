@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pickle
 
+import luigi
 import law
 import order as od
 
@@ -38,10 +39,17 @@ class SerializeInferenceModelBase(
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
-    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
-
     # support multiple configs
     single_config = False
+
+    shift_source_chunk_size = luigi.IntParameter(
+        default=law.NO_INT,
+        description="maximum number of shift sources to be passed to a single, required MergeShiftedHistograms task, "
+        "resulting in separate chunks (one task per chunk); they can potentially be processed in parallel but reading "
+        "and merging them in-memory might take longer; when empty, no chunking is used; default: empty",
+    )
+
+    sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
     # upstream requirements
     reqs = Requirements(
@@ -193,32 +201,51 @@ class SerializeInferenceModelBase(
         # dummy branch map
         return {0: None}
 
-    def _hist_requirements(self, **kwargs):
+    def _hist_requirements(self, shift_source_chunk_size: int | None = None, **kwargs):
+        # default chunk size
+        if shift_source_chunk_size is None:
+            shift_source_chunk_size = self.shift_source_chunk_size
+
         # gather data from inference model to define requirements in the structure
-        # config_name -> dataset_name -> MergeHistogramsTask
+        # config_name -> dataset_name -> [MergeHistogramsTask]
         reqs = {}
         for config_inst, data in self.combined_config_data.items():
             reqs[config_inst.name] = {}
-            # mc datasets
+            # mc datasets, possibly with chunking of shift sources
             for dataset_name in sorted(data["mc_datasets"]):
-                reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
-                    self,
-                    config=config_inst.name,
-                    dataset=dataset_name,
-                    shift_sources=tuple(sorted(data["mc_datasets"][dataset_name]["shift_sources"])),
-                    variables=tuple(sorted(data["variables"])),
-                    **kwargs,
-                )
-            # data datasets
+                # create shift source chunks
+                shift_sources = sorted(data["mc_datasets"][dataset_name]["shift_sources"])
+                if shift_source_chunk_size > 0:
+                    # multiple chunks with the first one being nominal only
+                    shift_source_chunks = list(law.util.iter_chunks(shift_sources, shift_source_chunk_size))
+                    shift_source_chunks = [["nominal"]] + shift_source_chunks
+                else:
+                    # single chunk including nominal
+                    shift_source_chunks = [["nominal"] + shift_sources]
+
+                reqs[config_inst.name][dataset_name] = [
+                    self.reqs.MergeShiftedHistograms.req_different_branching(
+                        self,
+                        config=config_inst.name,
+                        dataset=dataset_name,
+                        shift_sources=tuple(_shift_sources),
+                        variables=tuple(sorted(data["variables"])),
+                        **kwargs,
+                    )
+                    for _shift_sources in shift_source_chunks
+                ]
+            # data datasets, no shift sources so not chunked
             for dataset_name in sorted(data["data_datasets"]):
-                reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
-                    self,
-                    config=config_inst.name,
-                    dataset=dataset_name,
-                    shift_sources=(),
-                    variables=tuple(sorted(data["variables"])),
-                    **kwargs,
-                )
+                reqs[config_inst.name][dataset_name] = [
+                    self.reqs.MergeShiftedHistograms.req_different_branching(
+                        self,
+                        config=config_inst.name,
+                        dataset=dataset_name,
+                        shift_sources=(),
+                        variables=tuple(sorted(data["variables"])),
+                        **kwargs,
+                    ),
+                ]
 
         return reqs
 
@@ -244,47 +271,48 @@ class SerializeInferenceModelBase(
 
         with self.publish_step(f"extracting '{variable}' for config {config_inst.name} ..."):
             for dataset_name, process_names in dataset_processes.items():
-                # open the histogram and work on a copy
-                inp = inputs[dataset_name]["collection"][0]["hists"][variable]
-                try:
-                    h = inp.load(formatter="pickle").copy()
-                except pickle.UnpicklingError as e:
-                    raise Exception(
-                        f"failed to load '{variable}' histogram for dataset '{dataset_name}' in config "
-                        f"'{config_inst.name}' from {inp.abspath}",
-                    ) from e
+                # loop through inputs
+                for i, inp in enumerate(inputs[dataset_name]):
+                    # open the histogram and work on a copy
+                    try:
+                        h = inp["collection"][0]["hists"][variable].load(formatter="pickle").copy()
+                    except pickle.UnpicklingError as e:
+                        raise Exception(
+                            f"failed to load '{variable}' histogram for dataset '{dataset_name}' in config "
+                            f"'{config_inst.name}' from {inp.abspath}",
+                        ) from e
 
-                # determine processes to extract
-                process_insts = [config_inst.get_process(name) for name in process_names]
+                    # determine processes to extract
+                    process_insts = [config_inst.get_process(name) for name in process_names]
 
-                # loop over all proceses assigned to this dataset
-                for process_inst in process_insts:
-                    # gather all subprocesses for a full query later
-                    sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
+                    # loop over all proceses assigned to this dataset
+                    for process_inst in process_insts:
+                        # gather all subprocesses for a full query later
+                        sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
-                    # there must be at least one matching sub process
-                    if not any(p.name in h.axes["process"] for p in sub_process_insts):
-                        raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
+                        # there must be at least one matching sub process
+                        if not any(p.name in h.axes["process"] for p in sub_process_insts):
+                            raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
 
-                    # select and reduce over relevant processes
-                    h_proc = h[{
-                        "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
-                    }]
-                    h_proc = h_proc[{"process": sum}]
+                        # select and reduce over relevant processes
+                        h_proc = h[{
+                            "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
+                        }]
+                        h_proc = h_proc[{"process": sum}]
 
-                    # additional custom reductions
-                    h_proc = self.modify_process_hist(
-                        config_inst=config_inst,
-                        process_inst=process_inst,
-                        variable=variable,
-                        h=h_proc,
-                    )
+                        # additional custom reductions
+                        h_proc = self.modify_process_hist(
+                            config_inst=config_inst,
+                            process_inst=process_inst,
+                            variable=variable,
+                            h=h_proc,
+                        )
 
-                    # store it
-                    if process_inst in hists:
-                        hists[process_inst] += h_proc
-                    else:
-                        hists[process_inst] = h_proc
+                        # store it
+                        if process_inst in hists:
+                            hists[process_inst] += h_proc
+                        else:
+                            hists[process_inst] = h_proc
 
         return hists
 

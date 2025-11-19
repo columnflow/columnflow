@@ -521,7 +521,7 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
 
         if not self.pilot:
             # add nominal and both directions per shift source
-            for shift in ["nominal"] + self.shifts:
+            for shift in self.shifts:
                 reqs[shift] = self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
 
         return reqs
@@ -529,7 +529,7 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
     def requires(self):
         return {
             shift: self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
-            for shift in ["nominal"] + self.shifts
+            for shift in self.shifts
         }
 
     def output(self):
@@ -551,11 +551,14 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
             # verbosely load input histograms
             with self.publish_step(f"loading histograms for '{variable_name}' ..."):
                 variable_hists = []
-                for coll in inputs.values():
+                for shift_name, coll in inputs.items():
                     try:
                         variable_hists.append(coll["hists"].targets[variable_name].load(formatter="pickle"))
                     except:
-                        self.logger.error(f"cannot read {coll['hists'].targets[variable_name].abspath}")
+                        self.logger.error(
+                            f"cannot read file {coll['hists'].targets[variable_name].abspath} for with inputs for "
+                            f"shift '{shift_name}'",
+                        )
                         raise
 
             # merge and write the output

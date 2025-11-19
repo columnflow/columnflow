@@ -5,10 +5,9 @@ Tasks to plot different types of histograms.
 """
 
 import itertools
+import functools
 from collections import OrderedDict, defaultdict
 from abc import abstractmethod
-
-from columnflow.types import Any
 
 import law
 import luigi
@@ -27,7 +26,8 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 from columnflow.hist_util import add_missing_shifts
-from columnflow.config_util import get_shift_from_configs
+from columnflow.config_util import get_shift_from_configs, expand_shift_sources
+from columnflow.types import Any
 
 
 class _PlotVariablesBase(
@@ -118,7 +118,7 @@ class PlotVariablesBase(_PlotVariablesBase):
             process_insts = [config_inst.get_process(p) for p in self.processes[i]]
             dataset_insts = [config_inst.get_dataset(d) for d in self.datasets[i]]
 
-            requested_shifts_per_dataset: dict[od.Dataset, list[od.Shift]] = {}
+            requested_shifts_per_dataset: dict[od.Dataset, list[str]] = {}
             for dataset_inst in dataset_insts:
                 _req = reqs[config_inst.name][dataset_inst.name]
                 if isinstance(_req, ShiftTask) and _req.shift:
@@ -126,11 +126,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                     requested_shifts = [_req.shift]
                 elif isinstance(_req, ShiftSourcesMixin):
                     # when no shift is found, check for shift sources and expand to up/down variations
-                    requested_shifts = ["nominal", *[
-                        f"{shift}_{direction}"
-                        for shift in _req.shift_sources
-                        for direction in (od.Shift.UP, od.Shift.DOWN)
-                    ]]
+                    requested_shifts = expand_shift_sources(_req.shift_sources)
                 else:
                     raise Exception(
                         f"no shift or shift source found in requirements for dataset {dataset_inst.name} "
@@ -488,6 +484,9 @@ class PlotVariablesBaseMultiShifts(
         "the plot, the process_inst label is used; empty default",
     )
 
+    # always remove the nominal shift from shift sources
+    remove_nominal_shift_source = True
+
     # whether this task creates a single plot combining all shifts or one plot per shift
     combine_shifts = True
 
@@ -517,19 +516,25 @@ class PlotVariablesBaseMultiShifts(
         if self.is_branch() and self.bypass_branch_requirements:
             return reqs
 
-        req_cls = lambda dataset_name, config_inst: (
-            self.reqs.MergeShiftedHistograms
-            if config_inst.get_dataset(dataset_name).is_mc
-            else self.reqs.MergeHistograms
-        )
+        def hist_req(config_inst, dataset_name, **kwargs):
+            # return simple merged histograms for data
+            if config_inst.get_dataset(dataset_name).is_data:
+                return self.reqs.MergeHistograms.req(self, **kwargs)
+            # for mc, return shifted histograms with nominal shift prepended
+            return self.reqs.MergeShiftedHistograms.req(
+                self,
+                shift_sources=("nominal",) + self.shift_sources,
+                **kwargs,
+            )
 
         for config_inst, datasets in zip(self.config_insts, self.datasets):
             reqs[config_inst.name] = {}
             for d in datasets:
                 if d not in config_inst.datasets:
                     continue
-                reqs[config_inst.name][d] = req_cls(d, config_inst).req(
-                    self,
+                reqs[config_inst.name][d] = hist_req(
+                    config_inst,
+                    d,
                     config=config_inst.name,
                     dataset=d,
                     branch=-1,
@@ -564,20 +569,16 @@ class PlotVariablesBaseMultiShifts(
             "plots": [self.target(name) for name in self.get_plot_names("plot")],
         }
 
-    def get_plot_shifts(self):
+    def get_plot_shifts(self) -> list[od.Shift]:
         # only to be called by branch tasks
         if self.is_workflow():
             raise Exception("calls to get_plots_shifts are forbidden for workflow tasks")
 
         # gather sources, and expand to up/down shifts
         sources = self.shift_sources if self.combine_shifts else [self.branch_data.shift_source]
-        shifts = []
-        for source in sources:
-            shifts.append(get_shift_from_configs(self.config_insts, f"{source}_{od.Shift.UP}"))
-            shifts.append(get_shift_from_configs(self.config_insts, f"{source}_{od.Shift.DOWN}"))
+        shifts = list(map(functools.partial(get_shift_from_configs, self.config_insts), sources))
 
-        # add nominal
-        return [self.config_inst.get_shift("nominal"), *shifts]
+        return shifts
 
     def get_plot_parameters(self):
         # convert parameters to usable values during plotting
