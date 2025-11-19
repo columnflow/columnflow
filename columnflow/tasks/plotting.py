@@ -484,8 +484,8 @@ class PlotVariablesBaseMultiShifts(
         "the plot, the process_inst label is used; empty default",
     )
 
-    # always remove the nominal shift from shift sources
-    remove_nominal_shift_source = True
+    # always ensure the nominal shift is present in shift sources
+    enforce_nominal_shift_source = True
 
     # whether this task creates a single plot combining all shifts or one plot per shift
     combine_shifts = True
@@ -520,12 +520,8 @@ class PlotVariablesBaseMultiShifts(
             # return simple merged histograms for data
             if config_inst.get_dataset(dataset_name).is_data:
                 return self.reqs.MergeHistograms.req(self, **kwargs)
-            # for mc, return shifted histograms with nominal shift prepended
-            return self.reqs.MergeShiftedHistograms.req(
-                self,
-                shift_sources=("nominal",) + self.shift_sources,
-                **kwargs,
-            )
+            # for mc, return shifted histograms
+            return self.reqs.MergeShiftedHistograms.req(self, **kwargs)
 
         for config_inst, datasets in zip(self.config_insts, self.datasets):
             reqs[config_inst.name] = {}

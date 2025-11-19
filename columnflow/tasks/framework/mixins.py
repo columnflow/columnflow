@@ -2480,16 +2480,18 @@ class ShiftSourcesMixin(ConfigTask):
         if self.enforce_nominal_shift_source and tuple(self.shift_sources) == ("nominal",):
             return "none"
 
-        # simplified representation for single source
-        if len(self.shift_sources) == 1:
-            return self.build_repr(self.shift_sources[0])
-
-        # full representation on sorted sources, moving nominal to front if present, dropping it if enforced
+        # sort shift sources, moving nominal to front if present, but dropping it if enforced
         sorted_sources = sorted(self.shift_sources)
         if "nominal" in sorted_sources:
             sorted_sources.remove("nominal")
             if not self.enforce_nominal_shift_source:
                 sorted_sources.insert(0, "nominal")
+
+        # simplified representation for single source
+        if len(sorted_sources) == 1:
+            return self.build_repr(sorted_sources[0])
+
+        # full representation
         return self.build_repr(sorted_sources, prepend_count=True)
 
     def store_parts(self) -> law.util.InsertableDict:
