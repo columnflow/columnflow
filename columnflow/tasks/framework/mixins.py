@@ -2405,6 +2405,7 @@ class ShiftSourcesMixin(ConfigTask):
     )
 
     allow_empty_shift_sources = False
+    sort_shift_sources = True
     enforce_nominal_shift_source = False
     remove_nominal_shift_source = False
 
@@ -2457,6 +2458,10 @@ class ShiftSourcesMixin(ConfigTask):
             if not sources and not cls.allow_empty_shift_sources:
                 raise ValueError(f"no shifts found matching {params['shift_sources']}")
 
+            # potentially sort them
+            if cls.sort_shift_sources:
+                sources = sorted(sources)
+
             # store them
             params["shift_sources"] = tuple(sources)
 
@@ -2471,28 +2476,39 @@ class ShiftSourcesMixin(ConfigTask):
 
         self.shifts = expand_shift_sources(self.shift_sources)
 
-    @property
-    def shift_sources_repr(self) -> str:
-        if not self.shift_sources:
+    @classmethod
+    def _shift_sources_repr(
+        cls,
+        shift_sources: tuple[str, ...] | None,
+        enforce_nominal_shift_source: bool = False,
+    ) -> str:
+        if not shift_sources:
             return "none"
 
         # when nominal is the only source, but it is enforced to be present, also show "none" as in "no additional" ones
-        if self.enforce_nominal_shift_source and tuple(self.shift_sources) == ("nominal",):
+        if enforce_nominal_shift_source and tuple(shift_sources) == ("nominal",):
             return "none"
 
         # sort shift sources, moving nominal to front if present, but dropping it if enforced
-        sorted_sources = sorted(self.shift_sources)
+        sorted_sources = sorted(shift_sources)
         if "nominal" in sorted_sources:
             sorted_sources.remove("nominal")
-            if not self.enforce_nominal_shift_source:
+            if not enforce_nominal_shift_source:
                 sorted_sources.insert(0, "nominal")
 
         # simplified representation for single source
         if len(sorted_sources) == 1:
-            return self.build_repr(sorted_sources[0])
+            return cls.build_repr(sorted_sources[0])
 
         # full representation
-        return self.build_repr(sorted_sources, prepend_count=True)
+        return cls.build_repr(sorted_sources, prepend_count=True)
+
+    @property
+    def shift_sources_repr(self) -> str:
+        return self._shift_sources_repr(
+            self.shift_sources,
+            enforce_nominal_shift_source=self.enforce_nominal_shift_source,
+        )
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()

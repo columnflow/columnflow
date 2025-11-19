@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import pickle
 
-import luigi
 import law
 import order as od
 
@@ -41,13 +40,6 @@ class SerializeInferenceModelBase(
 ):
     # support multiple configs
     single_config = False
-
-    shift_source_chunk_size = luigi.IntParameter(
-        default=law.NO_INT,
-        description="maximum number of shift sources to be passed to a single, required MergeShiftedHistograms task, "
-        "resulting in separate chunks (one task per chunk); they can potentially be processed in parallel but reading "
-        "and merging them in-memory might take longer; when empty, no chunking is used; default: empty",
-    )
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -201,51 +193,33 @@ class SerializeInferenceModelBase(
         # dummy branch map
         return {0: None}
 
-    def _hist_requirements(self, shift_source_chunk_size: int | None = None, **kwargs):
-        # default chunk size
-        if shift_source_chunk_size is None:
-            shift_source_chunk_size = self.shift_source_chunk_size
-
+    def _hist_requirements(self, **kwargs):
         # gather data from inference model to define requirements in the structure
         # config_name -> dataset_name -> [MergeHistogramsTask]
         reqs = {}
         for config_inst, data in self.combined_config_data.items():
             reqs[config_inst.name] = {}
-            # mc datasets, possibly with chunking of shift sources
+            # mc datasets
             for dataset_name in sorted(data["mc_datasets"]):
-                # create shift source chunks
-                shift_sources = sorted(data["mc_datasets"][dataset_name]["shift_sources"])
-                if shift_source_chunk_size > 0:
-                    # multiple chunks with the first one being nominal only
-                    shift_source_chunks = list(law.util.iter_chunks(shift_sources, shift_source_chunk_size))
-                    shift_source_chunks = [["nominal"]] + shift_source_chunks
-                else:
-                    # single chunk including nominal
-                    shift_source_chunks = [["nominal"] + shift_sources]
+                reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
+                    self,
+                    config=config_inst.name,
+                    dataset=dataset_name,
+                    shift_sources=("nominal",) + tuple(sorted(data["mc_datasets"][dataset_name]["shift_sources"])),
+                    variables=tuple(sorted(data["variables"])),
+                    **kwargs,
+                )
 
-                reqs[config_inst.name][dataset_name] = [
-                    self.reqs.MergeShiftedHistograms.req_different_branching(
-                        self,
-                        config=config_inst.name,
-                        dataset=dataset_name,
-                        shift_sources=tuple(_shift_sources),
-                        variables=tuple(sorted(data["variables"])),
-                        **kwargs,
-                    )
-                    for _shift_sources in shift_source_chunks
-                ]
             # data datasets, no shift sources so not chunked
             for dataset_name in sorted(data["data_datasets"]):
-                reqs[config_inst.name][dataset_name] = [
-                    self.reqs.MergeShiftedHistograms.req_different_branching(
-                        self,
-                        config=config_inst.name,
-                        dataset=dataset_name,
-                        shift_sources=(),
-                        variables=tuple(sorted(data["variables"])),
-                        **kwargs,
-                    ),
-                ]
+                reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
+                    self,
+                    config=config_inst.name,
+                    dataset=dataset_name,
+                    shift_sources=("nominal",),
+                    variables=tuple(sorted(data["variables"])),
+                    **kwargs,
+                )
 
         return reqs
 
@@ -272,10 +246,10 @@ class SerializeInferenceModelBase(
         with self.publish_step(f"extracting '{variable}' for config {config_inst.name} ..."):
             for dataset_name, process_names in dataset_processes.items():
                 # loop through inputs
-                for i, inp in enumerate(inputs[dataset_name]):
-                    # open the histogram and work on a copy
+                for inp in inputs[dataset_name]["collection"].targets.values():
+                    # open the histogram
                     try:
-                        h = inp["collection"][0]["hists"][variable].load(formatter="pickle").copy()
+                        h = inp["hists"][variable].load(formatter="pickle")
                     except pickle.UnpicklingError as e:
                         raise Exception(
                             f"failed to load '{variable}' histogram for dataset '{dataset_name}' in config "

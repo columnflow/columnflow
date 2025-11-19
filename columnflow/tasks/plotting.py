@@ -25,7 +25,7 @@ from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict, dev_sandbox, dict_add_strict
-from columnflow.hist_util import add_missing_shifts
+from columnflow.hist_util import add_missing_shifts, sum_hists
 from columnflow.config_util import get_shift_from_configs, expand_shift_sources
 from columnflow.types import Any
 
@@ -194,9 +194,14 @@ class PlotVariablesBase(_PlotVariablesBase):
 
                 hists_config = {}
 
-                for dataset, inp in dataset_dict.items():
+                for dataset, inps in dataset_dict.items():
                     dataset_inst = config_inst.get_dataset(dataset)
-                    h_in = inp["collection"][0]["hists"].targets[self.branch_data.variable].load(formatter="pickle")
+
+                    # load input histograms, summing over outputs of histogram tasks
+                    h_in = sum_hists([
+                        inp["hists"].targets[self.branch_data.variable].load(formatter="pickle")
+                        for inp in inps["collection"].targets.values()
+                    ])
 
                     # loop and extract one histogram per process
                     for process_inst, process_info in config_process_map[config_inst].items():
@@ -204,12 +209,11 @@ class PlotVariablesBase(_PlotVariablesBase):
                             continue
 
                         # select processes and reduce axis
-                        h = h_in.copy()
-                        h = h[{
+                        h = h_in[{
                             "process": [
                                 hist.loc(proc_name)
                                 for proc_name in process_info["dataset_proc_name_map"][dataset_inst]
-                                if proc_name in h.axes["process"]
+                                if proc_name in h_in.axes["process"]
                             ],
                         }]
                         h = h[{"process": sum}]
@@ -223,6 +227,9 @@ class PlotVariablesBase(_PlotVariablesBase):
                             hists_config[process_inst] += h
                         else:
                             hists_config[process_inst] = h
+
+                    # free memory
+                    del h_in
 
                 # after merging all processes, sort the histograms by process order and store them
                 hists[config_inst] = {
@@ -572,7 +579,7 @@ class PlotVariablesBaseMultiShifts(
 
         # gather sources, and expand to up/down shifts
         sources = self.shift_sources if self.combine_shifts else [self.branch_data.shift_source]
-        shifts = list(map(functools.partial(get_shift_from_configs, self.config_insts), sources))
+        shifts = list(map(functools.partial(get_shift_from_configs, self.config_insts), expand_shift_sources(sources)))
 
         return shifts
 
