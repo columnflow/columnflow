@@ -576,7 +576,9 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
         inputs = self.input()
         outputs = self.output()["hists"].targets
 
-        shifts_msg = "" if self.shift_source_chunk_size <= 0 else f" for shifts {','.join(self.branch_data)}"
+        shifts_msg = ""
+        if self.shift_source_chunk_size > 0:
+            shifts_msg = f" for {len(self.branch_data)} shift sources {','.join(self.branch_data)}"
 
         for variable_name, outp in self.iter_progress(outputs.items(), len(outputs)):
             # verbosely load input histograms
