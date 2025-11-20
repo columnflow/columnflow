@@ -23,7 +23,11 @@ from columnflow.tasks.production import ProduceColumns
 from columnflow.tasks.ml import MLEvaluation
 from columnflow.hist_util import update_ax_labels, sum_hists
 from columnflow.config_util import expand_shift_sources
-from columnflow.util import dev_sandbox
+from columnflow.util import maybe_import, dev_sandbox
+from columnflow.types import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
 
 
 class VariablesMixinWorkflow(
@@ -558,8 +562,8 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
     def output(self):
         return {
             "hists": law.SiblingFileCollection({
-                variable_name: self.target(f"hists__{variable_name}.pickle")
-                for variable_name in self.variables
+                variable: self.target(f"hists__{variable}.pickle")
+                for variable in self.variables
             }),
         }
 
@@ -586,7 +590,7 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
                 variable_hists = []
                 for shift_name, inp in inputs.items():
                     try:
-                        variable_hists.append(inp["hists"].targets[variable_name].load(formatter="pickle"))
+                        h = inp["hists"].targets[variable_name].load(formatter="pickle")
                     except:
                         self.logger.error(
                             f"cannot read file {inp['hists'].targets[variable_name].abspath} for with inputs for "
@@ -594,11 +598,41 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
                         )
                         raise
 
+                    # invoke modification hook, then save
+                    h = self.modify_input_hist(shift_name, variable_name, h)
+                    variable_hists.append(h)
+
             # merge and write the output
             with self.publish_step(f"merging '{variable_name}' histograms{shifts_msg} ..."):
                 update_ax_labels(variable_hists, self.config_inst, variable_name)
                 merged = sum_hists(variable_hists)
+
+                # invoke modification hook, then save
+                merged = self.modify_merged_hist(variable_name, merged)
                 outp.dump(merged, formatter="pickle")
+
+    def modify_input_hist(self, shift: str, variable: str, h: hist.Hist) -> hist.Hist:
+        """
+        Hook to modify an input histogram for a shift after it has been loaded. This can be helpful to reduce memory
+        early on.
+
+        :param shift: The shift name the histogram corresponds to.
+        :param variable: The variable name the histogram corresponds to.
+        :param h: The histogram to modify.
+        :return: The modified histogram.
+        """
+        return h
+
+    def modify_merged_hist(self, variable: str, h: hist.Hist) -> hist.Hist:
+        """
+        Hook to modify the histogram merged for different shifts right before it is saved. This can be helpful to
+        reduce memory early on.
+
+        :param variable: The variable name the histogram corresponds to.
+        :param h: The histogram to modify.
+        :return: The modified histogram.
+        """
+        return h
 
 
 MergeShiftedHistogramsWrapper = wrapper_factory(

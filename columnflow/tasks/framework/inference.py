@@ -6,8 +6,6 @@ Base tasks for writing serialized statistical inference models.
 
 from __future__ import annotations
 
-import pickle
-
 import law
 import order as od
 
@@ -116,6 +114,8 @@ class SerializeInferenceModelBase(
             config_inst: {
                 # all variables used in this config in any datacard category
                 "variables": set(),
+                # set of all used categories
+                "categories": set(),
                 # plain set of names of real data datasets
                 "data_datasets": set(),
                 # per mc dataset name, the set of shift sources and the names processes to be extracted from them
@@ -126,7 +126,7 @@ class SerializeInferenceModelBase(
 
         # iterate over all model categories
         for cat_obj in self.inference_model_inst.categories:
-            # keep track of per-category information for consistency checks
+            # keep track of per-category information across configs for consistency checks
             variables = set()
             categories = set()
 
@@ -135,8 +135,9 @@ class SerializeInferenceModelBase(
             for config_inst in config_insts:
                 data = config_data[config_inst]
 
-                # variables
+                # variables and categories
                 data["variables"].add(cat_obj.config_data[config_inst.name].variable)
+                data["categories"].add(cat_obj.config_data[config_inst.name].category)
 
                 # data datasets, but only if
                 #   - data in that category is not faked from mc processes, or
@@ -193,6 +194,9 @@ class SerializeInferenceModelBase(
         # dummy branch map
         return {0: None}
 
+    def _hist_requirement(self, **kwargs):
+        return self.reqs.MergeShiftedHistograms.req_different_branching(self, **kwargs)
+
     def _hist_requirements(self, **kwargs):
         # gather data from inference model to define requirements in the structure
         # config_name -> dataset_name -> MergeHistogramsTask
@@ -201,8 +205,7 @@ class SerializeInferenceModelBase(
             reqs[config_inst.name] = {}
             # mc datasets
             for dataset_name in sorted(data["mc_datasets"]):
-                reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
-                    self,
+                reqs[config_inst.name][dataset_name] = self._hist_requirement(
                     config=config_inst.name,
                     dataset=dataset_name,
                     shift_sources=("nominal",) + tuple(sorted(data["mc_datasets"][dataset_name]["shift_sources"])),
@@ -212,8 +215,7 @@ class SerializeInferenceModelBase(
 
             # data datasets, no shift sources so not chunked
             for dataset_name in sorted(data["data_datasets"]):
-                reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
-                    self,
+                reqs[config_inst.name][dataset_name] = self._hist_requirement(
                     config=config_inst.name,
                     dataset=dataset_name,
                     shift_sources=("nominal",),
@@ -250,7 +252,7 @@ class SerializeInferenceModelBase(
                     # open the histogram
                     try:
                         h = inp["hists"][variable].load(formatter="pickle")
-                    except pickle.UnpicklingError as e:
+                    except Exception as e:
                         raise Exception(
                             f"failed to load '{variable}' histogram for dataset '{dataset_name}' in config "
                             f"'{config_inst.name}' from {inp.abspath}",
@@ -302,6 +304,7 @@ class SerializeInferenceModelBase(
 
         :param config_inst: The config instance the histogram belongs to.
         :param process_inst: The process instance the histogram belongs to.
+        :param variable: The variable name the histogram corresponds to.
         :param h: The histogram to modify.
         :return: The modified histogram.
         """

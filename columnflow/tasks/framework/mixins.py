@@ -2042,6 +2042,7 @@ class CategoriesMixin(ConfigTask):
 
     default_categories = None
     allow_empty_categories = False
+    sort_categories = True
 
     @classmethod
     def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -2079,15 +2080,26 @@ class CategoriesMixin(ConfigTask):
             if not categories and not cls.allow_empty_categories:
                 raise ValueError(f"no categories found matching {params['categories']}")
 
+            # sort them
+            if cls.sort_categories:
+                categories = sorted(categories)
+
             params["categories"] = tuple(categories)
 
         return params
 
+    @classmethod
+    def _categories_repr(cls, categories: Sequence[str]) -> str:
+        # single category representation
+        if len(categories) == 1:
+            return cls.build_repr(categories[0])
+
+        # full representation
+        return cls.build_repr(categories, prepend_count=True)
+
     @property
     def categories_repr(self) -> str:
-        if len(self.categories) == 1:
-            return self.build_repr(self.categories[0])
-        return self.build_repr(self.categories, prepend_count=True)
+        return self._categories_repr(self.categories)
 
 
 class VariablesMixin(ConfigTask):
