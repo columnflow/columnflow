@@ -26,7 +26,12 @@ bootstrap_htcondor_standalone() {
         # also move it to the /tmp/x509up_u<uid> location as some packages expect
         # the file to be at this path and do not respect the X509_USER_PROXY env var
         local tmp_x509="/tmp/x509up_u$( id -u )"
-        [ ! -f "${tmp_x509}" ] && cp "${X509_USER_PROXY}" "${tmp_x509}"
+        if [ ! -f "${tmp_x509}" ]; then
+            cp "${X509_USER_PROXY}" "${tmp_x509}" || {
+                >&2 echo "could not copy X509_USER_PROXY file from ${X509_USER_PROXY} to ${tmp_x509}, stopping job"
+                return "1"
+            }
+        fi
     fi
     local sharing_software="$( [ -z "{{cf_software_base}}" ] && echo "false" || echo "true" )"
     local lcg_setup="{{cf_remote_lcg_setup}}"

@@ -559,15 +559,23 @@ class RemoteWorkflowMixin(AnalysisTask):
                 )
 
         # forward voms proxy
-        if voms and not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False):
+        if voms:
+            # when skipping the check, still send it if the proxy exists and is valid, otherwise enforce it
+            skip_check = law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False)
             vomsproxy_file = law.wlcg.get_vomsproxy_file()
-            if not law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file):
-                raise Exception("voms proxy not valid, submission aborted")
-            config.input_files["vomsproxy_file"] = law.JobInputFile(
-                vomsproxy_file,
-                share=True,
-                render=False,
-            )
+            vomsproxy_exists = os.path.isfile(vomsproxy_file)
+            vomsproxy_valid = vomsproxy_exists and law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file)
+            if not skip_check:
+                if not vomsproxy_exists:
+                    raise Exception(f"voms proxy '{vomsproxy_file}' does not exist, submission aborted")
+                if not vomsproxy_valid:
+                    raise Exception(f"voms proxy '{vomsproxy_file}' not valid, submission aborted")
+            if vomsproxy_valid:
+                config.input_files["vomsproxy_file"] = law.JobInputFile(
+                    vomsproxy_file,
+                    share=True,
+                    render=False,
+                )
 
         # forward kerberos proxy
         if kerberos and "KRB5CCNAME" in os.environ:
