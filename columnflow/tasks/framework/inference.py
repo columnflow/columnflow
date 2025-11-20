@@ -205,17 +205,18 @@ class SerializeInferenceModelBase(
                     self,
                     config=config_inst.name,
                     dataset=dataset_name,
-                    shift_sources=tuple(sorted(data["mc_datasets"][dataset_name]["shift_sources"])),
+                    shift_sources=("nominal",) + tuple(sorted(data["mc_datasets"][dataset_name]["shift_sources"])),
                     variables=tuple(sorted(data["variables"])),
                     **kwargs,
                 )
-            # data datasets
+
+            # data datasets, no shift sources so not chunked
             for dataset_name in sorted(data["data_datasets"]):
                 reqs[config_inst.name][dataset_name] = self.reqs.MergeShiftedHistograms.req_different_branching(
                     self,
                     config=config_inst.name,
                     dataset=dataset_name,
-                    shift_sources=(),
+                    shift_sources=("nominal",),
                     variables=tuple(sorted(data["variables"])),
                     **kwargs,
                 )
@@ -244,47 +245,48 @@ class SerializeInferenceModelBase(
 
         with self.publish_step(f"extracting '{variable}' for config {config_inst.name} ..."):
             for dataset_name, process_names in dataset_processes.items():
-                # open the histogram and work on a copy
-                inp = inputs[dataset_name]["collection"][0]["hists"][variable]
-                try:
-                    h = inp.load(formatter="pickle").copy()
-                except pickle.UnpicklingError as e:
-                    raise Exception(
-                        f"failed to load '{variable}' histogram for dataset '{dataset_name}' in config "
-                        f"'{config_inst.name}' from {inp.abspath}",
-                    ) from e
+                # loop through inputs
+                for inp in inputs[dataset_name]["collection"].targets.values():
+                    # open the histogram
+                    try:
+                        h = inp["hists"][variable].load(formatter="pickle")
+                    except pickle.UnpicklingError as e:
+                        raise Exception(
+                            f"failed to load '{variable}' histogram for dataset '{dataset_name}' in config "
+                            f"'{config_inst.name}' from {inp.abspath}",
+                        ) from e
 
-                # determine processes to extract
-                process_insts = [config_inst.get_process(name) for name in process_names]
+                    # determine processes to extract
+                    process_insts = [config_inst.get_process(name) for name in process_names]
 
-                # loop over all proceses assigned to this dataset
-                for process_inst in process_insts:
-                    # gather all subprocesses for a full query later
-                    sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
+                    # loop over all proceses assigned to this dataset
+                    for process_inst in process_insts:
+                        # gather all subprocesses for a full query later
+                        sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
-                    # there must be at least one matching sub process
-                    if not any(p.name in h.axes["process"] for p in sub_process_insts):
-                        raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
+                        # there must be at least one matching sub process
+                        if not any(p.name in h.axes["process"] for p in sub_process_insts):
+                            raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
 
-                    # select and reduce over relevant processes
-                    h_proc = h[{
-                        "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
-                    }]
-                    h_proc = h_proc[{"process": sum}]
+                        # select and reduce over relevant processes
+                        h_proc = h[{
+                            "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
+                        }]
+                        h_proc = h_proc[{"process": sum}]
 
-                    # additional custom reductions
-                    h_proc = self.modify_process_hist(
-                        config_inst=config_inst,
-                        process_inst=process_inst,
-                        variable=variable,
-                        h=h_proc,
-                    )
+                        # additional custom reductions
+                        h_proc = self.modify_process_hist(
+                            config_inst=config_inst,
+                            process_inst=process_inst,
+                            variable=variable,
+                            h=h_proc,
+                        )
 
-                    # store it
-                    if process_inst in hists:
-                        hists[process_inst] += h_proc
-                    else:
-                        hists[process_inst] = h_proc
+                        # store it
+                        if process_inst in hists:
+                            hists[process_inst] += h_proc
+                        else:
+                            hists[process_inst] = h_proc
 
         return hists
 

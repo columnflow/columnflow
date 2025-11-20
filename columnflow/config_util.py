@@ -399,18 +399,21 @@ def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
 
     .. code-block:: python
 
-        expand_shift_sources(["jes", "jer_up"])
-        # -> ["jes_up", "jes_down", "jer_up"]
+        expand_shift_sources(["jes", "jer_up", "nominal"])
+        # -> ["jes_up", "jes_down", "jer_up", "nominal"]
     """
     _shifts = []
     for shift in shifts:
-        try:
-            od.Shift.split_name(shift)
+        if shift == od.Shift.NOMINAL:
             _shifts.append(shift)
-        except ValueError as e:
-            if not isinstance(shift, str):
-                raise e
-            _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.DOWN}"])
+        else:
+            try:
+                od.Shift.split_name(shift)
+                _shifts.append(shift)
+            except ValueError as e:
+                if not isinstance(shift, str):
+                    raise e
+                _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.DOWN}"])
 
     return law.util.make_unique(_shifts)
 
