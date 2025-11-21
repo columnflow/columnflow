@@ -566,7 +566,7 @@ class DatacardWriter(object):
                 return
 
             # warn in case of flow content
-            if cat_obj.flow_strategy == FlowStrategy.warn:
+            if cat_obj.flow_strategy in {FlowStrategy.warn, FlowStrategy.move}:
                 if underflow[0]:
                     logger.warning_once(
                         f"underflow_warn_{self.inference_model_inst.cls_name}_{cat_obj.name}_{name}",
@@ -579,6 +579,9 @@ class DatacardWriter(object):
                         f"overflow content detected in category '{cat_obj.name}' for histogram "
                         f"'{name}' ({overflow[0] / view.value.sum() * 100:.1f}% of integral)",
                     )
+
+            # stop here in case of warn-only
+            if cat_obj.flow_strategy == FlowStrategy.warn:
                 return
 
             # here, we can already remove overflow values
