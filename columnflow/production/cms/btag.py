@@ -48,7 +48,7 @@ class BTagSFConfig:
         # warn about potentially wrong column usage
         if (
             ("deepjet" in cs and "pnet" in self.discriminator) or
-            ("particlenet" in cs and "deepflav" in self.discriminator) or 
+            ("particlenet" in cs and "deepflav" in self.discriminator) or
             ("upart" in cs and "upart" in self.discriminator)
         ):
             logger.warning(

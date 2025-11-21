@@ -627,7 +627,7 @@ def jec_setup(
                 jec_era = "Run" + era
             if self.config_inst.campaign.x.year == 2024:
                 jme_key = f"{jec.campaign}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
-            else: 
+            else:
                 jme_key = f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
         elif is_data:
             jme_key = f"{jec.campaign}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
@@ -639,7 +639,7 @@ def jec_setup(
     jec_keys = make_jme_keys(jec_cfg.levels)
     jec_keys_subset_type1_met = make_jme_keys(jec_cfg.levels_for_type1_met)
     junc_keys = make_jme_keys(self.uncertainty_sources, is_data=False)  # uncertainties only stored as MC keys
-    
+
     # store the evaluators
     self.evaluators = {
         "jec": get_evaluators(correction_set, jec_keys),
