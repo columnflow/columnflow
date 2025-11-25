@@ -11,7 +11,9 @@ import math
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array, has_ak_column, optional_column as optional
+from columnflow.columnar_util import (
+    set_ak_column, flat_np_view, layout_ak_array, has_ak_column, optional_column as optional
+)
 from columnflow.types import Any
 
 np = maybe_import("numpy")
