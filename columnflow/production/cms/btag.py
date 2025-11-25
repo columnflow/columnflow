@@ -115,11 +115,11 @@ def btag_weights(
             jec_sources=["Absolute", "FlavorQCD", ...],
             discriminator="btagDeepFlavB",
             systs={
-                    "hf": "hf",
-                    "lf": "lf",
-                    "hfstats1": "hfstats1",
-                    ...
-                },,
+                "hf": "hf",
+                "lf": "lf",
+                "hfstats1": "hfstats1",
+                ...
+            },
             corrector_kwargs={...},
         )
 
