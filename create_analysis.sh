@@ -198,7 +198,7 @@ create_analysis() {
         return "1"
     fi
 
-    echo_color cyan "checking out analysis tempate to ${cf_analysis_base}"
+    echo_color cyan "checking out analysis template to ${cf_analysis_base}"
 
     if ${debug}; then
         cp -r "${this_dir}/analysis_templates/${cf_analysis_flavor}" "${cf_analysis_base}"
