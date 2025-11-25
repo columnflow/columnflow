@@ -14,7 +14,7 @@ import law
 from columnflow.categorization import Categorizer
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import
-from columnflow.columnar_util import set_ak_column
+from columnflow.columnar_util import set_ak_column, ak_concatenate_safe
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -57,7 +57,7 @@ def category_ids(
         category_ids.append(ak.singletons(ak.nan_to_none(ids)))
 
     # combine
-    category_ids = ak.concatenate(category_ids, axis=1)
+    category_ids = ak_concatenate_safe(category_ids, axis=1)
 
     # save, optionally on a target events array
     if target_events is None:

@@ -134,7 +134,7 @@ def json_filter_setup(
     max_run = max(map(int, json.keys()))
 
     # build lookup table
-    self.run_ls_lookup = scipy.sparse.lil_matrix((max_run + 1, max_ls + 1), dtype=bool)
+    self.run_ls_lookup = scipy.sparse.dok_matrix((max_run + 1, max_ls + 1), dtype=bool)
     for run, ls_ranges in json.items():
         run = int(run)
         for ls_range in ls_ranges:

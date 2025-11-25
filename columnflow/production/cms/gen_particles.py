@@ -10,7 +10,7 @@ from __future__ import annotations
 import law
 
 from columnflow.production import Producer, producer
-from columnflow.columnar_util import set_ak_column
+from columnflow.columnar_util import set_ak_column, ak_concatenate_safe
 from columnflow.util import UNSET, maybe_import
 
 np = maybe_import("numpy")
@@ -106,7 +106,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     # sort them so that down-type quarks and charged leptons (odd pdgIds) come first, followed by up-type quarks and
     # neutrinos (even pdgIds), then add back the remaining ones
     w_children_hard = w_children_hard[ak.argsort(-(w_children_hard.pdgId % 2), axis=2)]
-    w_children = ak.concatenate([w_children_hard, w_children_rest], axis=2)
+    w_children = ak_concatenate_safe([w_children_hard, w_children_rest], axis=2)
 
     # further distinguish tau decays in w_children
     w_tau_children = ak.drop_none(w_children[abs(w_children.pdgId) == 15].distinctChildrenDeep)
@@ -115,7 +115,7 @@ def gen_top_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwar
     w_tau_photon_mask = w_tau_children.pdgId == 22
     w_tau_rest = w_tau_children[~(w_tau_nu_mask | w_tau_photon_mask)]
     w_tau_rest = w_tau_rest[ak.argsort(abs(w_tau_rest.pdgId), axis=3, ascending=True)]
-    w_tau_children = ak.concatenate(
+    w_tau_children = ak_concatenate_safe(
         [w_tau_children[w_tau_nu_mask], w_tau_rest, w_tau_children[w_tau_photon_mask]],
         axis=3,
     )
@@ -214,9 +214,9 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
         tau_w = ak.where(tau_has_rest, tau_w_rest, tau_w)
     tau_w = set_ak_column(tau_w, "pdgId", ak.values_astype(-24 * np.sign(tau.pdgId), np.int32))
     # combine nu and w again
-    tau_nuw = ak.concatenate([tau_nu[..., None], tau_w[..., None]], axis=3)
+    tau_nuw = ak_concatenate_safe([tau_nu[..., None], tau_w[..., None]], axis=3)
     # define w children
-    tau_w_children = ak.concatenate(
+    tau_w_children = ak_concatenate_safe(
         [tau_children[tau_rest_mask], ak.drop_none(ak.firsts(tau_children[tau_w_mask], axis=3).children)],
         axis=2,
     )
@@ -335,9 +335,9 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
         tau_w = ak.where(tau_has_rest, tau_w_rest, tau_w)
     tau_w = set_ak_column(tau_w, "pdgId", ak.values_astype(-24 * np.sign(tau.pdgId), np.int32))
     # combine nu and w again
-    tau_nuw = ak.concatenate([tau_nu[..., None], tau_w[..., None]], axis=2)
+    tau_nuw = ak_concatenate_safe([tau_nu[..., None], tau_w[..., None]], axis=2)
     # define w children
-    tau_w_children = ak.concatenate(
+    tau_w_children = ak_concatenate_safe(
         [tau_children[tau_rest_mask], ak.drop_none(ak.firsts(tau_children[tau_w_mask], axis=2).children)],
         axis=1,
     )

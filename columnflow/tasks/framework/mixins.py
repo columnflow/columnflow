@@ -25,6 +25,7 @@ from columnflow.histogramming import HistProducer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler, TaskArrayFunction
+from columnflow.config_util import expand_shift_sources
 from columnflow.util import maybe_import, DotDict, get_docs_url, get_code_url
 from columnflow.types import Callable
 
@@ -766,7 +767,13 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
 
     @classmethod
     def get_reducer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
-        return cls.get_array_function_dict(params)
+        d = cls.get_array_function_dict(params)
+
+        # special case: add selector shifts
+        if (selector_inst := params.get("selector_inst")):
+            d["selector_shifts"] = selector_inst.all_shifts
+
+        return d
 
     @classmethod
     def build_reducer_inst(
@@ -2035,6 +2042,7 @@ class CategoriesMixin(ConfigTask):
 
     default_categories = None
     allow_empty_categories = False
+    sort_categories = True
 
     @classmethod
     def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -2072,15 +2080,26 @@ class CategoriesMixin(ConfigTask):
             if not categories and not cls.allow_empty_categories:
                 raise ValueError(f"no categories found matching {params['categories']}")
 
+            # sort them
+            if cls.sort_categories:
+                categories = sorted(categories)
+
             params["categories"] = tuple(categories)
 
         return params
 
+    @classmethod
+    def _categories_repr(cls, categories: Sequence[str]) -> str:
+        # single category representation
+        if len(categories) == 1:
+            return cls.build_repr(categories[0])
+
+        # full representation
+        return cls.build_repr(categories, prepend_count=True)
+
     @property
     def categories_repr(self) -> str:
-        if len(self.categories) == 1:
-            return self.build_repr(self.categories[0])
-        return self.build_repr(self.categories, prepend_count=True)
+        return self._categories_repr(self.categories)
 
 
 class VariablesMixin(ConfigTask):
@@ -2392,12 +2411,30 @@ class ShiftSourcesMixin(ConfigTask):
     shift_sources = law.CSVParameter(
         default=(),
         description="comma-separated shift source names (without direction) or patterns to select; can also be the key "
-        "of a mapping defined in the 'shift_group' auxiliary data of the config; default: ()",
+        "of a mapping defined in the 'shift_group' auxiliary data of the config; empty default",
         brace_expand=True,
         parse_empty=True,
     )
 
     allow_empty_shift_sources = False
+    sort_shift_sources = True
+    enforce_nominal_shift_source = False
+    remove_nominal_shift_source = False
+
+    @classmethod
+    def modify_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().modify_param_values(params)
+
+        # enforce/remove nominal shift source
+        if params.get("shift_sources") is not None:
+            if cls.enforce_nominal_shift_source and "nominal" not in params["shift_sources"]:
+                params["shift_sources"] = ("nominal",) + tuple(params["shift_sources"])
+            elif cls.remove_nominal_shift_source and "nominal" in params["shift_sources"]:
+                params["shift_sources"] = tuple(
+                    source for source in params["shift_sources"] if source != "nominal"
+                )
+
+        return params
 
     @classmethod
     def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -2406,7 +2443,7 @@ class ShiftSourcesMixin(ConfigTask):
         # resolve shift sources
         if (container := cls._get_config_container(params)) and "shift_sources" in params:
             shifts = cls.find_config_objects(
-                names=cls.expand_shift_sources(params["shift_sources"]),
+                names=expand_shift_sources(params["shift_sources"]),
                 container=container,
                 object_cls=od.Shift,
                 groups_str="shift_groups",
@@ -2418,12 +2455,12 @@ class ShiftSourcesMixin(ConfigTask):
             if shifts:
                 sources = cls.reduce_shifts(shifts)
 
-                # # reduce shifts based on known shifts
+                # reduce shifts based on known shifts
                 if "known_shifts" not in params:
                     raise ValueError("known_shifts must be set before resolving shift sources")
                 sources = [
                     source for source in sources
-                    if (
+                    if source == "nominal" or (
                         f"{source}_up" in params["known_shifts"].upstream and
                         f"{source}_down" in params["known_shifts"].upstream
                     )
@@ -2433,14 +2470,14 @@ class ShiftSourcesMixin(ConfigTask):
             if not sources and not cls.allow_empty_shift_sources:
                 raise ValueError(f"no shifts found matching {params['shift_sources']}")
 
+            # potentially sort them
+            if cls.sort_shift_sources:
+                sources = sorted(sources)
+
             # store them
             params["shift_sources"] = tuple(sources)
 
         return params
-
-    @classmethod
-    def expand_shift_sources(cls, sources: Sequence[str] | set[str]) -> list[str]:
-        return sum(([f"{s}_up", f"{s}_down"] for s in sources), [])
 
     @classmethod
     def reduce_shifts(cls, shifts: Sequence[str] | set[str]) -> list[str]:
@@ -2449,15 +2486,41 @@ class ShiftSourcesMixin(ConfigTask):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        self.shifts = self.expand_shift_sources(self.shift_sources)
+        self.shifts = expand_shift_sources(self.shift_sources)
+
+    @classmethod
+    def _shift_sources_repr(
+        cls,
+        shift_sources: tuple[str, ...] | None,
+        enforce_nominal_shift_source: bool = False,
+    ) -> str:
+        if not shift_sources:
+            return "none"
+
+        # when nominal is the only source, but it is enforced to be present, also show "none" as in "no additional" ones
+        if enforce_nominal_shift_source and tuple(shift_sources) == ("nominal",):
+            return "none"
+
+        # sort shift sources, moving nominal to front if present, but dropping it if enforced
+        sorted_sources = sorted(shift_sources)
+        if "nominal" in sorted_sources:
+            sorted_sources.remove("nominal")
+            if not enforce_nominal_shift_source:
+                sorted_sources.insert(0, "nominal")
+
+        # simplified representation for single source
+        if len(sorted_sources) == 1:
+            return cls.build_repr(sorted_sources[0])
+
+        # full representation
+        return cls.build_repr(sorted_sources, prepend_count=True)
 
     @property
     def shift_sources_repr(self) -> str:
-        if not self.shift_sources:
-            return "none"
-        if len(self.shift_sources) == 1:
-            return self.build_repr(self.shift_sources[0])
-        return self.build_repr(sorted(self.shift_sources), prepend_count=True)
+        return self._shift_sources_repr(
+            self.shift_sources,
+            enforce_nominal_shift_source=self.enforce_nominal_shift_source,
+        )
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
@@ -2472,7 +2535,7 @@ class DatasetShiftSourcesMixin(ShiftSourcesMixin, DatasetTask):
     effective_shift = None
     allow_empty_shift = True
 
-    # allow empty sources, i.e., using only nominal
+    # allow empty sources
     allow_empty_shift_sources = True
 
 

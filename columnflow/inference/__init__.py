@@ -15,8 +15,7 @@ import yaml
 
 from columnflow.types import Generator, Callable, TextIO, Sequence, Any, Hashable, Type, T
 from columnflow.util import (
-    CachedDerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url,
-    freeze,
+    CachedDerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url, freeze,
 )
 
 
@@ -221,7 +220,7 @@ class FlowStrategy(enum.Enum):
 class InferenceModelMeta(CachedDerivableMeta):
 
     def _get_inst_cache_key(cls, args: tuple, kwargs: dict) -> Hashable:
-        config_insts = args[0]
+        config_insts = args[0] if args else kwargs.get("config_insts", [])
         config_names = tuple(sorted(config_inst.name for config_inst in config_insts))
         return freeze((cls, config_names, kwargs.get("inst_dict", {})))
 
@@ -601,11 +600,11 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
             ("shift_source", str(shift_source) if shift_source else None),
         ])
 
-    def __init__(self, config_insts: list[od.Config]) -> None:
+    def __init__(self, config_insts: list[od.Config] | None = None) -> None:
         super().__init__()
 
         # store attributes
-        self.config_insts = config_insts
+        self.config_insts = config_insts or []
 
         # temporary attributes for as long as we issue deprecation warnings
         self.__config_inst = None

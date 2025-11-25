@@ -12,7 +12,7 @@ import law
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set
-from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array, DotDict
+from columnflow.columnar_util import set_ak_column, DotDict
 from columnflow.types import Any
 
 np = maybe_import("numpy")
@@ -163,9 +163,6 @@ def btag_weights(
             f"known values are {','.join(known_log_modes)}",
         )
 
-    # get the total number of jets in the chunk
-    n_jets_all = ak.sum(ak.num(events.Jet, axis=1))
-
     # check that the b-tag score is not negative for all jets considered in the SF calculation
     discr = events.Jet[self.btag_config.discriminator]
     jets_negative_b_score = discr[jet_mask] < 0
@@ -193,14 +190,14 @@ def btag_weights(
         # set jet mask to False when b_score is negative
         jet_mask = (discr >= 0) & (True if jet_mask is Ellipsis else jet_mask)
 
-    # get flat inputs, evaluated at jet_mask
-    flavor = flat_np_view(events.Jet.hadronFlavour[jet_mask], axis=1)
-    abs_eta = flat_np_view(abs(events.Jet.eta[jet_mask]), axis=1)
-    pt = flat_np_view(events.Jet.pt[jet_mask], axis=1)
-    discr_flat = flat_np_view(discr[jet_mask], axis=1)
+    # get inputs, evaluated at jet_mask
+    flavor = events.Jet.hadronFlavour[jet_mask]
+    abs_eta = abs(events.Jet.eta[jet_mask])
+    pt = events.Jet.pt[jet_mask]
+    discr = discr[jet_mask]
 
     # fix edge cases where the discriminator is non-finite
-    discr_flat[~np.isfinite(discr_flat)] = 0
+    discr = ak.where(np.isfinite(discr), discr, 0.0)
 
     # helper to create and store the weight
     def add_weight(syst_name, syst_direction, column_name):
@@ -219,32 +216,19 @@ def btag_weights(
             "flavor": flavor[flavor_mask],
             "abseta": abs_eta[flavor_mask],
             "pt": pt[flavor_mask],
-            "discriminant": discr_flat[flavor_mask],
+            "discriminant": discr[flavor_mask],
             **self.btag_config.corrector_kwargs,
         }
 
-        # get the flat scale factors
-        sf_flat = self.btag_sf_corrector(*(
+        # get the scale factors
+        sf = self.btag_sf_corrector(*(
             variable_map[inp.name]
             for inp in self.btag_sf_corrector.inputs
         ))
 
-        # insert them into an array of ones whose length corresponds to the total number of jets
-        sf_flat_all = np.ones(n_jets_all, dtype=np.float32)
-        if jet_mask is Ellipsis:
-            indices = flavor_mask
-        else:
-            indices = flat_np_view(jet_mask)
-            if flavor_mask is not Ellipsis:
-                indices = np.where(indices)[0][flavor_mask]
-        sf_flat_all[indices] = sf_flat
-
-        # enforce the correct shape and create the product over all jets per event
-        sf = layout_ak_array(sf_flat_all, events.Jet.pt)
-
         if negative_b_score_action == "remove":
             # set the weight to 0 for jets with negative btag score
-            sf = ak.where(jets_negative_b_score, 0, sf)
+            sf = ak.where(jets_negative_b_score, 0.0, sf)
 
         weight = ak.prod(sf, axis=1, mask_identity=False)
 

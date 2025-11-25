@@ -559,15 +559,23 @@ class RemoteWorkflowMixin(AnalysisTask):
                 )
 
         # forward voms proxy
-        if voms and not law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False):
+        if voms:
+            # when skipping the check, still send it if the proxy exists and is valid, otherwise enforce it
+            skip_check = law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False)
             vomsproxy_file = law.wlcg.get_vomsproxy_file()
-            if not law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file):
-                raise Exception("voms proxy not valid, submission aborted")
-            config.input_files["vomsproxy_file"] = law.JobInputFile(
-                vomsproxy_file,
-                share=True,
-                render=False,
-            )
+            vomsproxy_exists = os.path.isfile(vomsproxy_file)
+            vomsproxy_valid = vomsproxy_exists and law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file)
+            if not skip_check:
+                if not vomsproxy_exists:
+                    raise Exception(f"voms proxy '{vomsproxy_file}' does not exist, submission aborted")
+                if not vomsproxy_valid:
+                    raise Exception(f"voms proxy '{vomsproxy_file}' not valid, submission aborted")
+            if vomsproxy_valid:
+                config.input_files["vomsproxy_file"] = law.JobInputFile(
+                    vomsproxy_file,
+                    share=True,
+                    render=False,
+                )
 
         # forward kerberos proxy
         if kerberos and "KRB5CCNAME" in os.environ:
@@ -664,6 +672,11 @@ _default_htcondor_disk = law.util.parse_bytes(
     input_unit="GB",
     unit="GB",
 )
+_default_htcondor_runtime = law.util.parse_duration(
+    law.config.get_expanded("analysis", "htcondor_runtime", 3.0),
+    input_unit="h",
+    unit="h",
+)
 
 
 class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
@@ -673,11 +686,11 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         significant=False,
         description="transfer job logs to the output directory; default: True",
     )
-    max_runtime = law.DurationParameter(
-        default=2.0,
+    htcondor_runtime = law.DurationParameter(
+        default=_default_htcondor_runtime,
         unit="h",
         significant=False,
-        description="maximum runtime; default unit is hours; default: 2",
+        description=f"maximum runtime; default unit is hours; default: {_default_htcondor_runtime}",
     )
     htcondor_logs = luigi.BoolParameter(
         default=False,
@@ -731,12 +744,12 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
 
     # parameters that should not be passed to a workflow required upstream
     exclude_params_req_set = {
-        "max_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_memory", "htcondor_disk",
+        "htcondor_runtime", "htcondor_cpus", "htcondor_gpus", "htcondor_memory", "htcondor_disk",
     }
 
     # parameters that should not be passed from workflow to branches
     exclude_params_branch = {
-        "max_runtime", "htcondor_logs", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
+        "htcondor_runtime", "htcondor_logs", "htcondor_cpus", "htcondor_gpus", "htcondor_memory",
         "htcondor_disk", "htcondor_flavor", "htcondor_share_software",
     }
 
@@ -766,7 +779,7 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         self.bundle_repo_req = self.reqs.BundleRepo.req(self)
 
         # add scheduler message handlers
-        self.add_message_handler("max_runtime")
+        self.add_message_handler("htcondor_runtime")
         self.add_message_handler("htcondor_logs")
         self.add_message_handler("htcondor_cpus")
         self.add_message_handler("htcondor_gpus")
@@ -846,8 +859,8 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
                 config.custom_content.append(("Request_OpSysAndVer", "\"RedHat9\""))
 
         # maximum runtime, compatible with multiple batch systems
-        if self.max_runtime is not None and self.max_runtime > 0:
-            max_runtime = int(math.floor(self.max_runtime * 3600)) - 1
+        if self.htcondor_runtime is not None and self.htcondor_runtime > 0:
+            max_runtime = int(math.floor(self.htcondor_runtime * 3600)) - 1
             config.custom_content.append(("+MaxRuntime", max_runtime))
             config.custom_content.append(("+RequestRuntime", max_runtime))
 
@@ -901,6 +914,11 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
 
 _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "maxwell")
 _default_slurm_partition = law.config.get_expanded("analysis", "slurm_partition", "cms-uhh")
+_default_slurm_runtime = law.util.parse_duration(
+    law.config.get_expanded("analysis", "slurm_runtime", 3.0),
+    input_unit="h",
+    unit="h",
+)
 
 
 class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
@@ -910,11 +928,11 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
         significant=False,
         description="transfer job logs to the output directory; default: True",
     )
-    max_runtime = law.DurationParameter(
-        default=2.0,
+    slurm_runtime = law.DurationParameter(
+        default=_default_slurm_runtime,
         unit="h",
         significant=False,
-        description="maximum runtime; default unit is hours; default: 2",
+        description=f"maximum runtime; default unit is hours; default: {_default_slurm_runtime}",
     )
     slurm_partition = luigi.Parameter(
         default=_default_slurm_partition,
@@ -930,10 +948,10 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
     )
 
     # parameters that should not be passed to a workflow required upstream
-    exclude_params_req_set = {"max_runtime"}
+    exclude_params_req_set = {"slurm_runtime"}
 
     # parameters that should not be passed from workflow to branches
-    exclude_params_branch = {"max_runtime", "slurm_partition", "slurm_flavor"}
+    exclude_params_branch = {"slurm_runtime", "slurm_partition", "slurm_flavor"}
 
     # mapping of environment variables to render variables that are forwarded
     slurm_forward_env_variables = {
@@ -985,9 +1003,9 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
         )
 
         # set job time
-        if self.max_runtime is not None:
+        if self.slurm_runtime is not None and self.slurm_runtime > 0:
             job_time = law.util.human_duration(
-                seconds=int(math.floor(self.max_runtime * 3600)) - 1,
+                seconds=int(math.floor(self.slurm_runtime * 3600)) - 1,
                 colon_format=True,
             )
             config.custom_content.append(("time", job_time))

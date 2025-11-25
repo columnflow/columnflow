@@ -303,7 +303,20 @@ class DatacardWriter(object):
                     if param_obj.effect_precision <= 0
                     else param_obj.effect_precision
                 )
-                rnd = lambda f: round(f, effect_precision)
+
+                def rnd(f: float | int) -> float:
+                    r = round(f, effect_precision)
+
+                    # warn in case the precision is too low for the effect
+                    if abs(1.0 - f) < 10**(-effect_precision):
+                        logger.warning(
+                            f"the effect value '{f}' is rounded to '{r}' which probably leads to loosing its intended "
+                            f"impact; consider choosing an effect precision higher than the current value of "
+                            f"{effect_precision} for the paremeter '{param_name}' acting on process '{proc_name}' in "
+                            f"category '{cat_name}'",
+                        )
+
+                    return r
 
                 # update and transform effects
                 if param_obj.type.is_rate:
@@ -553,17 +566,22 @@ class DatacardWriter(object):
                 return
 
             # warn in case of flow content
-            if cat_obj.flow_strategy == FlowStrategy.warn:
+            if cat_obj.flow_strategy in {FlowStrategy.warn, FlowStrategy.move}:
                 if underflow[0]:
-                    logger.warning(
+                    logger.warning_once(
+                        f"underflow_warn_{self.inference_model_inst.cls_name}_{cat_obj.name}_{name}",
                         f"underflow content detected in category '{cat_obj.name}' for histogram "
                         f"'{name}' ({underflow[0] / view.value.sum() * 100:.1f}% of integral)",
                     )
                 if overflow[0]:
-                    logger.warning(
+                    logger.warning_once(
+                        f"overflow_warn_{self.inference_model_inst.cls_name}_{cat_obj.name}_{name}",
                         f"overflow content detected in category '{cat_obj.name}' for histogram "
                         f"'{name}' ({overflow[0] / view.value.sum() * 100:.1f}% of integral)",
                     )
+
+            # stop here in case of warn-only
+            if cat_obj.flow_strategy == FlowStrategy.warn:
                 return
 
             # here, we can already remove overflow values
@@ -610,7 +628,7 @@ class DatacardWriter(object):
                 # flat list of hists for configs that contribute to this category
                 hists: list[dict[Hashable, hist.Hist]] = [
                     hd for config_name, hd in config_hists.items()
-                    if config_name in cat_obj.config_data
+                    if not cat_obj.config_data or config_name in cat_obj.config_data
                 ]
                 if not hists:
                     continue
@@ -823,23 +841,25 @@ class DatacardWriter(object):
                 if not h_data:
                     proc_str = ",".join(map(str, cat_obj.data_from_processes))
                     raise Exception(f"none of requested processes '{proc_str}' found to create fake data")
-                h_data = sum_hists(h_data)
                 data_name = data_pattern.format(category=cat_name)
-                fill_empty(cat_obj, h_data)
+                h_data = sum_hists(h_data)
                 handle_flow(cat_obj, h_data, data_name)
+                h_data.view().variance = h_data.view().value
                 out_file[data_name] = h_data
                 _rates["data"] = float(h_data.sum().value)
 
-            elif any(cd.data_datasets for cd in cat_obj.config_data.values()):
+            elif proc_hists.get("data"):
+                # real data
                 h_data = []
-                for config_name, config_data in cat_obj.config_data.items():
-                    if "data" not in proc_hists or config_name not in proc_hists["data"]:
+                for config_name, config_hists in proc_hists["data"].items():
+                    if cat_obj.config_data and config_name not in cat_obj.config_data:
                         raise Exception(
-                            f"the inference model '{self.inference_model_inst.cls_name}' is configured to use real "
-                            f"data for config '{config_name}' in category '{cat_name}' but no histogram received at "
-                            f"entry ['data']['{config_name}']: {proc_hists}",
+                            f"received real data in datacard category '{cat_name}' for config '{config_name}', but the "
+                            f"inference model '{self.inference_model_inst.cls_name}' is not configured to use it in "
+                            f"the config_data for that config; configured config_names are "
+                            f"'{','.join(cat_obj.config_data.keys())}'",
                         )
-                    h_data.append(proc_hists["data"][config_name]["nominal"])
+                    h_data.append(config_hists["nominal"])
 
                 # simply save the data histogram that was already built from the requested datasets
                 h_data = sum_hists(h_data)
@@ -847,6 +867,9 @@ class DatacardWriter(object):
                 handle_flow(cat_obj, h_data, data_name)
                 out_file[data_name] = h_data
                 _rates["data"] = h_data.sum().value
+
+            else:
+                logger.warning(f"neither real data found nor fake data created in category '{cat_name}'")
 
         return (rates, effects, nom_pattern_comb, syst_pattern_comb)
 

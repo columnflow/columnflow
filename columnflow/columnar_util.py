@@ -965,7 +965,7 @@ def update_ak_array(
                     ak_array = set_ak_column(
                         ak_array,
                         route,
-                        ak.concatenate((route.apply(ak_array), route.apply(other)), axis=-1),
+                        ak_concatenate_safe((route.apply(ak_array), route.apply(other)), axis=-1),
                     )
                 elif do_add(route):
                     # add and reassign
@@ -1335,12 +1335,22 @@ def layout_ak_array(data_array: np.array | ak.Array, layout_array: ak.Array) -> 
     return ak.unflatten(ak.flatten(data_array, axis=None), ak.num(layout_array, axis=1), axis=0)
 
 
-def flat_np_view(ak_array: ak.Array, axis: int | None = None) -> np.array:
+def flat_np_view(ak_array: ak.Array, axis: int | None = None, copy: bool = False) -> np.array:
     """
     Takes an *ak_array* and returns a fully flattened numpy view. The flattening is applied along
     *axis*. See *ak.flatten* for more info.
+
+    If *copy* is *True*, a full copy of the numpy array is returned instead of a view.
+
+    .. note::
+
+        Note that the returned numpy array is a view and in-place value assignments will not necessarily be propagated
+        back to the underlying awkward array. The conditions under which propagation can occur are limited: the
+        underlying array should not be the immediate results of a masked array and it should not have optional types.
+        However, this is implementation dependent and might change with future releases of awkward.
     """
-    return np.asarray(ak.flatten(ak_array, axis=axis))
+    np_func = np.array if copy else np.asarray
+    return np_func(ak.flatten(ak_array, axis=axis))
 
 
 def ak_copy(ak_array: ak.Array) -> ak.Array:
@@ -1350,6 +1360,24 @@ def ak_copy(ak_array: ak.Array) -> ak.Array:
     removed.
     """
     return layout_ak_array(np.array(ak.flatten(ak_array)), ak_array)
+
+
+def ak_concatenate_safe(arrays: Sequence[ak.Array], *args, **kwargs) -> ak.Array:
+    """
+    Safe version of ``ak.concatenate`` that ensures that all arrays in *arrays* are materialized and that their masks
+    have been fully applied.
+
+    .. note::
+
+        This is necessary to avoid concatenation of masked arrays whose original data is still referrenced internally by
+        awkward and that would be concatenated as well, leading to needlessly high memory consumption.
+
+    :param arrays: The arrays to concatenate.
+    :param args: Additional positional arguments forwarded to ``ak.concatenate``.
+    :param kwargs: Additional keyword arguments forwarded to ``ak.concatenate``.
+    :return: The concatenated array.
+    """
+    return ak.concatenate(list(map(ak.to_packed, arrays)), *args, **kwargs)
 
 
 class RouteFilter(object):
@@ -2213,6 +2241,30 @@ class ArrayFunction(Derivable):
 
 # shorthand
 deferred_column = ArrayFunction.DeferredColumn.deferred_column
+
+
+@deferred_column
+def IF_DATA(self: ArrayFunction.DeferredColumn, func: ArrayFunction) -> Any | set[Any]:
+    return self.get() if func.dataset_inst.is_data else None
+
+
+@deferred_column
+def IF_MC(self: ArrayFunction.DeferredColumn, func: ArrayFunction) -> Any | set[Any]:
+    return self.get() if func.dataset_inst.is_mc else None
+
+
+def IF_DATASET_HAS_TAG(*args, negate: bool = False, **kwargs) -> ArrayFunction.DeferredColumn:
+    @deferred_column
+    def deferred(
+        self: ArrayFunction.DeferredColumn,
+        func: ArrayFunction,
+    ) -> Any | set[Any]:
+        return self.get() if func.dataset_inst.has_tag(*args, **kwargs) is not negate else None
+
+    return deferred
+
+
+IF_DATASET_NOT_HAS_TAG = partial(IF_DATASET_HAS_TAG, negate=True)
 
 
 def tagged_column(
@@ -3231,7 +3283,7 @@ class DaskArrayReader(object):
             parts.append(arr[part_start:part_stop])
 
         # construct the full array
-        arr = parts[0] if len(parts) == 1 else ak.concatenate(parts, axis=0)
+        arr = ak.to_packed(parts[0]) if len(parts) == 1 else ak_concatenate_safe(parts, axis=0)
 
         # cleanup
         del parts
@@ -3353,7 +3405,7 @@ class ChunkedParquetReader(object):
                 self.group_cache[g].chunks.remove(chunk_index)
 
                 if self.group_cache[g].array is None:
-                    arr = ak.from_parquet(self.path, row_groups=[g], **self.open_options)
+                    arr = law.awkward.from_parquet(self.path, row_groups=[g], **self.open_options)
                     # add to cache when there is a chunk left that will need it
                     if self.group_cache[g].chunks:
                         self.group_cache[g].array = arr
@@ -3370,7 +3422,7 @@ class ChunkedParquetReader(object):
             parts.append(arr[part_start:part_stop])
 
         # construct the full array
-        arr = parts[0] if len(parts) == 1 else ak.concatenate(parts, axis=0)
+        arr = ak.to_packed(parts[0]) if len(parts) == 1 else ak_concatenate_safe(parts, axis=0)
 
         # cleanup
         del parts

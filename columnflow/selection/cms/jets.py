@@ -11,7 +11,7 @@ import math
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, flat_np_view, has_ak_column, optional_column as optional
+from columnflow.columnar_util import set_ak_column, flat_np_view, layout_ak_array, has_ak_column, optional_column as optional
 from columnflow.types import Any
 
 np = maybe_import("numpy")
@@ -126,9 +126,10 @@ def jet_veto_map(
         inputs = [variable_map[inp.name] for inp in self.veto_map.inputs]
         veto_mask_sel = veto_mask_sel & ~(self.veto_map(*inputs) != 0)
 
-    # insert back into full jet mask in-place
-    flat_jet_mask = flat_np_view(jet_mask)
+    # combine again with jet mask
+    flat_jet_mask = flat_np_view(jet_mask, copy=True)
     flat_jet_mask[flat_jet_mask] = ak.flatten(veto_mask_sel)
+    jet_mask = layout_ak_array(flat_jet_mask, events.Jet)
 
     # store the per-jet veto mask for further processing
     # note: to be consistent with conventions, the exported values should be True for passing jets
