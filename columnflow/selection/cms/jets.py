@@ -11,7 +11,7 @@ import math
 
 from columnflow.selection import Selector, SelectionResult, selector
 from columnflow.util import maybe_import, load_correction_set, DotDict
-from columnflow.columnar_util import set_ak_column, flat_np_view, optional_column as optional
+from columnflow.columnar_util import set_ak_column, flat_np_view, has_ak_column, optional_column as optional
 from columnflow.types import Any
 
 np = maybe_import("numpy")
@@ -23,7 +23,7 @@ logger = law.logger.get_logger(__name__)
 
 @selector(
     uses={
-        "Jet.{pt,eta,phi,mass,chEmEF}", optional("Jet.puId"), optional("jetId"),
+        "Jet.{pt,eta,phi,mass,chEmEF}", optional("Jet.puId"), optional("Jet.jetId"),
         "Muon.{pt,eta,phi,mass,isPFcand}",
     },
     produces={"Jet.veto_map_mask"},
@@ -56,6 +56,11 @@ def jet_veto_map(
     """
     jet = events.Jet
     muon = events.Muon[events.Muon.isPFcand]
+
+    if not has_ak_column(events, "Jet.jetId"):
+        raise ValueError(
+            "'Jet.jetId' column is missing. Starting from Nanov15 it is required to create the jetId column manually.",
+        )
 
     # loose jet selection
     jet_mask = (

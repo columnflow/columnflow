@@ -28,7 +28,7 @@ class BTagSFConfig:
     jec_sources: list[str]
     discriminator: str = ""  # when empty, set in post init based on correction set
     corrector_kwargs: dict[str, Any] = field(default_factory=dict)
-    systs: list[str] = field(default_factory=list)
+    systs: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         cs = self.correction_set.lower()
@@ -114,6 +114,12 @@ def btag_weights(
             correction_set="deepJet_shape",
             jec_sources=["Absolute", "FlavorQCD", ...],
             discriminator="btagDeepFlavB",
+            systs={
+                    "hf": "hf",
+                    "lf": "lf",
+                    "hfstats1": "hfstats1",
+                    ...
+                },,
             corrector_kwargs={...},
         )
 
@@ -306,18 +312,6 @@ def btag_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
     self.shift_is_known_jec_source = (
         self.jec_source and btag_sf_jec_source in self.btag_config.jec_sources
     )
-
-    # names of method-intrinsic uncertainties, mapped to how they are namend in produced columns
-    # self.btag_uncs = {
-    #     "hf": "hf",
-    #     "lf": "lf",
-    #     "hfstats1": "hfstats1",
-    #     "hfstats2": "hfstats2",
-    #     "lfstats1": "lfstats1",
-    #     "lfstats2": "lfstats2",
-    #     "cferr1": "cferr1",
-    #     "cferr2": "cferr2",
-    # }
 
     # add uncertainty sources of the method itself
     if shift_inst.is_nominal:
