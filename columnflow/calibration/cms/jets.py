@@ -625,6 +625,7 @@ def jec_setup(
                         f"auxiliary is set for dataset {self.dataset_inst.name}.",
                     )
                 jec_era = "Run" + era
+
             jme_key = f"{jec.campaign}_{jec_era}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
         elif is_data:
             jme_key = f"{jec.campaign}_{jec.version}_DATA_{{name}}_{jec.jet_type}"
