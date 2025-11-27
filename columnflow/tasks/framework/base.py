@@ -197,7 +197,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             not law.parser.global_cmdline_values().get(f"{cls.task_family}_version") and
             (
                 cls.task_family != inst.task_family or
-                freeze(cls.get_config_lookup_keys(params)) != freeze(inst.get_config_lookup_keys(inst))
+                (
+                    freeze(cls.get_config_lookup_keys(params, significant=True)) !=
+                    freeze(inst.get_config_lookup_keys(inst, significant=True))
+                )
             )
         ):
             default_version = cls.get_default_version(inst, params)
@@ -352,12 +355,14 @@ class AnalysisTask(BaseTask, law.SandboxTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: AnalysisTask | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
         """
         Returns a dictionary with keys that can be used to lookup state specific values in a config or dictionary, such
         as default task versions or output locations.
 
         :param inst_or_params: The tasks instance or its parameters.
+        :param significant: Whether only significant keys should be returned.
         :return: A dictionary with keys that can be used for nested lookup.
         """
         keys = law.util.InsertableDict()
@@ -1492,8 +1497,9 @@ class ConfigTask(AnalysisTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: ConfigTask | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the config name in front of the task family
         config = (
@@ -1673,8 +1679,9 @@ class ShiftTask(ConfigTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: ShiftTask | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the (global) shift name
         shift = (
@@ -1780,8 +1787,9 @@ class DatasetTask(ShiftTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: DatasetTask | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the dataset name before the shift name
         dataset = (

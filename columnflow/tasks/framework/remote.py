@@ -391,17 +391,19 @@ class RemoteWorkflowMixin(AnalysisTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: RemoteWorkflowMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the pilot flag
-        pilot = (
-            inst_or_params.get("pilot")
-            if isinstance(inst_or_params, dict)
-            else getattr(inst_or_params, "pilot", None)
-        )
-        if pilot not in (law.NO_STR, None, ""):
-            keys["pilot"] = f"pilot_{pilot}"
+        if not significant:
+            pilot = (
+                inst_or_params.get("pilot")
+                if isinstance(inst_or_params, dict)
+                else getattr(inst_or_params, "pilot", None)
+            )
+            if pilot not in (law.NO_STR, None, ""):
+                keys["pilot"] = f"pilot_{pilot}"
 
         return keys
 

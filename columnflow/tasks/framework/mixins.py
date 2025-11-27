@@ -97,8 +97,9 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: CalibratorClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the calibrator name
         calibrator = (
@@ -314,8 +315,9 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: CalibratorClassesMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the calibrator names
         calibrators = (
@@ -500,8 +502,9 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: SelectorClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the selector name
         selector = (
@@ -716,8 +719,9 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: ReducerClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the reducer name
         reducer = (
@@ -915,8 +919,9 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: ProducerClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the producer name
         producer = (
@@ -1132,8 +1137,9 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: ProducerClassesMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the producer names
         producers = (
@@ -1350,8 +1356,9 @@ class MLModelMixinBase(ConfigTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: MLModelMixinBase | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the ml model name
         ml_model = (
@@ -1695,8 +1702,9 @@ class MLModelsMixin(ConfigTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: MLModelsMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the ml model names
         ml_models = (
@@ -1760,8 +1768,9 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: HistProducerClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the hist producer name
         producer = (
