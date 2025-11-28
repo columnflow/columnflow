@@ -884,6 +884,9 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         if self.htcondor_disk is not None and self.htcondor_disk > 0:
             config.custom_content.append(("RequestDisk", f"{self.htcondor_disk} Gb"))
 
+        # remove held jobs periodically
+        config.custom_content.append(("periodic_remove", "(HoldReason =!= undefined)"))
+
         # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
         if self.htcondor_flavor not in ("", law.NO_STR):
@@ -912,6 +915,10 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         info = super().htcondor_destination_info(info)
         info = self.common_destination_info(info)
         return info
+
+    def htcondor_post_poll_callback(self, success, duration):
+        from law.workflow.remote import log_job_memory_summary
+        log_job_memory_summary(self.workflow_proxy.job_data, logger=self.logger.info)
 
 
 _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "maxwell")
