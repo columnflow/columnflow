@@ -74,8 +74,12 @@ def fill_hist(
         flat_values = flat_np_view(data[ax.name])
         right_egde_mask = flat_values == ax.edges[-1]
         if np.any(right_egde_mask):
-            flat_values = np.where(right_egde_mask, flat_values - ax.widths[-1] * 1e-5, flat_values)
-            data[ax.name] = layout_ak_array(flat_values, data[ax.name])
+            flat_values = ak.where(right_egde_mask, flat_values - ax.widths[-1] * 1e-5, flat_values)
+            data[ax.name] = (
+                flat_values
+                if data[ax.name].ndim == 1
+                else layout_ak_array(flat_values, data[ax.name])
+            )
 
     # check if conversion to records is needed
     arr_types = (ak.Array, np.ndarray)
