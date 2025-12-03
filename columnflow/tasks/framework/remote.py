@@ -918,7 +918,7 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
 
     def htcondor_post_poll_callback(self, success, duration):
         from law.workflow.remote import log_job_memory_summary
-        log_job_memory_summary(self.workflow_proxy.job_data, logger=self.logger.info)
+        log_job_memory_summary(self.workflow_proxy.job_data, log=self.logger.info)
 
 
 _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "maxwell")
