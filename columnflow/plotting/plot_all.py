@@ -390,19 +390,20 @@ def plot_all(
         # check if required fields are present
         if "method" not in cfg:
             raise ValueError(f"no method given in plot_cfg entry {key}")
-        if "hist" not in cfg:
-            raise ValueError(f"no histogram(s) given in plot_cfg entry {key}")
 
         # invoke the method
         method = cfg["method"]
-        h = cfg["hist"]
-        plot_methods[method](ax, h, **cfg.get("kwargs", {}))
+        method_func = method if callable(method) else plot_methods[method]
+        args = (ax, cfg["hist"]) if "hist" in cfg else (ax,)
+        method_func(*args, **cfg.get("kwargs", {}))
 
         # repeat for ratio axes if configured
         if not skip_ratio and "ratio_kwargs" in cfg:
             # take ratio_method if the ratio plot requires a different plotting method
             method = cfg.get("ratio_method", method)
-            plot_methods[method](rax, h, **cfg.get("ratio_kwargs", {}))
+            method_func = method if callable(method) else plot_methods[method]
+            args = (rax, cfg["hist"]) if "hist" in cfg else (rax,)
+            method_func(*args, **cfg.get("ratio_kwargs", {}))
 
     # axis styling
     ax_kwargs = {
