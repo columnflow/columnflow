@@ -139,7 +139,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "dy_weight_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/external_files/DY_pTll_weights_v2.json.gz",  # noqa
+            "dy_weight_sf": "/afs/cern.ch/work/m/mrieger/public/mirrors/external_files/hbt_corrections.json.gz",  # noqa
         })
 
     *get_dy_weight_file* can be adapted in a subclass in case it is stored differently in the external files.
@@ -170,19 +170,19 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
     if callable(self.dy_config.get_njets):
         variable_map["njets"] = self.dy_config.get_njets(self, events)
     if callable(self.dy_config.get_nbtags):
-        variable_map["nbtags"] = self.dy_config.get_nbtags(self, events)
-        # for compatibility
-        variable_map["ntags"] = variable_map["nbtags"]
+        variable_map["ntags"] = self.dy_config.get_nbtags(self, events)
 
     # initializing the list of weight variations (called syst in the dy files)
-    systs = [("nom", "")]
+    systs = []
 
     # add specific uncertainties or additional systs
     if self.dy_config.unc_correction:
+        systs.append(("nom", ""))
         for i in range(self.n_unc):
             for direction in ["up", "down"]:
                 systs.append((f"{direction}{i + 1}", f"_{direction}{i + 1}"))
     elif self.dy_config.systs:
+        systs.append(("nominal", ""))
         for syst in self.dy_config.systs:
             systs.append((syst, f"_{syst}"))
 
