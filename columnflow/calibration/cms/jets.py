@@ -36,6 +36,7 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 def get_evaluators(
     correction_set: correctionlib.highlevel.CorrectionSet,
     names: list[str],
+    attrs: list[dict[str, Any]] | None = None,
 ) -> list[Any]:
     """
     Helper function to get a list of correction evaluators from a
@@ -45,6 +46,7 @@ def get_evaluators(
 
     :param correction_set: evaluator provided by :external+correctionlib:doc:`index`
     :param names: List of names of corrections to be applied
+    :param: attrs: List of dictionaries containing attributes to be added to each evaluator.
     :raises RuntimeError: If a requested correction in *names* is not available
     :return: List of compounded corrections, see
         :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
@@ -59,13 +61,27 @@ def get_evaluators(
             f"\n  - {name}" for name in sorted(available_keys)
         ))
 
+    if attrs and len(attrs) != len(names):
+        raise ValueError(
+            f"number of attribute dictionaries ({len(attrs)}) does not match number of evaluator names ({len(attrs)})",
+        )
+
     # retrieve the evaluators
-    return [
-        correction_set.compound[name]
-        if name in correction_set.compound
-        else correction_set[name]
-        for name in names
-    ]
+    evaluators = []
+    for i, name in enumerate(names):
+        e = (
+            correction_set.compound[name]
+            if name in correction_set.compound
+            else correction_set[name]
+        )
+        # attach attributes if given
+        if attrs:
+            for attr, value in attrs[i].items():
+                setattr(e, attr, value)
+        # save
+        evaluators.append(e)
+
+    return evaluators
 
 
 def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
@@ -251,6 +267,8 @@ def get_jec_config_default(self: Calibrator) -> DotDict:
     get_jec_file=get_jerc_file_default,
     # function to determine the jec configuration dict
     get_jec_config=get_jec_config_default,
+    # function to update variables before jec corrector call
+    update_corrector_variables=(lambda self, corrector, variables: variables),
 )
 def jec(
     self: Calibrator,
@@ -347,13 +365,15 @@ def jec(
         # apply all correctors sequentially, updating the pt each time
         full_correction = ak.ones_like(pt, dtype=np.float32)
         for corrector in self.evaluators[evaluator_key]:
+            # optionally update variables for this corrector call
+            _variable_map = variable_map
+            if callable(self.update_corrector_variables):
+                _variable_map = variable_map.copy()
+                _variable_map = self.update_corrector_variables(corrector, _variable_map)
             # determine correct inputs (change depending on corrector)
-            inputs = [
-                variable_map[inp.name]
-                for inp in corrector.inputs
-            ]
+            inputs = [_variable_map[inp.name] for inp in corrector.inputs]
             correction = ak_evaluate(corrector, *inputs)
-            # update pt for subsequent correctors
+            # update pt in original variable map for subsequent correctors
             variable_map["JetPt"] = variable_map["JetPt"] * correction
             full_correction = full_correction * correction
 
@@ -640,8 +660,16 @@ def jec_setup(
 
     # store the evaluators
     self.evaluators = {
-        "jec": get_evaluators(correction_set, jec_keys),
-        "jec_subset_type1_met": get_evaluators(correction_set, jec_keys_subset_type1_met),
+        "jec": get_evaluators(
+            correction_set,
+            jec_keys,
+            attrs=[{"level": level} for level in jec_cfg.levels],
+        ),
+        "jec_subset_type1_met": get_evaluators(
+            correction_set,
+            jec_keys_subset_type1_met,
+            attrs=[{"level": level} for level in jec_cfg.levels_for_type1_met],
+        ),
         "junc": dict(zip(self.uncertainty_sources, get_evaluators(correction_set, junc_keys))),
     }
 
