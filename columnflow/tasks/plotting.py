@@ -51,6 +51,11 @@ class _PlotVariablesBase(
 
 class PlotVariablesBase(_PlotVariablesBase):
 
+    multi_variable = luigi.BoolParameter(
+        default=False,
+        description="whether a single plot for all variables should be created; this requires that the used plot "
+        "function accepts a nested dictionary with all variable and process histograms as an input; default: False",
+    )
     bypass_branch_requirements = luigi.BoolParameter(
         default=False,
         description="whether to skip branch requirements and only use that of the workflow; default: False",
@@ -72,11 +77,12 @@ class PlotVariablesBase(_PlotVariablesBase):
         return parts
 
     def create_branch_map(self):
-        return [
-            DotDict({"category": cat_name, "variable": var_name})
-            for cat_name in sorted(self.categories)
-            for var_name in sorted(self.variables)
-        ]
+        keys = ["category"]
+        seqs = [self.categories]
+        if not self.multi_variable:
+            keys.append("variable")
+            seqs.append(self.variables)
+        return [DotDict(zip(keys, vals)) for vals in itertools.product(*seqs)]
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -172,148 +178,149 @@ class PlotVariablesBase(_PlotVariablesBase):
         import hist
 
         # prepare other config objects
-        variable_tuple = self.variable_tuples[self.branch_data.variable]
-        variable_insts = [
-            self.config_inst.get_variable(var_name)
-            for var_name in variable_tuple
-        ]
+        variables = list(self.variables) if self.multi_variable else [self.branch_data.variable]
         plot_shifts = self.get_plot_shifts()
         plot_shift_names = set(shift_inst.name for shift_inst in plot_shifts)
 
         # get assignment of processes to datasets and shifts
         config_process_map, process_shift_map = self.get_config_process_map()
 
-        # histogram data per process copy
-        hists: dict[od.Config, dict[od.Process, hist.Hist]] = {}
-        with self.publish_step(f"plotting {self.branch_data.variable} in {self.branch_data.category}"):
+        # read histograms per variable name, config and process
+        hists: dict[str, dict[od.Config, dict[od.Process, hist.Hist]]] = {var_name: {} for var_name in variables}
+        with self.publish_step(f"plotting {','.join(variables)} in {self.branch_data.category}"):
             inputs = self.input() or self.workflow_input().merged_hists
-            for i, (config, dataset_dict) in enumerate(inputs.items()):
-                config_inst = self.config_insts[i]
-                category_inst = config_inst.get_category(self.branch_data.category)
-                leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
+            for var_name in variables:
+                for i, (config, dataset_dict) in enumerate(inputs.items()):
+                    config_inst = self.config_insts[i]
+                    category_inst = config_inst.get_category(self.branch_data.category)
+                    leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
-                hists_config = {}
+                    hists_config = {}
 
-                for dataset, inps in dataset_dict.items():
-                    dataset_inst = config_inst.get_dataset(dataset)
+                    for dataset, inps in dataset_dict.items():
+                        dataset_inst = config_inst.get_dataset(dataset)
 
-                    # load input histograms, summing over outputs of histogram tasks
-                    h_in = sum_hists([
-                        inp["hists"].targets[self.branch_data.variable].load(formatter="pickle")
-                        for inp in inps["collection"].targets.values()
-                    ])
+                        # load input histograms, summing over outputs of histogram tasks
+                        h_in = sum_hists([
+                            inp["hists"].targets[var_name].load(formatter="pickle")
+                            for inp in inps["collection"].targets.values()
+                        ])
 
-                    # loop and extract one histogram per process
-                    for process_inst, process_info in config_process_map[config_inst].items():
-                        if dataset_inst not in process_info["dataset_proc_name_map"].keys():
-                            continue
+                        # loop and extract one histogram per process
+                        for process_inst, process_info in config_process_map[config_inst].items():
+                            if dataset_inst not in process_info["dataset_proc_name_map"].keys():
+                                continue
 
-                        # select processes and reduce axis
-                        h = h_in[{
-                            "process": [
-                                hist.loc(proc_name)
-                                for proc_name in process_info["dataset_proc_name_map"][dataset_inst]
-                                if proc_name in h_in.axes["process"]
-                            ],
-                        }]
-                        h = h[{"process": sum}]
+                            # select processes and reduce axis
+                            h = h_in[{
+                                "process": [
+                                    hist.loc(proc_name)
+                                    for proc_name in process_info["dataset_proc_name_map"][dataset_inst]
+                                    if proc_name in h_in.axes["process"]
+                                ],
+                            }]
+                            h = h[{"process": sum}]
 
-                        # create expected shift bins and fill them with the nominal histogram
-                        expected_shifts = plot_shift_names & process_shift_map[process_inst.name]
-                        add_missing_shifts(h, expected_shifts, str_axis="shift", nominal_bin="nominal")
+                            # create expected shift bins and fill them with the nominal histogram
+                            expected_shifts = plot_shift_names & process_shift_map[process_inst.name]
+                            add_missing_shifts(h, expected_shifts, str_axis="shift", nominal_bin="nominal")
 
-                        # add the histogram
-                        if process_inst in hists_config:
-                            hists_config[process_inst] += h
-                        else:
-                            hists_config[process_inst] = h
+                            # add the histogram
+                            if process_inst in hists_config:
+                                hists_config[process_inst] += h
+                            else:
+                                hists_config[process_inst] = h
 
-                    # free memory
-                    del h_in
+                        # free memory
+                        del h_in
 
-                # after merging all processes, sort the histograms by process order and store them
-                hists[config_inst] = {
-                    proc_inst: hists_config[proc_inst]
-                    for proc_inst in sorted(
-                        hists_config.keys(), key=list(config_process_map[config_inst].keys()).index,
-                    )
-                }
+                    # after merging all processes, sort the histograms by process order and store them
+                    hists[var_name][config_inst] = {
+                        proc_inst: hists_config[proc_inst]
+                        for proc_inst in sorted(
+                            hists_config.keys(),
+                            key=list(config_process_map[config_inst].keys()).index,
+                        )
+                    }
 
-                # there should be hists to plot
-                if not hists:
-                    raise Exception(
-                        "no histograms found to plot; possible reasons:\n"
-                        "  - requested variable requires columns that were missing during histogramming\n"
-                        "  - selected --processes did not match any value on the process axis of the input histogram",
-                    )
+                    # there should be hists to plot
+                    if not hists:
+                        raise Exception(
+                            "no histograms found to plot; possible reasons:\n"
+                            "  - requested variable requires columns that were missing during histogramming\n"
+                            "  - selected --processes did not match any value on the input histogram process axis",
+                        )
 
-            # update histograms using custom hooks
-            hists = self.invoke_hist_hooks(
-                hists,
-                hook_kwargs={"category_name": self.branch_data.category, "variable_name": self.branch_data.variable},
-            )
-
-            # merge configs
-            if len(self.config_insts) != 1:
-                process_memory = {}
-                merged_hists = {}
-                for _hists in hists.values():
-                    for process_inst, h in _hists.items():
-                        if process_inst.id in merged_hists:
-                            merged_hists[process_inst.id] += h
-                        else:
-                            merged_hists[process_inst.id] = h
-                            process_memory[process_inst.id] = process_inst
-
-                process_insts = list(process_memory.values())
-                hists = {process_memory[process_id]: h for process_id, h in merged_hists.items()}
-            else:
-                hists = hists[self.config_inst]
-                process_insts = list(hists.keys())
-
-            # axis selections and reductions
-            _hists = OrderedDict()
-            for process_inst in hists.keys():
-                h = hists[process_inst]
-                # determine expected shifts from the intersection of requested shifts and those known for the process
-                process_shifts = (
-                    process_shift_map[process_inst.name]
-                    if process_inst.name in process_shift_map
-                    else {"nominal"}
+                # update histograms using custom hooks
+                hists[var_name] = self.invoke_hist_hooks(
+                    hists[var_name],
+                    hook_kwargs={
+                        "category_name": self.branch_data.category,
+                        "variable_name": var_name,
+                    },
                 )
-                expected_shifts = (process_shifts & plot_shift_names) or (process_shifts & {"nominal"})
-                if not expected_shifts:
-                    raise Exception(f"no shifts to plot found for process {process_inst.name}")
-                # selections
-                h = h[{
-                    "category": [
-                        hist.loc(c.name)
-                        for c in leaf_category_insts
-                        if c.name in h.axes["category"]
-                    ],
-                    "shift": [
-                        hist.loc(s_name)
-                        for s_name in expected_shifts
-                        if s_name in h.axes["shift"]
-                    ],
-                }]
-                # reductions
-                h = h[{"category": sum}]
-                # store
-                _hists[process_inst] = h
-            hists = _hists
 
-            # copy process instances once so that their auxiliary data fields can be used as a storage
-            # for process-specific plot parameters later on in plot scripts without affecting the
-            # original instances
+                # merge configs
+                if len(self.config_insts) != 1:
+                    process_memory = {}
+                    merged_hists = {}
+                    for _hists in hists[var_name].values():
+                        for process_inst, h in _hists.items():
+                            if process_inst.id in merged_hists:
+                                merged_hists[process_inst.id] += h
+                            else:
+                                merged_hists[process_inst.id] = h
+                                process_memory[process_inst.id] = process_inst
+                    hists[var_name] = {process_memory[process_id]: h for process_id, h in merged_hists.items()}
+                else:
+                    hists[var_name] = hists[var_name][self.config_inst]
+
+                # axis selections and reductions
+                _hists = OrderedDict()
+                for process_inst in hists[var_name].keys():
+                    h = hists[var_name][process_inst]
+                    # determine expected shifts from intersection of requested shifts and those known for the process
+                    process_shifts = (
+                        process_shift_map[process_inst.name]
+                        if process_inst.name in process_shift_map
+                        else {"nominal"}
+                    )
+                    expected_shifts = (process_shifts & plot_shift_names) or (process_shifts & {"nominal"})
+                    if not expected_shifts:
+                        raise Exception(f"no shifts to plot found for process {process_inst.name}")
+                    # selections
+                    h = h[{
+                        "category": [
+                            hist.loc(c.name)
+                            for c in leaf_category_insts
+                            if c.name in h.axes["category"]
+                        ],
+                        "shift": [
+                            hist.loc(s_name)
+                            for s_name in expected_shifts
+                            if s_name in h.axes["shift"]
+                        ],
+                    }]
+                    # reductions
+                    h = h[{"category": sum}]
+                    # store
+                    _hists[process_inst] = h
+                hists[var_name] = _hists
+
+            # copy process instances once so that their auxiliary data fields can be used as a storage for
+            # process-specific plot parameters later on in plot scripts without affecting the original instances
             fake_root = od.Process(
                 name=f"{hex(id(object()))[2:]}",
                 id="+",
-                processes=list(hists.keys()),
+                processes=list(set.union(*[set(_hists.keys()) for _hists in hists.values()])),
             ).copy()
-            process_insts = list(fake_root.processes)
+            process_map = {proc_inst.name: proc_inst for proc_inst in fake_root.processes.values()}
             fake_root.processes.clear()
-            hists = dict(zip(process_insts, hists.values()))
+            for var_name, _hists in hists.items():
+                hists[var_name] = {process_map[proc_inst.name]: h for proc_inst, h in _hists.items()}
+
+            # helper to get variable instances per variable name in tuples (split in case of n-d plots)
+            get_var_insts = lambda var_name: list(map(self.config_inst.get_variable, self.variable_tuples[var_name]))
 
             # temporarily use a merged luminostiy value, assigned to the first config
             config_inst = self.config_insts[0]
@@ -322,10 +329,14 @@ class PlotVariablesBase(_PlotVariablesBase):
                 # call the plot function
                 fig, _ = self.call_plot_func(
                     self.plot_function,
-                    hists=hists,
+                    hists=hists if self.multi_variable else hists[variables[0]],
                     config_inst=config_inst,
                     category_inst=category_inst.copy_shallow(),
-                    variable_insts=[var_inst.copy_shallow() for var_inst in variable_insts],
+                    variable_insts=(
+                        {var_name: get_var_insts(var_name) for var_name in variables}
+                        if self.multi_variable
+                        else get_var_insts(variables[0])
+                    ),
                     shift_insts=plot_shifts,
                     **self.get_plot_parameters(),
                 )
@@ -348,13 +359,6 @@ class PlotVariablesBaseSingleShift(
         PlotVariablesBase.reqs,
         MergeHistograms=MergeHistograms,
     )
-
-    def create_branch_map(self):
-        return [
-            DotDict({"category": cat_name, "variable": var_name})
-            for var_name in sorted(self.variables)
-            for cat_name in sorted(self.categories)
-        ]
 
     def requires(self):
         reqs = {}
@@ -383,7 +387,10 @@ class PlotVariablesBaseSingleShift(
 
         parts["processes"] = f"proc_{self.processes_repr}"
         parts["category"] = f"cat_{self.branch_data.category}"
-        parts["variable"] = f"var_{self.branch_data.variable}"
+        if self.multi_variable:
+            parts["variables"] = f"vars_{self.variables_repr}"
+        else:
+            parts["variable"] = f"var_{self.branch_data.variable}"
 
         hooks_repr = self.hist_hooks_repr
         if hooks_repr:
@@ -510,8 +517,11 @@ class PlotVariablesBaseMultiShifts(
     )
 
     def create_branch_map(self) -> list[DotDict]:
-        seqs = [self.categories, self.variables]
-        keys = ["category", "variable"]
+        keys = ["category"]
+        seqs = [self.categories]
+        if not self.multi_variable:
+            keys.append("variable")
+            seqs.append(self.variables)
         if not self.combine_shifts:
             seqs.append(self.shift_sources)
             keys.append("shift_source")
@@ -552,7 +562,10 @@ class PlotVariablesBaseMultiShifts(
 
         parts["processes"] = f"proc_{self.processes_repr}"
         parts["category"] = f"cat_{self.branch_data.category}"
-        parts["variable"] = f"var_{self.branch_data.variable}"
+        if self.multi_variable:
+            parts["variables"] = f"vars_{self.variables_repr}"
+        else:
+            parts["variable"] = f"var_{self.branch_data.variable}"
 
         # shift source or sources
         parts["shift_source"] = (
