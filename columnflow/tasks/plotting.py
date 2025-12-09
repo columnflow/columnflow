@@ -180,7 +180,7 @@ class PlotVariablesBase(_PlotVariablesBase):
         # prepare other config objects
         variables = list(self.variables) if self.multi_variable else [self.branch_data.variable]
         plot_shifts = self.get_plot_shifts()
-        plot_shift_names = set(shift_inst.name for shift_inst in plot_shifts)
+        plot_shift_names = set(shift_inst.name for shift_inst in plot_shifts) | {"nominal"}
 
         # get assignment of processes to datasets and shifts
         config_process_map, process_shift_map = self.get_config_process_map()
@@ -523,7 +523,7 @@ class PlotVariablesBaseMultiShifts(
             keys.append("variable")
             seqs.append(self.variables)
         if not self.combine_shifts:
-            seqs.append(self.shift_sources)
+            seqs.append([source for source in self.shift_sources if source != "nominal"])
             keys.append("shift_source")
         return [DotDict(zip(keys, vals)) for vals in itertools.product(*seqs)]
 
@@ -619,6 +619,7 @@ class PlotShiftedVariablesPerShift1D(
 ):
     # this tasks creates one plot per shift
     combine_shifts = False
+
     plot_function = PlotBase.plot_function.copy(
         default="columnflow.plotting.plot_functions_1d.plot_shifted_variable",
         add_default_to_description=True,
@@ -631,6 +632,7 @@ class PlotShiftedVariablesPerConfig1D(
 ):
     # force this one to be a local workflow
     workflow = "local"
+
     output_collection_cls = law.NestedSiblingFileCollection
 
     def requires(self):
