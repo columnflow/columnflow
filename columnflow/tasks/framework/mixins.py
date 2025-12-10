@@ -2195,6 +2195,15 @@ class VariablesMixin(ConfigTask):
         """
         return "-".join(map(str, variables))
 
+    @classmethod
+    def _variables_repr(cls, variables: Sequence[str]) -> str:
+        # simplified representation for single source
+        if len(variables) == 1:
+            return cls.build_repr(variables[0])
+
+        # full representation
+        return cls.build_repr(sorted(variables), prepend_count=True)
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
@@ -2206,9 +2215,7 @@ class VariablesMixin(ConfigTask):
 
     @property
     def variables_repr(self) -> str:
-        if len(self.variables) == 1:
-            return self.build_repr(self.variables[0])
-        return self.build_repr(sorted(self.variables), prepend_count=True)
+        return self._variables_repr(self.variables)
 
 
 class DatasetsProcessesMixin(ConfigTask):
