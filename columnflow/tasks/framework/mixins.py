@@ -2275,8 +2275,8 @@ class DatasetsProcessesMixin(ConfigTask):
 
         # helper to resolve processes and datasets for one config
         def resolve(config_inst: od.Config, processes: Any, datasets: Any) -> tuple[list[str], list[str]]:
+            processes_orig = processes
             if processes != law.no_value:
-                processes_orig = processes
                 if processes:
                     processes = cls.find_config_objects(
                         names=processes,
@@ -2315,6 +2315,13 @@ class DatasetsProcessesMixin(ConfigTask):
                         object_cls=od.Dataset,
                         groups_str="dataset_groups",
                     )
+                    # reduce processes to those present in selected datasets when none were given initially
+                    if datasets and processes and processes_orig in {law.no_value, ()}:
+                        dataset_insts = list(map(config_inst.get_dataset, datasets))
+                        processes = tuple(
+                            process for process in processes
+                            if any(dataset_inst.has_process(process) for dataset_inst in dataset_insts)
+                        )
                 elif processes and processes != law.no_value:
                     # pick all datasets that contain any of the requested (sub)processes
                     sub_process_insts = sum((
