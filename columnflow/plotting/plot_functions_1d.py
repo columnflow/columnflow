@@ -91,6 +91,7 @@ def plot_variable_stack(
         hists,
         shape_norm=shape_norm,
         shift_insts=shift_insts,
+        density=density,
         **kwargs,
     )
 
