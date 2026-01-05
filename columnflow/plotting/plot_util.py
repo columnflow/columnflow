@@ -228,10 +228,17 @@ def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hi
         if try_int(scale_factor):
             scale_factor = int(scale_factor)
             hists[proc_inst] = h * scale_factor
+            # scale_factor_str = (
+            #     str(scale_factor)
+            #     if scale_factor < 1e5
+            #     else re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
+            # )
+            mantissa, exp = f"{scale_factor:.1e}".split("e")
+            exp = exp.lstrip("+0") or "0"  # keep sign, drop + and leading zeros
             scale_factor_str = (
                 str(scale_factor)
                 if scale_factor < 1e5
-                else re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
+                else rf"{mantissa}$\times$$10^{exp}$"
             )
             if scale_factor != 1:
                 proc_inst.label = apply_label_placeholders(
@@ -472,7 +479,7 @@ def prepare_style_config(
         ylabel = variable_inst.get_full_y_title(
             bin_width=False,
             unit=variable_inst.unit or "unit",
-            unit_format="{title} / {unit}",
+            unit_format="< {title} / {unit} >",
         )
     else:
         ylabel = variable_inst.get_full_y_title(
@@ -491,6 +498,7 @@ def prepare_style_config(
             "xrotation": variable_inst.x("x_label_rotation", None),
         },
         "rax_cfg": {
+            "xlim": xlim,
             "ylabel": "Data / MC",
             "xlabel": variable_inst.get_full_x_title(unit_format=unit_format),
             "xrotation": variable_inst.x("x_label_rotation", None),
@@ -679,6 +687,7 @@ def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     other_keys = {
         "xmajorticks", "xminorticks", "xmajorticklabels", "xminorticklabels", "xloc", "xrotation",
         "ymajorticks", "yminorticks", "yloc", "yrotation",
+        "xlabel_fontsize", "ylabel_fontsize",
     }
     for key, value in kwargs.items():
         (other_kwargs if key in other_keys else set_kwargs)[key] = value
@@ -717,6 +726,10 @@ def apply_ax_kwargs(ax: plt.Axes, kwargs: dict[str, Any]) -> None:
         ax.tick_params(axis="x", labelrotation=other_kwargs.get("xrotation"))
     if other_kwargs.get("yrotation") is not None:
         ax.tick_params(axis="y", labelrotation=other_kwargs.get("yrotation"))
+    if other_kwargs.get("xlabel_fontsize") is not None:
+        ax.xaxis.label.set_size(other_kwargs.get("xlabel_fontsize"))
+    if other_kwargs.get("ylabel_fontsize") is not None:
+        ax.yaxis.label.set_size(other_kwargs.get("ylabel_fontsize"))
 
 
 def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: bool = False) -> float:

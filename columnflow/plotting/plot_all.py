@@ -217,6 +217,7 @@ def draw_hist(
         "ax": ax,
         "stack": False,
         "histtype": "step",
+        "linewidth": 2.5,
     }
     defaults.update(kwargs)
     if "yerr" not in defaults:
