@@ -151,6 +151,53 @@ class DatacardWriter(object):
 
         return True
 
+    @classmethod
+    def validate_histograms(cls, histograms: DatacardHists, silent: bool = False) -> bool:
+        import hist
+
+        # validate structure of histograms, shape keys and histogram types
+        errors: list[str] = []
+        for cat_name, proc_hists in histograms.items():
+            if not isinstance(cat_name, str):
+                errors.append(f"category name key '{cat_name}' is not a string")
+            for proc_name, config_hists in proc_hists.items():
+                if not isinstance(proc_name, str):
+                    errors.append(f"process name '{proc_name}' in category '{cat_name}' is not a string")
+                for config_name, shift_hists in config_hists.items():
+                    if not isinstance(config_name, str):
+                        errors.append(
+                            f"config name '{config_name}' for process '{proc_name}' in category '{cat_name}' is not a "
+                            f"string",
+                        )
+                    for shift_key, h in shift_hists.items():
+                        # shift_key must be nominal or a tuple of (param_name, "up|down")
+                        if (
+                            shift_key != "nominal" and
+                            (
+                                not isinstance(shift_key, (tuple, list)) or
+                                len(shift_key) != 2 or
+                                shift_key[1] not in {"up", "down"}
+                            )
+                        ):
+                            errors.append(
+                                f"invalid shift key '{shift_key}' in config '{config_name}' for process "
+                                f"'{proc_name}' in category '{cat_name}'",
+                            )
+                        if not isinstance(h, hist.Hist):
+                            errors.append(
+                                f"histogram for shift '{shift_key}' in config '{config_name}' for process "
+                                f"'{proc_name}' in category '{cat_name}' is not a hist.Hist instance",
+                            )
+
+        # handle errors
+        if errors:
+            if silent:
+                return False
+            errors_repr = "\n  - ".join(errors)
+            raise ValueError(f"datacard histograms invalid, reasons:\n  - {errors_repr}")
+
+        return True
+
     def __init__(
         self,
         inference_model_inst: InferenceModel,
@@ -172,8 +219,9 @@ class DatacardWriter(object):
         self.effect_from_shape_if_flat_max_deviation = effect_from_shape_if_flat_max_deviation
         self.asymmetrize_if_large_threshold = asymmetrize_if_large_threshold
 
-        # validate the inference model
+        # validate the inference model and histograms
         self.validate_model(self.inference_model_inst)
+        self.validate_histograms(self.histograms)
 
     def write(
         self,

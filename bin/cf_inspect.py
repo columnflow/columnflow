@@ -34,11 +34,10 @@ def _load_parquet(fname: str, **kwargs) -> ak.Array:
 
 def _load_nano_root(fname: str, treepath: str | None = None, **kwargs) -> ak.Array:
     import uproot
-    import coffea.nanoevents
-
-    source = uproot.open(fname)
+    from columnflow.columnar_util import coffea_nano_factory_from_root
 
     # get the default treepath
+    source = uproot.open(fname)
     if treepath is None:
         for treepath in ["events", "Events"] + list(source.keys()):
             treepath = treepath.split(";", 1)[0]
@@ -48,12 +47,12 @@ def _load_nano_root(fname: str, treepath: str | None = None, **kwargs) -> ak.Arr
         else:
             raise ValueError(f"no default treepath determined in {fname}")
 
-    return coffea.nanoevents.NanoEventsFactory.from_root(
-        source,
-        treepath=treepath,
-        mode="eager",
-        runtime_cache=None,
-        persistent_cache=None,
+    return coffea_nano_factory_from_root(
+        source=source,
+        tree_name=treepath,
+        read_columns=None,
+        entry_start=None,
+        entry_stop=None,
     ).events()
 
 

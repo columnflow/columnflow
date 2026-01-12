@@ -391,17 +391,19 @@ class RemoteWorkflowMixin(AnalysisTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: RemoteWorkflowMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the pilot flag
-        pilot = (
-            inst_or_params.get("pilot")
-            if isinstance(inst_or_params, dict)
-            else getattr(inst_or_params, "pilot", None)
-        )
-        if pilot not in (law.NO_STR, None, ""):
-            keys["pilot"] = f"pilot_{pilot}"
+        if not significant:
+            pilot = (
+                inst_or_params.get("pilot")
+                if isinstance(inst_or_params, dict)
+                else getattr(inst_or_params, "pilot", None)
+            )
+            if pilot not in (law.NO_STR, None, ""):
+                keys["pilot"] = f"pilot_{pilot}"
 
         return keys
 
@@ -882,6 +884,9 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         if self.htcondor_disk is not None and self.htcondor_disk > 0:
             config.custom_content.append(("RequestDisk", f"{self.htcondor_disk} Gb"))
 
+        # remove held jobs periodically
+        config.custom_content.append(("periodic_remove", "(HoldReason =!= undefined)"))
+
         # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
         if self.htcondor_flavor not in ("", law.NO_STR):
@@ -910,6 +915,10 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         info = super().htcondor_destination_info(info)
         info = self.common_destination_info(info)
         return info
+
+    def htcondor_post_poll_callback(self, success, duration):
+        from law.workflow.remote import log_job_memory_summary
+        log_job_memory_summary(self.workflow_proxy.job_data, log=self.logger.info)
 
 
 _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "maxwell")

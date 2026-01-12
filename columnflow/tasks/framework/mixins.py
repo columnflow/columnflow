@@ -97,8 +97,9 @@ class CalibratorClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: CalibratorClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the calibrator name
         calibrator = (
@@ -314,8 +315,9 @@ class CalibratorClassesMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: CalibratorClassesMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the calibrator names
         calibrators = (
@@ -500,8 +502,9 @@ class SelectorClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: SelectorClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the selector name
         selector = (
@@ -716,8 +719,9 @@ class ReducerClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: ReducerClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the reducer name
         reducer = (
@@ -915,8 +919,9 @@ class ProducerClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: ProducerClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the producer name
         producer = (
@@ -1132,8 +1137,9 @@ class ProducerClassesMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: ProducerClassesMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the producer names
         producers = (
@@ -1350,8 +1356,9 @@ class MLModelMixinBase(ConfigTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: MLModelMixinBase | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the ml model name
         ml_model = (
@@ -1695,8 +1702,9 @@ class MLModelsMixin(ConfigTask):
     def get_config_lookup_keys(
         cls,
         inst_or_params: MLModelsMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the ml model names
         ml_models = (
@@ -1760,8 +1768,9 @@ class HistProducerClassMixin(ArrayFunctionClassMixin):
     def get_config_lookup_keys(
         cls,
         inst_or_params: HistProducerClassMixin | dict[str, Any],
+        significant: bool = False,
     ) -> law.util.InsertiableDict:
-        keys = super().get_config_lookup_keys(inst_or_params)
+        keys = super().get_config_lookup_keys(inst_or_params, significant=significant)
 
         # add the hist producer name
         producer = (
@@ -2186,6 +2195,15 @@ class VariablesMixin(ConfigTask):
         """
         return "-".join(map(str, variables))
 
+    @classmethod
+    def _variables_repr(cls, variables: Sequence[str]) -> str:
+        # simplified representation for single source
+        if len(variables) == 1:
+            return cls.build_repr(variables[0])
+
+        # full representation
+        return cls.build_repr(sorted(variables), prepend_count=True)
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
@@ -2197,9 +2215,7 @@ class VariablesMixin(ConfigTask):
 
     @property
     def variables_repr(self) -> str:
-        if len(self.variables) == 1:
-            return self.build_repr(self.variables[0])
-        return self.build_repr(sorted(self.variables), prepend_count=True)
+        return self._variables_repr(self.variables)
 
 
 class DatasetsProcessesMixin(ConfigTask):
@@ -2259,8 +2275,8 @@ class DatasetsProcessesMixin(ConfigTask):
 
         # helper to resolve processes and datasets for one config
         def resolve(config_inst: od.Config, processes: Any, datasets: Any) -> tuple[list[str], list[str]]:
+            processes_orig = processes
             if processes != law.no_value:
-                processes_orig = processes
                 if processes:
                     processes = cls.find_config_objects(
                         names=processes,
@@ -2299,6 +2315,13 @@ class DatasetsProcessesMixin(ConfigTask):
                         object_cls=od.Dataset,
                         groups_str="dataset_groups",
                     )
+                    # reduce processes to those present in selected datasets when none were given initially
+                    if datasets and processes and processes_orig in {law.no_value, ()}:
+                        dataset_insts = list(map(config_inst.get_dataset, datasets))
+                        processes = tuple(
+                            process for process in processes
+                            if any(dataset_inst.has_process(process) for dataset_inst in dataset_insts)
+                        )
                 elif processes and processes != law.no_value:
                     # pick all datasets that contain any of the requested (sub)processes
                     sub_process_insts = sum((

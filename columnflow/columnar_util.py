@@ -25,15 +25,18 @@ from collections import namedtuple, OrderedDict, deque, defaultdict
 import law
 import order as od
 
-from columnflow.types import Sequence, Callable, Any, T, Generator, Hashable
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, CachedDerivableMeta, Derivable, pattern_matcher,
     get_source_code, real_path, freeze, get_docs_url,
 )
+from columnflow.types import Sequence, Callable, Any, T, Generator, Hashable, TYPE_CHECKING
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
 uproot = maybe_import("uproot")
+if TYPE_CHECKING:
+    coffea = maybe_import("coffea")
+    maybe_import("coffea.nanoevents")
 
 
 # loggers
@@ -2989,6 +2992,67 @@ class TAFConfig:
         return self.__class__(self.__dict__ | kwargs)
 
 
+def coffea_nano_factory_from_root(
+    source: str | uproot.ReadOnlyDirectory,
+    tree_name: str,
+    *,
+    mode: str = "eager",
+    disable_cache: bool = True,
+    read_columns: Sequence[str | Route] | set[str | Route] | None = None,
+    entry_start: int | None = None,
+    entry_stop: int | None = None,
+    read_options: dict[str, Any] | None = None,
+) -> coffea.nanoevents.NanoEventsFactory:
+    """
+    Eagerly reads a tree named *tree_name* from a root file *source*, which can either be a path or an opened uproot
+    file, and attaches the full nano behavior to its contents.
+
+    :param source: File path or opened uproot file.
+    :param tree_name: Name of the tree to read.
+    :param mode: Reading mode passed to ``coffea.nanoevents.NanoEventsFactory.from_root``.
+    :param disable_cache: If *True*, disables all caching mechanisms in the upstream coffea and root methods.
+    :param read_columns: Sequence or set of columns to read. Supports patterns.
+    :param entry_start: First entry to read, if given.
+    :param entry_stop: Last entry to read, if given.
+    :param read_options: Additional options passed to ``coffea.nanoevents.NanoEventsFactory.from_root``.
+    :return: The created ``coffea.nanoevents.NanoEventsFactory`` instance.
+    """
+    import coffea.nanoevents
+
+    # default read options
+    read_options = read_options or {}
+    read_options["mode"] = "eager"
+
+    # disable caching
+    if disable_cache:
+        arg_names = set(inspect.getfullargspec(coffea.nanoevents.NanoEventsFactory.from_root).kwonlyargs)
+        for cache_arg in ["runtime_cache", "persistent_cache", "buffer_cache"]:
+            if cache_arg in arg_names:
+                read_options[cache_arg] = None
+
+    # inject read_columns
+    if read_columns and "filter_name" not in read_options.get("iteritems_options", {}):
+        filter_name = [Route(s).string_nano_column for s in read_columns]
+
+        # add names prefixed with an 'n' to the list of columns to read
+        # (needed to construct the nested list structure of jagged columns)
+        maybe_jagged_fields = {Route(s)[0] for s in read_columns}
+        filter_name.extend(f"n{field}" for field in maybe_jagged_fields)
+
+        read_options.setdefault("iteritems_options", {})["filter_name"] = filter_name
+
+    # create the factory
+    factory = coffea.nanoevents.NanoEventsFactory.from_root(
+        source,
+        treepath=tree_name,
+        entry_start=entry_start,
+        entry_stop=entry_stop,
+        **read_options,
+    )
+
+    return factory
+
+
 class NoThreadPool(object):
     """
     Dummy implementation that mimics parts of the usual thread pool interface but instead of
@@ -3825,53 +3889,26 @@ class ChunkedIOHandler(object):
         cls,
         source_object: tuple[str | uproot.ReadOnlyDirectory, str],
         chunk_pos: ChunkPosition,
-        read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
+        read_options: dict | None = None,
     ) -> ak.Array:
         """
-        Given a file location or opened uproot file, and a tree name in a 2-tuple *source_object*,
-        returns an awkward array chunk referred to by *chunk_pos*, assuming nanoAOD structure.
-        *read_options* are passed to ``coffea.nanoevents.NanoEventsFactory.from_root``.
-        *read_columns* are converted to strings and, if not already present, added as nested fields
-        ``iteritems_options.filter_name`` to *read_options*.
+        Given a file location or opened uproot file, and a tree name in a 2-tuple *source_object*, returns an awkward
+        array chunk referred to by *chunk_pos*, assuming nanoAOD structure. *read_options* are passed to the
+        ``arrays()`` method of the tree. *read_columns* are converted to strings and, if not already present, added as
+        nested fields ``iteritems_options.filter_name`` to *read_options*.
         """
-        import coffea.nanoevents
-
-        # default read options
-        read_options = read_options or {}
-        read_options["mode"] = "eager"
-        read_options["runtime_cache"] = None
-        read_options["persistent_cache"] = None
-
-        # inject read_columns
-        if read_columns and (
-            "iteritems_options" not in read_options or
-            "filter_name" not in read_options["iteritems_options"]
-        ):
-            filter_name = [Route(s).string_nano_column for s in read_columns]
-
-            # add names prefixed with an 'n' to the list of columns to read
-            # (needed to construct the nested list structure of jagged columns)
-            maybe_jagged_fields = {Route(s)[0] for s in read_columns}
-            filter_name.extend(
-                f"n{field}"
-                for field in maybe_jagged_fields
-            )
-
-            # filter on these column names when reading
-            read_options.setdefault("iteritems_options", {})["filter_name"] = filter_name
-
-        # read the events chunk into memory
         _source_object, tree_name = source_object
-        chunk = coffea.nanoevents.NanoEventsFactory.from_root(
-            _source_object,
-            treepath=tree_name,
+        factory = coffea_nano_factory_from_root(
+            source=_source_object,
+            tree_name=tree_name,
+            read_columns=read_columns,
             entry_start=chunk_pos.entry_start,
             entry_stop=chunk_pos.entry_stop,
-            **read_options,
-        ).events()
+            read_options=read_options,
+        )
 
-        return chunk
+        return factory.events()
 
     @classmethod
     def open_coffea_parquet(
