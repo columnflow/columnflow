@@ -416,11 +416,14 @@ class MergeReductionStats(_MergeReductionStats):
         # determine the number of files after merging, allowing a possible ~15% increase per file
         n_total = self.dataset_info_inst.n_files
         if n_total > 1:
-            extrapolation = n_total / n
-            n_merged_files = extrapolation * stats["tot_size"] / stats["max_size_merged"]
+            # get the expected number of files after merging
+            n_merged_files = n_total / n * stats["tot_size"] / stats["max_size_merged"]
+            # round using some heuristics
             rnd = math.ceil if n_merged_files % 1.0 > 0.15 else math.floor
             n_merged_files = max(int(rnd(n_merged_files)), 1)
+            # determine the merging factor and adjust the number of merged files accordingly for numeric edge cases
             stats["merge_factor"] = max(math.ceil(n_total / n_merged_files), 1)
+            n_merged_files = max(math.ceil(n_total / stats["merge_factor"]), 1)
         else:
             # trivial case, no merging needed
             n_merged_files = 1
