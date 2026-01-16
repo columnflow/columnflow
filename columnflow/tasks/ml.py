@@ -82,9 +82,6 @@ class PrepareMLEvents(
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # require the full merge forest
-        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
-
         # add producer dependent requirements
         if self.preparation_producer_inst:
             reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
@@ -101,10 +98,13 @@ class PrepareMLEvents(
                 if producer_inst.produced_columns
             ]
 
+        # require the full merge forest
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
+
         return reqs
 
     def requires(self):
-        reqs = {"events": self.reqs.ProvideReducedEvents.req(self)}
+        reqs = {}
 
         if self.preparation_producer_inst:
             reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
@@ -119,6 +119,9 @@ class PrepareMLEvents(
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
+
+        # require merged events
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         return reqs
 
@@ -625,8 +628,6 @@ class MLEvaluation(
             configs=(self.config_inst.name,),
         )
 
-        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
-
         # add producer dependent requirements
         if self.preparation_producer_inst:
             reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
@@ -642,17 +643,21 @@ class MLEvaluation(
                 if producer_inst.produced_columns
             ]
 
+        # require the full merge forest
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
+
         return reqs
 
     def requires(self):
-        reqs = {
-            "models": self.reqs.MLTraining.req_different_branching(
-                self,
-                configs=(self.config_inst.name,),
-                branch=-1,
-            ),
-            "events": self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch),
-        }
+        reqs = {}
+
+        # add models
+        reqs["models"] = self.reqs.MLTraining.req_different_branching(
+            self,
+            configs=(self.config_inst.name,),
+            branch=-1,
+        )
+
         if self.preparation_producer_inst:
             reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
 
@@ -666,6 +671,9 @@ class MLEvaluation(
                 for producer_inst in self.producer_insts
                 if producer_inst.produced_columns
             ]
+
+        # require merged events
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self, _exclude=self.exclude_params_branch)
 
         return reqs
 

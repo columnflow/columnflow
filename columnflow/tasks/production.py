@@ -46,20 +46,20 @@ class ProduceColumns(_ProduceColumns):
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # require the full merge forest
-        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
-
         # add producer dependent requirements
         reqs["producer"] = law.util.make_unique(law.util.flatten(self.producer_inst.run_requires(task=self)))
+
+        # require the full merge forest
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         return reqs
 
     def requires(self):
         return {
-            "events": self.reqs.ProvideReducedEvents.req(self),
             "producer": law.util.make_unique(law.util.flatten(
                 self.producer_inst.run_requires(task=self),
             )),
+            "events": self.reqs.ProvideReducedEvents.req(self),
         }
 
     workflow_condition = ReducedEventsUser.workflow_condition.copy()

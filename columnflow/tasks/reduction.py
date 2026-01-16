@@ -18,7 +18,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import on_failure
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.selection import CalibrateEvents, SelectEvents
-from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div
+from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div, DotDict
 from columnflow.types import Any
 
 ak = maybe_import("awkward")
@@ -641,11 +641,15 @@ class ProvideReducedEvents(_ProvideReducedEvents):
                 elif file_merging == 1 and not self.pilot:
                     reqs["events"] = self._req_reduced_events()
 
+        # move reduction stats requirement to the end
+        if "reduction_stats" in reqs:
+            reqs.move_to_end("reduction_stats")
+
         return reqs
 
     def requires(self):
         # same as for workflow requirements without optional pilot check
-        reqs = {}
+        reqs = DotDict()
         if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
             reqs["events"] = self._req_reduced_events()
         else:
@@ -659,6 +663,10 @@ class ProvideReducedEvents(_ProvideReducedEvents):
                     reqs["events"] = self._req_merged_reduced_events()
                 elif file_merging == 1:
                     reqs["events"] = self._req_reduced_events()
+
+        # move reduction stats requirement to the end
+        if "reduction_stats" in reqs:
+            reqs.move_to_end("reduction_stats")
 
         return reqs
 

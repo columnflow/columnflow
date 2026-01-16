@@ -63,9 +63,6 @@ class UniteColumns(_UniteColumns):
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # require the full merge forest
-        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
-
         if not self.pilot:
             if self.producer_insts:
                 reqs["producers"] = [
@@ -83,10 +80,13 @@ class UniteColumns(_UniteColumns):
                     for m in self.ml_models
                 ]
 
+        # require the full merge forest
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
+
         return reqs
 
     def requires(self):
-        reqs = {"events": self.reqs.ProvideReducedEvents.req(self)}
+        reqs = {}
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -103,6 +103,9 @@ class UniteColumns(_UniteColumns):
                 self.reqs.MLEvaluation.req(self, ml_model=m)
                 for m in self.ml_models
             ]
+
+        # require merged events
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         return reqs
 

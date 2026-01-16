@@ -94,9 +94,6 @@ class CreateHistograms(_CreateHistograms):
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        # require the full merge forest
-        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
-
         if not self.pilot:
             if self.producer_insts:
                 reqs["producers"] = [
@@ -121,10 +118,13 @@ class CreateHistograms(_CreateHistograms):
         # add hist producer dependent requirements
         reqs["hist_producer"] = law.util.make_unique(law.util.flatten(self.hist_producer_inst.run_requires(task=self)))
 
+        # require the full merge forest
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
+
         return reqs
 
     def requires(self):
-        reqs = {"events": self.reqs.ProvideReducedEvents.req(self)}
+        reqs = {}
 
         if self.producer_insts:
             reqs["producers"] = [
@@ -146,6 +146,9 @@ class CreateHistograms(_CreateHistograms):
         reqs["hist_producer"] = law.util.make_unique(law.util.flatten(
             self.hist_producer_inst.run_requires(task=self),
         ))
+
+        # require merged events
+        reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
 
         return reqs
 
