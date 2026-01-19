@@ -97,7 +97,7 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
 
         # get scaled energy error
         smear = self.smear_syst_corrector.evaluate("smear", *get_inputs(self.smear_syst_corrector, pt=pt_scaled))
-        energy_err_scaled = (((coll.energyErr)**2 + (coll.energy * smear)**2) * scale)**0.5
+        energy_err_scaled = (((coll.energyErr)**2 + (coll.energy * smear)**2))**0.5 * scale
 
         # store columns
         events = set_ak_column_f32(events, f"{self.collection_name}.pt", pt_scaled)
@@ -127,7 +127,7 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
             smear_factor = 1.0 + smear * rnd
             pt_smeared = coll.pt * smear_factor
             # get smeared energy error
-            energy_err_smeared = (((coll.energyErr)**2 + (coll.energy * smear)**2) * smear_factor)**0.5
+            energy_err_smeared = (((coll.energyErr)**2 + (coll.energy * smear)**2))**0.5 * smear_factor
             # return both
             return pt_smeared, energy_err_smeared
 
