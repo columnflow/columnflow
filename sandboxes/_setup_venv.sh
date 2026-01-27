@@ -203,7 +203,13 @@ setup_venv() {
         fi
 
         # create the pending_flag to express that the venv state might be changing
-        [ ! -f "${pending_flag_file}" ] && touch "${pending_flag_file}"
+        declare_pending() {
+            if [ ! -f "${pending_flag_file}" ]; then
+                touch "${pending_flag_file}"
+            else
+                return "0"
+            fi
+        }
         clear_pending() {
             rm -f "${pending_flag_file}"
         }
@@ -220,6 +226,7 @@ setup_venv() {
             if [ "${current_version}" != "${venv_version}" ]; then
                 if [ "${mode}" = "update" ]; then
                     # remove the venv in case an update is requested
+                    declare_pending || return "$?"
                     echo "removing current installation at ${install_path_repr} (mode '${mode}', installed version ${current_version}, requested version ${venv_version})"
                     rm -rf "${install_path}"
 
@@ -248,6 +255,8 @@ setup_venv() {
 
         # install if not existing
         if [ ! -f "${CF_SANDBOX_FLAG_FILE}" ]; then
+            declare_pending || return "$?"
+
             echo -n "$( cf_color cyan "installing venv" )"
             echo -n " $( cf_color cyan_bright "${CF_VENV_NAME}" )"
             echo " $( cf_color cyan "from ${sandbox_file} at ${install_path}" )"
