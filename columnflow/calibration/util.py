@@ -58,7 +58,7 @@ def sum_transverse(pt: ak.Array, phi: ak.Array) -> tuple[ak.Array, ak.Array]:
 
 
 def propagate_met(
-    jet_pt1: (ak.Array),
+    jet_pt1: ak.Array,
     jet_phi1: ak.Array,
     jet_pt2: ak.Array,
     jet_phi2: ak.Array,

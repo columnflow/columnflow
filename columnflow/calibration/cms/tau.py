@@ -142,10 +142,10 @@ def tec(
             scales_up = ak.where(reset_mask, 1.0, scales_up)
             scales_down = ak.where(reset_mask, 1.0, scales_down)
 
-    # create varied collections per decay mode
+    # create varied collections per decay mode, gen match, and direction
     if self.with_uncertainties:
         for (match_mask, match_name), _dm, (direction, scales) in itertools.product(
-            [(match == 5, "jet"), ((match == 1) | (match == 3), "e")],
+            [(match == 5, "tau"), ((match == 1) | (match == 3), "e"), ((match == 2) | (match == 4), "mu")],
             [0, 1, 10, 11],
             [("up", scales_up), ("down", scales_down)],
         ):
@@ -153,11 +153,13 @@ def tec(
             pt_flat = flat_np_view(events.Tau.pt, copy=True)
             mass_flat = flat_np_view(events.Tau.mass, copy=True)
 
-            # correct pt and mass for taus with that gen match and decay mode
+            # correct pt and mass using
+            # - varied scale values for taus with that gen match and decay mode
+            # - nominal scale values for the rest
             mask = match_mask & (dm == _dm)
-            mask_flat = flat_np_view(mask)
-            pt_flat[mask_flat] *= flat_np_view(scales[mask])
-            mass_flat[mask_flat] *= flat_np_view(scales[mask])
+            flat_scales = flat_np_view(ak.where(mask, scales, scales_nom))
+            pt_flat *= flat_scales
+            mass_flat *= flat_scales
 
             # save columns
             postfix = f"tec_{match_name}_dm{_dm}_{direction}"
@@ -215,7 +217,7 @@ def tec_init(self: Calibrator, **kwargs) -> None:
             src_fields += [f"{self.met_name}.{var}" for var in ["pt", "phi"]]
 
         self.produces |= {
-            f"{field}_tec_{{jet,e}}_dm{{0,1,10,11}}_{{up,down}}"
+            f"{field}_tec_{{tau,e,mu}}_dm{{0,1,10,11}}_{{up,down}}"
             for field in src_fields
         }
 
