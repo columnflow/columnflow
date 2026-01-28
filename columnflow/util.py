@@ -1027,7 +1027,7 @@ class KeyValueMessage(luigi.worker.SchedulerMessage):
         return str(self.value)
 
 
-def load_correction_set(target: law.FileSystemFileTarget) -> Any:
+def load_correction_set(target: law.FileSystemFileTarget | str) -> Any:
     """
     Loads a correction set using the correctionlib from a file *target*.
     """
@@ -1035,6 +1035,10 @@ def load_correction_set(target: law.FileSystemFileTarget) -> Any:
 
     # extend the Correction object
     correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
+
+    # convert str to target
+    if isinstance(target, str):
+        target = law.LocalFileTarget(target)
 
     # use the path when the input file is a normal json
     if target.ext() == "json":
