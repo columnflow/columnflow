@@ -8,10 +8,17 @@ from __future__ import annotations
 
 import functools
 
-from columnflow.types import Iterable, Sequence, Union
+import law
+
 from columnflow.production import Producer, producer
+from columnflow.columnar_util import (
+    TaskArrayFunction,
+    Route,
+    set_ak_column,
+    attach_coffea_behavior as attach_coffea_behavior_fn,
+)
 from columnflow.util import maybe_import
-from columnflow.columnar_util import attach_coffea_behavior as attach_coffea_behavior_fn
+from columnflow.types import Iterable, Sequence, Union, Callable
 
 ak = maybe_import("awkward")
 
@@ -202,3 +209,37 @@ def delta_r_match_multiple(
     # return either index or four-vector of best match
     best_match = best_match_idxs if as_index else dst_lvs[best_match_idxs]
     return best_match, dst_lvs_filtered
+
+
+def transfer_produced_columns(
+    func: TaskArrayFunction,
+    src_array: ak.Array,
+    dst_array: ak.Array,
+    filter_routes: Sequence[str] | set[str] | Callable[[Route], bool] | None = None,
+) -> ak.Array:
+    """
+    Transfers all columns produced by a :py:class:`TaskArrayFunction` from a source array *src_array* to a destination
+    array *dst_array*. Optionally, only columns produced for certain routes can be transferred by specifying
+    *filter_routes*, which can be a sequence or set of route names or patterns, or a callable that receives a
+    :py:class:`Route`.
+
+    :param func: :py:class:`TaskArrayFunction` that produced columns in *src_array*.
+    :param src_array: Source array containing the produced columns.
+    :param dst_array: Destination array to which the produced columns are transferred.
+    :param filter_routes: Optional filter.
+    :return: Destination array with transferred columns.
+    """
+    # prepare filtering
+    if not filter_routes:
+        filter_routes = lambda r: True
+    elif not callable(filter_routes):
+        patterns = set(filter_routes)
+        filter_routes = lambda r: law.util.multi_match(str(r), patterns, mode=any)
+
+    # start transferring
+    for r in func.produced_columns:
+        if not filter_routes(r):
+            continue
+        dst_array = set_ak_column(dst_array, r, r.apply(src_array))
+
+    return dst_array

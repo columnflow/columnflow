@@ -1303,6 +1303,10 @@ def attach_coffea_behavior(
             continue
         coll = ak_array[name]
 
+        # when info is a string, interpret as the collection in default_coffea_collections
+        if isinstance(info, str):
+            info = default_coffea_collections[info]
+
         # when a check_attr is defined, do nothing in case it already exists
         if info.get("check_attr") and getattr(coll, info["check_attr"], None) is not None:
             continue
