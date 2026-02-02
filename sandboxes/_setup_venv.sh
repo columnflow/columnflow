@@ -334,7 +334,14 @@ setup_venv() {
                     law_wlcg_get_file "${sandbox_uris[i]}" "${sandbox_patterns[i]}" "bundle.tgz" &&
                     tar -xzf "bundle.tgz"
                 ) || return "$?"
+
                 found_sandbox="true"
+
+                # let the home variable in pyvenv.cfg point to the conda bin directory
+                sed -i -r \
+                    "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
+                    "${install_path}/pyvenv.cfg"
+
                 break
             done
             if ! ${found_sandbox}; then
@@ -342,11 +349,6 @@ setup_venv() {
                 return "31"
             fi
         fi
-
-        # let the home variable in pyvenv.cfg point to the conda bin directory
-        sed -i -r \
-            "s|^(home = ).+/bin/?$|\1$CF_CONDA_BASE\/bin|" \
-            "${install_path}/pyvenv.cfg"
 
         # activate it
         source "${install_path}/bin/activate" "" || return "$?"

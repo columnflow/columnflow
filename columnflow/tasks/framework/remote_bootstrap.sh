@@ -14,7 +14,9 @@ bootstrap_htcondor_standalone() {
     export CF_CERN_USER_FIRSTCHAR="${CF_CERN_USER:0:1}"
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
-    export CF_SOFTWARE_BASE="{{cf_software_base}}"
+    export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    export CF_CONDA_BASE="{{cf_conda_base}}"
+    export CF_VENV_BASE="{{cf_venv_base}}"
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_STORE_LOCAL="{{cf_store_local}}"
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
@@ -33,7 +35,8 @@ bootstrap_htcondor_standalone() {
             }
         fi
     fi
-    local sharing_software="$( [ -z "{{cf_software_base}}" ] && echo "false" || echo "true" )"
+    local share_software="{{cf_htcondor_share_software}}"
+    share_software="${share_software:-false}"
     local lcg_setup="{{cf_remote_lcg_setup}}"
     lcg_setup="${lcg_setup:-/cvmfs/grid.cern.ch/alma9-ui-test/etc/profile.d/setup-alma9-test.sh}"
     local force_lcg_setup="$( [ -z "{{cf_remote_lcg_setup_force}}" ] && echo "false" || echo "true" )"
@@ -48,17 +51,42 @@ bootstrap_htcondor_standalone() {
         export CAPATH="/cvmfs/grid.cern.ch/etc/grid-security/certificates"
     fi
 
-    # fallback to a default path when the externally given software base is empty or inaccessible
-    local fetch_software="true"
-    if [ -z "${CF_SOFTWARE_BASE}" ]; then
-        export CF_SOFTWARE_BASE="${CF_DATA}/software"
-    elif [ ! -d "${CF_SOFTWARE_BASE}/conda" ] || [ ! -x "${CF_SOFTWARE_BASE}/conda" ]; then
-        echo "software base directory ${CF_SOFTWARE_BASE} was configured to be shared,"
-        echo "but conda subdirectory is either missing or not accessible"
-        export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    # prepare sharing of conda and venv setup
+    local fetch_conda_bundle="true"
+    if ${share_software}; then
+        # check conda
+        if [ -z "${CF_CONDA_BASE}" ]; then
+            >&2 echo "cf_htcondor_share_software is set to true, but cf_conda_base is empty"
+            return "1"
+        fi
+        if [ ! -d "${CF_CONDA_BASE}" ] || [ ! -x "${CF_CONDA_BASE}" ]; then
+            >&2 echo "cf_htcondor_share_software is set to true, but cf_conda_base is not accessible: ${CF_CONDA_BASE}"
+            return "1"
+        fi
+        fetch_conda_bundle="false"
+        echo "detected existing conda setup at ${CF_CONDA_BASE}"
+
+        # check venvs
+        if [ -z "${CF_VENV_BASE}" ]; then
+            >&2 echo "cf_htcondor_share_software is set to true, but cf_venv_base is empty"
+            return "1"
+        fi
+        if [ ! -d "${CF_VENV_BASE}" ] || [ ! -x "${CF_VENV_BASE}" ]; then
+            >&2 echo "cf_htcondor_share_software is set to true, but cf_venv_base is not accessible: ${CF_VENV_BASE}"
+            return "1"
+        fi
+        # set variables required by _setup_venv script to load and setup venvs on-the-fly
+        export CF_JOB_BASH_SANDBOX_URIS="{{cf_bash_sandbox_uris}}"
+        export CF_JOB_BASH_SANDBOX_PATTERNS="{{cf_bash_sandbox_patterns}}"
+        export CF_JOB_BASH_SANDBOX_NAMES="{{cf_bash_sandbox_names}}"
+        export CF_JOB_CMSSW_SANDBOX_URIS="{{cf_cmssw_sandbox_uris}}"
+        export CF_JOB_CMSSW_SANDBOX_PATTERNS="{{cf_cmssw_sandbox_patterns}}"
+        export CF_JOB_CMSSW_SANDBOX_NAMES="{{cf_cmssw_sandbox_names}}"
+        echo "detected existing venvs at ${CF_VENV_BASE}"
     else
-        fetch_software="false"
-        echo "found existing software at ${CF_SOFTWARE_BASE}"
+        # force local bases
+        export CF_CONDA_BASE="${CF_SOFTWARE}/conda"
+        export CF_VENV_BASE="${CF_SOFTWARE}/venvs"
     fi
 
     # when gfal is not available, check that the lcg_setup file exists
@@ -83,12 +111,12 @@ bootstrap_htcondor_standalone() {
     echo "done sourcing wlcg tools"
 
     # load and unpack the software bundle, then source it
-    if ${fetch_software}; then
+    if ${fetch_conda_bundle}; then
         (
             echo -e "\nfetching software bundle ..."
             { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
-            mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
-            cd "${CF_SOFTWARE_BASE}/conda" &&
+            mkdir -p "${CF_CONDA_BASE}" &&
+            cd "${CF_CONDA_BASE}" &&
             GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
             tar -xzf "software.tgz" &&
             rm "software.tgz" &&
@@ -107,16 +135,6 @@ bootstrap_htcondor_standalone() {
         rm "repo.tgz" &&
         echo "done fetching repository bundle"
     ) || return "$?"
-
-    # export variables used in cf setup script on-the-fly to load sandboxes
-    if ! ${sharing_software}; then
-        export CF_JOB_BASH_SANDBOX_URIS="{{cf_bash_sandbox_uris}}"
-        export CF_JOB_BASH_SANDBOX_PATTERNS="{{cf_bash_sandbox_patterns}}"
-        export CF_JOB_BASH_SANDBOX_NAMES="{{cf_bash_sandbox_names}}"
-        export CF_JOB_CMSSW_SANDBOX_URIS="{{cf_cmssw_sandbox_uris}}"
-        export CF_JOB_CMSSW_SANDBOX_PATTERNS="{{cf_cmssw_sandbox_patterns}}"
-        export CF_JOB_CMSSW_SANDBOX_NAMES="{{cf_cmssw_sandbox_names}}"
-    fi
 
     # optional custom command before the setup is sourced
     {{cf_pre_setup_command}}
@@ -167,6 +185,8 @@ bootstrap_crab() {
     export CF_REPO_BASE="${LAW_JOB_HOME}/repo"
     export CF_DATA="${LAW_JOB_HOME}/cf_data"
     export CF_SOFTWARE_BASE="${CF_DATA}/software"
+    export CF_CONDA_BASE="${CF_SOFTWARE_BASE}/conda"
+    export CF_VENV_BASE="${CF_SOFTWARE_BASE}/venvs"
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_STORE_LOCAL="${CF_DATA}/${CF_STORE_NAME}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
@@ -196,8 +216,8 @@ bootstrap_crab() {
     (
         echo -e "\nfetching software bundle ..."
         { ${skip_lcg_setup} || source "${lcg_setup}" ""; } &&
-        mkdir -p "${CF_SOFTWARE_BASE}/conda" &&
-        cd "${CF_SOFTWARE_BASE}/conda" &&
+        mkdir -p "${CF_CONDA_BASE}" &&
+        cd "${CF_CONDA_BASE}" &&
         GFAL_PYTHONBIN="$( which python3 )" law_wlcg_get_file '{{cf_software_uris}}' '{{cf_software_pattern}}' "software.tgz" &&
         tar -xzf "software.tgz" &&
         rm "software.tgz" &&

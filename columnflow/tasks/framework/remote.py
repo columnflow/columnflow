@@ -884,9 +884,6 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         if self.htcondor_disk is not None and self.htcondor_disk > 0:
             config.custom_content.append(("RequestDisk", f"{self.htcondor_disk} Gb"))
 
-        # remove held jobs periodically
-        config.custom_content.append(("periodic_remove", "(HoldReason =!= undefined)"))
-
         # render variables
         config.render_variables["cf_bootstrap_name"] = "htcondor_standalone"
         if self.htcondor_flavor not in ("", law.NO_STR):
@@ -898,8 +895,9 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
             "cf_remote_lcg_setup_force",
             "1" if law.config.get_expanded_bool("job", "remote_lcg_setup_force") else "",
         )
-        if self.htcondor_share_software:
-            config.render_variables["cf_software_base"] = os.environ["CF_SOFTWARE_BASE"]
+        config.render_variables["cf_htcondor_share_software"] = str(self.htcondor_share_software).lower()
+        config.render_variables["cf_conda_base"] = os.environ["CF_CONDA_BASE"]
+        config.render_variables["cf_venv_base"] = os.environ["CF_VENV_BASE"]
 
         # forward env variables
         for ev, rv in self.htcondor_forward_env_variables.items():

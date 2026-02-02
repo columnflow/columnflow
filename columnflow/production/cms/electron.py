@@ -61,7 +61,7 @@ class ElectronSFConfig:
     use_supercluster_eta=True,
     # name of the saved weight column
     weight_name="electron_weight",
-    supported_versions={1, 2, 3},
+    supported_versions={1, 2, 3, 4},
 )
 def electron_weights(
     self: Producer,
