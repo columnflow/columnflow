@@ -37,8 +37,8 @@ class BTagWPCountConfig(TAFConfig):
     })
     # edges for histogram binning
     # ! values are merely examples and should be overwritten
-    pt_edges: tuple[float, ...] = (20, 30, 50, 70, 100, 140, 200, 300, 600, 1000)
-    abs_eta_edges: tuple[float, ...] = (0.0, 1.0, 1.5, 2.0, 2.5)
+    pt_edges: tuple[float, ...] = (0, 20, 30, 50, 70, 100, 140, 200, 300, 600, 10_000)
+    abs_eta_edges: tuple[float, ...] = (0.0, 1.0, 1.5, 2.0, 5.0)
     # key of the histogram to save in selector hists
     hist_key: str = "btag_wp_counts"
 
