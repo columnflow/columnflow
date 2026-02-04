@@ -504,7 +504,13 @@ def normalization_weights_setup(
 
     # prepare info for the inclusive dataset
     inclusive_proc = self.inclusive_dataset.processes.get_first()
-    inclusive_xsec = inclusive_proc.get_xsec(self.config_inst.campaign.ecm).nominal
+    try:
+        inclusive_xsec = inclusive_proc.get_xsec(self.config_inst.campaign.ecm).nominal
+    except KeyError as e:
+        raise KeyError(
+            f"no cross section registered for inclusive process {inclusive_proc} for center-of-mass energy of "
+            f"{self.config_inst.campaign.ecm}",
+        ) from e
 
     # compute the weight the inclusive dataset would have on its own without stitching
     if self.allow_stitching and self.dataset_inst == self.inclusive_dataset:
