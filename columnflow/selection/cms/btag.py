@@ -66,14 +66,6 @@ def fill_btag_wp_count_hists(
     """
     import hist
 
-    # create empty histogram
-    h = hist.Hist(
-        hist.axis.Variable(self.cfg.pt_edges, name="pt", label="pt"),
-        hist.axis.Variable(self.cfg.abs_eta_edges, name="abs_eta", label="abs_eta"),
-        hist.axis.StrCategory(["total"] + list(self.wp_ranges.keys()), name="wp_bin", label="wp_bin"),
-        storage=hist.storage.Double(),
-    )
-
     # select jets and reduce to selected events only
     jets = events[self.cfg.jet_name][jet_mask][event_mask]
 
@@ -81,6 +73,14 @@ def fill_btag_wp_count_hists(
     pt = ak.flatten(jets.pt, axis=None)
     abs_eta = abs(ak.flatten(jets.eta, axis=None))
     btag_score = ak.flatten(jets[self.cfg.btag_column], axis=None)
+
+    # create empty histogram
+    h = hist.Hist(
+        hist.axis.Variable(self.cfg.pt_edges, name="pt", label="pt"),
+        hist.axis.Variable(self.cfg.abs_eta_edges, name="abs_eta", label="abs_eta"),
+        hist.axis.StrCategory(["total"] + list(self.wp_ranges.keys()), name="wp_bin", label="wp_bin"),
+        storage=hist.storage.Double(),
+    )
 
     # fill total wp bin
     h.fill(pt=pt, abs_eta=abs_eta, wp_bin="total")
