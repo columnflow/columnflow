@@ -765,6 +765,9 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
     }
 
+    # whether to show a memory summary histogram after workflow completion
+    show_memory_summary_hist = True
+
     # upstream requirements
     reqs = Requirements(
         BundleRepo=BundleRepo,
@@ -914,9 +917,14 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         info = self.common_destination_info(info)
         return info
 
-    def htcondor_post_poll_callback(self, success, duration):
+    def htcondor_post_poll_callback(self, success, duration, summary_kwargs=None):
         from law.workflow.remote import log_job_memory_summary
-        log_job_memory_summary(self.workflow_proxy.job_data, log=self.logger.info)
+
+        # prepare kwargs to forward
+        summary_kwargs = summary_kwargs or {}
+        summary_kwargs.setdefault("use_uniplot", self.show_memory_summary_hist)
+
+        log_job_memory_summary(self.workflow_proxy.job_data, log=self.logger.info, **summary_kwargs)
 
 
 _default_slurm_flavor = law.config.get_expanded("analysis", "slurm_flavor", "maxwell")

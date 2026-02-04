@@ -202,7 +202,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 @dy_weights.init
 def dy_weights_init(self: Producer) -> None:
-    if self.config_inst.campaign.x.year not in {2022, 2023}:
+    if self.config_inst.campaign.x.year not in {2022, 2023, 2024}:
         raise NotImplementedError(
             f"campaign year {self.config_inst.campaign.x.year} is not yet supported by {self.cls_name}",
         )
