@@ -59,7 +59,7 @@ def fill_btag_wp_count_hists(
 ) -> None:
     """
     Selector that fills numbers of selected jets passing different b-tagging working points into histograms. There is no
-    return values defined as the created histogram is stored in *hists* in-place.
+    return value as the created histogram is stored in *hists* in-place.
 
     The counts can be used later on to compute b-tagging efficiencies, required by scale factor calculations such as
     https://btv-wiki.docs.cern.ch/PerformanceCalibration/fixedWPSFRecommendations/#b-tagging-efficiencies-in-simulation.
@@ -72,18 +72,20 @@ def fill_btag_wp_count_hists(
     # flatten necessary columns
     pt = ak.flatten(jets.pt, axis=None)
     abs_eta = abs(ak.flatten(jets.eta, axis=None))
+    flavor = ak.flatten(jets.hadronFlavour, axis=None)
     btag_score = ak.flatten(jets[self.cfg.btag_column], axis=None)
 
     # create empty histogram
     h = hist.Hist(
         hist.axis.Variable(self.cfg.pt_edges, name="pt", label="pt"),
         hist.axis.Variable(self.cfg.abs_eta_edges, name="abs_eta", label="abs_eta"),
+        hist.axis.IntCategory(categories=[], growth=True, name="flavor", label="flavor"),
         hist.axis.StrCategory(["total"] + list(self.wp_ranges.keys()), name="wp_bin", label="wp_bin"),
         storage=hist.storage.Double(),
     )
 
     # fill total wp bin
-    h.fill(pt=pt, abs_eta=abs_eta, wp_bin="total")
+    h.fill(pt=pt, abs_eta=abs_eta, flavor=flavor, wp_bin="total")
 
     # fill wp bins
     for wp_bin, (lower, upper) in self.wp_ranges.items():
@@ -92,7 +94,7 @@ def fill_btag_wp_count_hists(
             mask = mask & (btag_score >= lower)
         if upper is not None:
             mask = mask & (btag_score < upper)
-        h.fill(pt=pt[mask], abs_eta=abs_eta[mask], wp_bin=wp_bin)
+        h.fill(pt=pt[mask], abs_eta=abs_eta[mask], flavor=flavor[mask], wp_bin=wp_bin)
 
     # store the histogram
     hists[self.cfg.hist_key] = h
