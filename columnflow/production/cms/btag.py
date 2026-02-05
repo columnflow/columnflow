@@ -359,9 +359,14 @@ class BTagWPSFConfig(TAFConfig):
         "xtight": 0.6298,
         "xxtight": 0.9739,
     })
+    # edges for histogram re-binning when set
+    # ! note that, when given, these edges need to be a valid subset of the original bin edges used to create the
+    pt_edges: tuple[float, ...] | None = None
+    abs_eta_edges: tuple[float, ...] | None = None
     # key of the histogram to save in selector hists
     hist_key: str = "btag_wp_counts"
     # name of the weight column to produce
+    weight_name: str = "btag_weight"
 
 
 @producer(
@@ -422,10 +427,24 @@ def btag_wp_weights_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    import hist
+
     # load the btag sf corrector
     btag_wp_file = self.get_btag_wp_file(reqs["external_files"].files)
     self.btag_wp_sf_corrector = load_correction_set(btag_wp_file)[self.cfg.correction_set]
 
     # load the count histograms and compute efficiencies
-    # TODO: actually compute them and create a histogram binned in (wp, abs_eta, pt, flavor)
-    self.btag_effs = None
+    hists = inputs["selection_stats"]["hists"].load(formatter="pickle")
+    h = hists[self.cfg.hist_key]
+    # optionally rebin pt and abs_eta axes
+    if self.cfg.pt_edges:
+        h = h[{"pt": hist.rebin(edges=self.cfg.pt_edges)}]
+    if self.cfg.abs_eta_edges:
+        h = h[{"abs_eta": hist.rebin(edges=self.cfg.abs_eta_edges)}]
+    # compute efficiencies
+    counts_total = h[{"wp": "total"}]
+    effs = h[{"wp": [wp for wp in h.axes["wp"] if wp != "total"]}]
+    eff_values = effs.view()
+    eff_values[...] /= counts_total.view()[..., None]
+    eff_values[np.isnan(eff_values)] = 1.0
+    self.btag_effs = effs
