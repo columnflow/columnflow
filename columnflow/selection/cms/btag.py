@@ -80,21 +80,17 @@ def fill_btag_wp_count_hists(
         hist.axis.Variable(self.cfg.pt_edges, name="pt", label="pt"),
         hist.axis.Variable(self.cfg.abs_eta_edges, name="abs_eta", label="abs_eta"),
         hist.axis.IntCategory(categories=[], growth=True, name="flavor", label="flavor"),
-        hist.axis.StrCategory(["total"] + list(self.wp_ranges.keys()), name="wp_bin", label="wp_bin"),
+        hist.axis.StrCategory(["total", *self.cfg.btag_wps.keys()], name="wp", label="wp"),
         storage=hist.storage.Double(),
     )
 
     # fill total wp bin
-    h.fill(pt=pt, abs_eta=abs_eta, flavor=flavor, wp_bin="total")
+    h.fill(pt=pt, abs_eta=abs_eta, flavor=flavor, wp="total")
 
     # fill wp bins
-    for wp_bin, (lower, upper) in self.wp_ranges.items():
-        mask = np.ones(len(pt), dtype=bool)
-        if lower is not None:
-            mask = mask & (btag_score >= lower)
-        if upper is not None:
-            mask = mask & (btag_score < upper)
-        h.fill(pt=pt[mask], abs_eta=abs_eta[mask], flavor=flavor[mask], wp_bin=wp_bin)
+    for wp, threshold in self.cfg.btag_wps.items():
+        mask = btag_score >= threshold
+        h.fill(pt=pt[mask], abs_eta=abs_eta[mask], flavor=flavor[mask], wp=wp)
 
     # store the histogram
     hists[self.cfg.hist_key] = h
@@ -107,11 +103,3 @@ def fill_btag_wp_count_hists_init(self: Selector) -> None:
 
     # add used columns
     self.uses.add(f"{self.cfg.jet_name}.{{pt,eta,phi,mass,hadronFlavour,{self.cfg.btag_column}}}")
-
-    # compute working point ranges, starting with the lowest bin ranging from "veto" to the first wp entry
-    self.wp_ranges = {}
-    for lower_key, upper_key in zip([None] + list(self.cfg.btag_wps.keys()), list(self.cfg.btag_wps.keys()) + [None]):
-        self.wp_ranges[lower_key or "veto"] = (
-            self.cfg.btag_wps.get(lower_key, float("-inf")),
-            self.cfg.btag_wps.get(upper_key, float("inf")),
-        )
