@@ -277,6 +277,7 @@ def draw_errorbars(
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
     error_type: str = "poisson_unweighted",
+    density: bool = False,
     **kwargs,
 ) -> None:
     import hist
@@ -301,7 +302,7 @@ def draw_errorbars(
                 "Error bars calculation only implemented for histograms with storage type WeightedSum "
                 "either change the Histogram storage_type or set yerr manually",
             )
-        yerr = calculate_stat_error(h, error_type)
+        yerr = calculate_stat_error(h, error_type, density=density)
         # normalize yerr to the histogram = error propagation on standard deviation
         yerr = abs(yerr / norm)
         # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
