@@ -6,13 +6,13 @@ Producers for btag scale factor weights.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import dataclasses
 
 import law
 
 from columnflow.production import Producer, producer
 from columnflow.util import maybe_import, load_correction_set
-from columnflow.columnar_util import set_ak_column, DotDict
+from columnflow.columnar_util import set_ak_column, DotDict, TAFConfig, full_like
 from columnflow.types import Any
 
 np = maybe_import("numpy")
@@ -22,12 +22,12 @@ ak = maybe_import("awkward")
 logger = law.logger.get_logger(__name__)
 
 
-@dataclass
-class BTagSFConfig:
+@dataclasses.dataclass
+class BTagSFConfig(TAFConfig):
     correction_set: str
     jec_sources: list[str]
     discriminator: str = ""  # when empty, set in post init based on correction set
-    corrector_kwargs: dict[str, Any] = field(default_factory=dict)
+    corrector_kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def __post_init__(self):
         cs = self.correction_set.lower()
@@ -340,3 +340,92 @@ def btag_weights_setup(
     # load the btag sf corrector
     btag_file = self.get_btag_file(reqs["external_files"].files)
     self.btag_sf_corrector = load_correction_set(btag_file)[self.btag_config.correction_set]
+
+
+@dataclasses.dataclass
+class BTagWPSFConfig(TAFConfig):
+    # name of the jet collection
+    jet_name: str = "Jet"
+    # name of the b-tag score column
+    btag_column: str = "btagUParTAK4B"
+    # name of the correction set to load
+    correction_set: str = "UPartTAK4_merged"
+    # mapping of working point names and thresholds
+    # ! values are merely examples and should be overwritten
+    btag_wps: dict[str, float] = dataclasses.field(default_factory=lambda: {
+        "loose": 0.0246,
+        "medium": 0.1272,
+        "tight": 0.4648,
+        "xtight": 0.6298,
+        "xxtight": 0.9739,
+    })
+    # key of the histogram to save in selector hists
+    hist_key: str = "btag_wp_counts"
+    # name of the weight column to produce
+
+
+@producer(
+    # only run on mc
+    mc_only=True,
+    # function to determine the correction file
+    get_btag_wp_file=(lambda self, external_files: external_files.btag_wp_sf_corr),
+    # function to configure how to retrieve the BTagWPSFConfig
+    get_btag_wp_sf_config=(lambda self: self.config_inst.x.btag_wp_sf_config),
+)
+def btag_wp_weights(
+    self: Producer,
+    events: ak.Array,
+    task: law.Task,
+    jet_mask: ak.Array | type(Ellipsis) = Ellipsis,
+    **kwargs,
+) -> ak.Array:
+    # TODO: all the implementation goes here :)
+    events = set_ak_column(events, self.cfg.weight_name, full_like(events.event, 1.0, dtype=np.float32))
+
+    return events
+
+
+@btag_wp_weights.init
+def btag_wp_weights_init(self: Producer) -> None:
+    # retrieve and store the config
+    self.cfg: BTagWPSFConfig = self.get_btag_wp_sf_config()
+
+    # add used columns
+    self.uses.add(f"{self.cfg.jet_name}.{{pt,eta,phi,mass,hadronFlavour,{self.cfg.btag_column}}}")
+
+
+@btag_wp_weights.requires
+def btag_wp_weights_requires(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    **kwargs,
+) -> None:
+    if "external_files" not in reqs:
+        from columnflow.tasks.external import BundleExternalFiles
+        reqs["external_files"] = BundleExternalFiles.req(task)
+
+    if "selection_stats" not in reqs:
+        from columnflow.tasks.selection import MergeSelectionStats
+        reqs["selection_stats"] = MergeSelectionStats.req_different_branching(
+            task,
+            branch=-1 if task.is_workflow() else 0,
+        )
+
+
+@btag_wp_weights.setup
+def btag_wp_weights_setup(
+    self: Producer,
+    task: law.Task,
+    reqs: dict[str, DotDict[str, Any]],
+    inputs: dict[str, Any],
+    reader_targets: law.util.InsertableDict,
+    **kwargs,
+) -> None:
+    # load the btag sf corrector
+    btag_wp_file = self.get_btag_wp_file(reqs["external_files"].files)
+    self.btag_wp_sf_corrector = load_correction_set(btag_wp_file)[self.cfg.correction_set]
+
+    # load the count histograms and compute efficiencies
+    # TODO: actually compute them and create a histogram binned in (wp, abs_eta, pt, flavor)
+    self.btag_effs = None
