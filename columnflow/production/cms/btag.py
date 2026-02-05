@@ -360,7 +360,7 @@ class BTagWPSFConfig(TAFConfig):
         "xxtight": 0.9739,
     })
     # edges for histogram re-binning when set
-    # ! note that, when given, these edges need to be a valid subset of the original bin edges used to create the
+    # ! note that, when given, these edges need to be a valid subset of the original bin edges of the counting hists
     pt_edges: tuple[float, ...] | None = None
     abs_eta_edges: tuple[float, ...] | None = None
     # key of the histogram to save in selector hists
