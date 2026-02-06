@@ -483,7 +483,7 @@ class RemoteWorkflowMixin(AnalysisTask):
         :param config: The job :py:class:`law.BaseJobFileFactory.Config` whose render variables
             should be set.
         """
-        join_bash = lambda seq: " ".join(map('"{}"'.format, seq))
+        join_bash = lambda seq: " ".join(map(str, seq))
 
         def get_bundle_info(task):
             uris = task.output().dir.uri(base_name="filecopy", return_all=True)
