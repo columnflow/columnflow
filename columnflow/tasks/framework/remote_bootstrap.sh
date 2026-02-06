@@ -75,6 +75,11 @@ bootstrap_htcondor_standalone() {
             >&2 echo "cf_htcondor_share_software is set to true, but cf_venv_base is not accessible: ${CF_VENV_BASE}"
             return "1"
         fi
+        echo "detected existing venvs at ${CF_VENV_BASE}"
+    else
+        # force local bases
+        export CF_CONDA_BASE="${CF_SOFTWARE_BASE}/conda"
+        export CF_VENV_BASE="${CF_SOFTWARE_BASE}/venvs"
         # set variables required by _setup_venv script to load and setup venvs on-the-fly
         export CF_JOB_BASH_SANDBOX_URIS="{{cf_bash_sandbox_uris}}"
         export CF_JOB_BASH_SANDBOX_PATTERNS="{{cf_bash_sandbox_patterns}}"
@@ -82,11 +87,6 @@ bootstrap_htcondor_standalone() {
         export CF_JOB_CMSSW_SANDBOX_URIS="{{cf_cmssw_sandbox_uris}}"
         export CF_JOB_CMSSW_SANDBOX_PATTERNS="{{cf_cmssw_sandbox_patterns}}"
         export CF_JOB_CMSSW_SANDBOX_NAMES="{{cf_cmssw_sandbox_names}}"
-        echo "detected existing venvs at ${CF_VENV_BASE}"
-    else
-        # force local bases
-        export CF_CONDA_BASE="${CF_SOFTWARE_BASE}/conda"
-        export CF_VENV_BASE="${CF_SOFTWARE_BASE}/venvs"
     fi
 
     # when gfal is not available, check that the lcg_setup file exists
