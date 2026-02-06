@@ -85,8 +85,8 @@ bootstrap_htcondor_standalone() {
         echo "detected existing venvs at ${CF_VENV_BASE}"
     else
         # force local bases
-        export CF_CONDA_BASE="${CF_SOFTWARE}/conda"
-        export CF_VENV_BASE="${CF_SOFTWARE}/venvs"
+        export CF_CONDA_BASE="${CF_SOFTWARE_BASE}/conda"
+        export CF_VENV_BASE="${CF_SOFTWARE_BASE}/venvs"
     fi
 
     # when gfal is not available, check that the lcg_setup file exists
