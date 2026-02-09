@@ -46,6 +46,8 @@ class BTagWPCountConfig(TAFConfig):
 @selector(
     # function to configure how to retrieve the BTagWPCountConfig
     get_btag_wp_count_config=(lambda self: self.config_inst.x.btag_wp_count_config),
+    # only run on mc
+    mc_only=True,
     # unexpose so that it cannot be called from the command line
     exposed=False,
 )
