@@ -580,7 +580,7 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
         if not outputs["bundle"].exists():
             if not env_is_local:
                 raise RuntimeError(
-                    f"the output bundle {outputs['bundle'].basename} is missing, but cannot be created in non-local "
+                    f"the output bundle {self.single_output().abspath} is missing, but cannot be created in non-local "
                     "environments",
                 )
 
