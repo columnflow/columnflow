@@ -349,7 +349,7 @@ class BTagWPSFConfig(TAFConfig):
     # name of the b-tag score column
     btag_column: str = "btagUParTAK4B"
     # name of the correction set to load
-    correction_set: str = "UPartTAK4_merged"
+    correction_set: str = "UParTAK4_merged"
     # mapping of working point names and thresholds
     # ! values are merely examples and should be overwritten
     btag_wps: dict[str, float] = dataclasses.field(default_factory=lambda: {
@@ -384,19 +384,166 @@ def btag_wp_weights(
     jet_mask: ak.Array | type(Ellipsis) = Ellipsis,
     **kwargs,
 ) -> ak.Array:
-    # TODO: all the implementation goes here :)
+    """
+    B-tag scale factor weight producer using the fixed working point method. Requires an external file in the config as under
+    ``btag_sf_corr``:
+
+    .. code-block:: python
+
+        cfg.x.external_files = DotDict.wrap({
+            "btag_wp_sf_corr": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/BTV/2017_UL/btagging.json.gz",  # noqa
+        })
+
+    *get_btag_wp_file* can be adapted in a subclass in case it is stored differently in the external
+    files.
+
+    The name of the correction set, a list of JEC uncertainty sources which should be
+    propagated through the weight calculation, and the column used for b-tagging should
+    be given as an auxiliary entry in the config:
+
+    .. code-block:: python
+
+        cfg.x.btag_sf = BTagSFConfig(
+            correction_set="btagUParTAK4B_merged",
+            jec_sources=["Absolute", "FlavorQCD", ...],
+            discriminator="btagUParTAK4B",
+            corrector_kwargs={...},
+        )
+
+    *get_btag_wp_sf_config* can be adapted in a subclass in case it is stored differently in the config.
+
+    Resources:
+        - https://btv-wiki.docs.cern.ch/PerformanceCalibration/fixedWPSFRecommendations/#recommendations-for-fixed-working-point-sfs  # noqa
+        - https://cms-analysis-corrections.docs.cern.ch/corrections_era/Run3-24CDEReprocessingFGHIPrompt-Summer24-NanoAODv15/BTV/2026-01-30/#btagging_preliminaryjsongz  # noqa
+        - https://indico.cern.ch/event/1583955/contributions/6771046/attachments/3176162/5648591/BTVreportHIGPAG_18112025.pdf  # noqa
+    """
+    from hist import loc
+
+    # get inputs
+    discr = events.Jet[self.cfg.btag_column]
+    flavor = events[self.cfg.jet_name].hadronFlavour
+    abs_eta = abs(events[self.cfg.jet_name].eta)
+    pt = events[self.cfg.jet_name].pt
+
+    # helpers to get the sf and efficiencies
+    def get_sf_and_eff(
+        wp: str,
+        variable_map: dict[str, ak.Array]
+    ) -> tuple[ak.Array, ak.Array]:
+
+        # for compatibility with BTV correction set naming
+        convert_wp_str = {"loose": "L", "medium": "M", "tight": "T", "xtight": "XT", "xxtight": "XXT"}
+        wp_btv = convert_wp_str[wp]
+        variable_map["working_point"] = wp_btv
+
+        # get scale factor
+        sf = self.btag_wp_sf_corrector(
+            *(variable_map[inp.name] for inp in self.btag_wp_sf_corrector.inputs)
+        )
+
+        # for compatibility with btag efficiency corrector
+        variable_map_eff = variable_map.copy()
+        variable_map_eff.pop("working_point", None)
+        variable_map_eff.pop("systematic", None)
+        variable_map_eff["wp"] = wp
+        variable_map_eff["abs_eta"] = variable_map_eff["abseta"]
+
+        # get efficiency
+        wp_eff = self.wp_eff_corrector(
+            *(variable_map_eff[inp.name] for inp in self.wp_eff_corrector.inputs)
+        )
+
+        return sf, wp_eff
+
+    # sort the WPs therehold values and make the WP strings all lowercase
+    wps = dict(sorted(((k.lower(), v) for k, v in self.cfg.btag_wps.items()), key=lambda tpl: tpl[1]))
+
+    # helper to create and store the weight
+    def add_wp_weight(syst_name, syst_direction, column_name):
+
+        # initialize btag_weight set 1.0
+        btag_weight = ak.ones_like(events.event, dtype=np.float32)
+
+        # apply WP masks to each jet in the event falling between the WP thresholds
+        for lower_key, upper_key in zip([None] + list(wps.keys()), list(wps.keys()) + [None]):
+            jet_mask = (discr >= wps.get(lower_key, -np.inf)) & (discr < wps.get(upper_key, np.inf))
+            # ak.where(jet_mask, events.Jet[self.cfg.btag_column], float("nan"))
+
+            # prepare arguments with specific WP jet_mask applied
+            variable_map = {
+                "systematic": syst_name if syst_name == "central" else f"{syst_direction}_{syst_name}",
+                "flavor": flavor[jet_mask],
+                "abseta": abs_eta[jet_mask],
+                "pt": pt[jet_mask],
+            }
+
+            # handle three cases for sf calculation
+            # general sf formula: (sf_pass * wp_eff_pass - sf_fail * wp_eff_fail) / (wp_eff_pass - wp_eff_fail)
+            if lower_key is None:  # jets that fail lowest WP
+                sf_fail, wp_eff_fail = get_sf_and_eff(upper_key, variable_map)
+                sf_pass, wp_eff_pass = 1.0, 1.0
+            elif upper_key is None:  # jets that pass highest WP
+                sf_fail, wp_eff_fail = 0.0, 0.0
+                sf_pass, wp_eff_pass = get_sf_and_eff(lower_key, variable_map)
+            else:  # jets that pass one WP but fail the next one
+                sf_fail, wp_eff_fail = get_sf_and_eff(lower_key, variable_map)
+                sf_pass, wp_eff_pass = get_sf_and_eff(upper_key, variable_map)
+
+            from IPython import embed; embed(header="debugger")
+
+
+            # sf_term = (sf_pass * wp_eff_pass - sf_fail * wp_eff_fail) / (wp_eff_pass - wp_eff_fail)
+            # sf_term = ak.where(sf_term <= 0, 1.0, sf_term)
+
+            # btag_weight = btag_weight * ak.prod(sf_term, axis=1, mask_identity=False)
+
+        return set_ak_column(events, column_name, btag_weight, value_type=np.float32)
+
+    shift_inst = task.global_shift_inst
+    if shift_inst.is_nominal:
+        # nominal weight and those of all method intrinsic uncertainties
+        events = add_wp_weight("central", None, self.cfg.weight_name)
+        for syst_name, col_name in self.btag_uncs.items():
+            for direction in ["up", "down"]:
+                events = add_wp_weight(
+                    syst_name,
+                    direction,
+                    f"{self.cfg.weight_name}_{col_name}_{direction}",
+                )
+    else:
+        # any other shift, just produce the nominal weight
+        events = add_wp_weight("central", None, self.cfg.weight_name)
+
     events = set_ak_column(events, self.cfg.weight_name, full_like(events.event, 1.0, dtype=np.float32))
 
     return events
 
 
-@btag_wp_weights.init
-def btag_wp_weights_init(self: Producer) -> None:
-    # retrieve and store the config
-    self.cfg: BTagWPSFConfig = self.get_btag_wp_sf_config()
+@btag_wp_weights.post_init
+def btag_wp_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
+
+    # retrieve and store the config and shift information
+    self.cfg = self.get_btag_wp_sf_config()
+    shift_inst = task.global_shift_inst
 
     # add used columns
     self.uses.add(f"{self.cfg.jet_name}.{{pt,eta,phi,mass,hadronFlavour,{self.cfg.btag_column}}}")
+
+    # names of method-intrinsic uncertainties, mapped to how they are namend in produced columns
+    self.btag_uncs = {
+        "hdamp": "hdamp",
+    }
+
+    # add uncertainty sources of the method itself
+    if shift_inst.is_nominal:
+        # nominal column
+        self.produces.add(self.cfg.weight_name)
+        # all varied columns
+        for col_name in self.btag_uncs.values():
+            self.produces.add(f"{self.cfg.weight_name}_{col_name}_{{up,down}}")
+    else:
+        # only the nominal column
+        self.produces.add(self.cfg.weight_name)
 
 
 @btag_wp_weights.requires
@@ -428,6 +575,8 @@ def btag_wp_weights_setup(
     **kwargs,
 ) -> None:
     import hist
+    import correctionlib as clib
+    import correctionlib.convert
 
     # load the btag sf corrector
     btag_wp_file = self.get_btag_wp_file(reqs["external_files"].files)
@@ -448,3 +597,8 @@ def btag_wp_weights_setup(
     eff_values[...] /= counts_total.view()[..., None]
     eff_values[np.isnan(eff_values)] = 1.0
     self.btag_effs = effs
+
+    # convert to clib corrector
+    self.btag_effs.name = "btag_efficiencies"
+    self.btag_effs.label = "eff"
+    self.wp_eff_corrector = clib.convert.from_histogram(self.btag_effs).to_evaluator()
