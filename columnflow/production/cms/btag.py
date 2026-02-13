@@ -9,11 +9,13 @@ from __future__ import annotations
 import dataclasses
 
 import law
+import order as od
 
 from columnflow.production import Producer, producer
+from columnflow.columnar_util import set_ak_column, DotDict, TAFConfig, full_like, EMPTY_FLOAT
+from columnflow.hist_util import sum_hists
 from columnflow.util import maybe_import, load_correction_set
-from columnflow.columnar_util import set_ak_column, DotDict, TAFConfig, full_like
-from columnflow.types import Any
+from columnflow.types import Any, Callable, Sequence
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -367,6 +369,28 @@ class BTagWPSFConfig(TAFConfig):
     hist_key: str = "btag_wp_counts"
     # name of the weight column to produce
     weight_name: str = "btag_weight"
+    # a function that, given a dataset_inst, returns other dataset_inst's (or their names) whose counting histograms
+    # should be summed, can also be a sequence of lists containing dataset_inst's (converted to callable in init)
+    # (see "binning recommendations" in ref 1 below)
+    dataset_groups: (
+        Callable[[od.Dataset], Sequence[od.Dataset | str] | None] |
+        Sequence[Sequence[od.Dataset | str]] |
+        None
+    ) = None
+
+    def __post_init__(self) -> None:
+        # ensure group_datasets is always a callable
+        if not self.dataset_groups:
+            self.dataset_groups = lambda dataset: [dataset]
+        elif not callable(self.dataset_groups):
+            # convert nested sequence to list of sets for faster lookup
+            groups = list(set(seq) for seq in self.dataset_groups)
+            def dataset_groups(dataset_inst: od.Dataset) -> list[od.Dataset] | None:
+                for group in groups:
+                    if dataset_inst in group or dataset_inst.name in group:
+                        return list(group)
+                return None
+            self.dataset_groups = dataset_groups
 
 
 @producer(
@@ -413,9 +437,9 @@ def btag_wp_weights(
     *get_btag_wp_sf_config* can be adapted in a subclass in case it is stored differently in the config.
 
     Resources:
-        - https://btv-wiki.docs.cern.ch/PerformanceCalibration/fixedWPSFRecommendations/#recommendations-for-fixed-working-point-sfs  # noqa
-        - https://cms-analysis-corrections.docs.cern.ch/corrections_era/Run3-24CDEReprocessingFGHIPrompt-Summer24-NanoAODv15/BTV/2026-01-30/#btagging_preliminaryjsongz  # noqa
-        - https://indico.cern.ch/event/1583955/contributions/6771046/attachments/3176162/5648591/BTVreportHIGPAG_18112025.pdf  # noqa
+        1. https://btv-wiki.docs.cern.ch/PerformanceCalibration/fixedWPSFRecommendations/#recommendations-for-fixed-working-point-sfs  # noqa
+        2. https://cms-analysis-corrections.docs.cern.ch/corrections_era/Run3-24CDEReprocessingFGHIPrompt-Summer24-NanoAODv15/BTV/2026-01-30/#btagging_preliminaryjsongz  # noqa
+        3. https://indico.cern.ch/event/1583955/contributions/6771046/attachments/3176162/5648591/BTVreportHIGPAG_18112025.pdf  # noqa
     """
     from hist import loc
 
@@ -532,13 +556,36 @@ def btag_wp_weights(
     return events
 
 
+@btag_wp_weights.init
+def btag_wp_weights_init(self: Producer, **kwargs) -> None:
+    self.cfg = self.get_btag_wp_sf_config()
+
+    # keep a list of all dataset insts whose tagging counts should be grouped (summed)
+    group = self.cfg.dataset_groups(self.dataset_inst)
+    log_id = f"{self.cls_name}_{self.config_inst.name}_{self.dataset_inst.name}_group_lookup"
+    if group:
+        # make sure to deal with instances rather than names
+        group = [
+            (dataset if isinstance(dataset, od.Dataset) else self.config_inst.get_dataset(dataset))
+            for dataset in group
+        ]
+        logger.info_once(
+            log_id,
+            f"{self.cls_name}: found {len(group)} dataset(s) for grouping tagging counts for requested dataset "
+            f"'{self.dataset_inst.name}': {', '.join(dataset.name for dataset in group)}",
+        )
+    else:
+        logger.warning_once(
+            log_id,
+            f"{self.cls_name}: found no dataset group for requested dataset '{self.dataset_inst.name}', please check "
+            f"the 'dataset_groups' setting in the {self.cfg.__class__.__name__} object",
+        )
+        group = [self.dataset_inst]
+    self.dataset_group = group
+
+
 @btag_wp_weights.post_init
 def btag_wp_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
-
-    # retrieve and store the config and shift information
-    self.cfg = self.get_btag_wp_sf_config()
-    shift_inst = task.global_shift_inst
-
     # add used columns
     self.uses.add(f"{self.cfg.jet_name}.{{pt,eta,phi,mass,hadronFlavour,{self.cfg.btag_column}}}")
 
@@ -548,7 +595,7 @@ def btag_wp_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
     }
 
     # add uncertainty sources of the method itself
-    if shift_inst.is_nominal:
+    if task.global_shift_inst.is_nominal:
         # nominal column
         self.produces.add(self.cfg.weight_name)
         # all varied columns
@@ -570,12 +617,16 @@ def btag_wp_weights_requires(
         from columnflow.tasks.external import BundleExternalFiles
         reqs["external_files"] = BundleExternalFiles.req(task)
 
-    if "selection_stats" not in reqs:
+    if "grouped_selection_stats" not in reqs:
         from columnflow.tasks.selection import MergeSelectionStats
-        reqs["selection_stats"] = MergeSelectionStats.req_different_branching(
-            task,
-            branch=-1 if task.is_workflow() else 0,
-        )
+        reqs["grouped_selection_stats"] = {
+            dataset_inst.name: MergeSelectionStats.req_different_branching(
+                task,
+                dataset=dataset_inst.name,
+                branch=-1 if task.is_workflow() else 0,
+            )
+            for dataset_inst in self.dataset_group
+        }
 
 
 @btag_wp_weights.setup
@@ -596,22 +647,25 @@ def btag_wp_weights_setup(
     self.btag_wp_sf_corrector = load_correction_set(btag_wp_file)[self.cfg.correction_set]
 
     # load the count histograms and compute efficiencies
-    hists = inputs["selection_stats"]["hists"].load(formatter="pickle")
-    h = hists[self.cfg.hist_key]
+    counts = sum_hists([
+        inps["hists"].load(formatter="pickle")[self.cfg.hist_key]
+        for inps in inputs["grouped_selection_stats"].values()
+    ])
     # optionally rebin pt and abs_eta axes
     if self.cfg.pt_edges:
-        h = h[{"pt": hist.rebin(edges=self.cfg.pt_edges)}]
+        counts = counts[{"pt": hist.rebin(edges=self.cfg.pt_edges)}]
     if self.cfg.abs_eta_edges:
-        h = h[{"abs_eta": hist.rebin(edges=self.cfg.abs_eta_edges)}]
+        counts = counts[{"abs_eta": hist.rebin(edges=self.cfg.abs_eta_edges)}]
+    # get the total counts
+    counts_total = counts[{"wp": "total"}].view()
     # compute efficiencies
-    counts_total = h[{"wp": "total"}]
-    effs = h[{"wp": [wp for wp in h.axes["wp"] if wp != "total"]}]
+    effs = counts[{"wp": [wp for wp in counts.axes["wp"] if wp != "total"]}]
     eff_values = effs.view()
-    eff_values[...] /= counts_total.view()[..., None]
-    eff_values[np.isnan(eff_values)] = 1.0
-    self.btag_effs = effs
+    eff_values[...] /= counts_total[..., None]
+    # bins with a count of zero will contain nan's, so replace them with a placeholder
+    eff_values[counts_total == 0] = EMPTY_FLOAT
 
     # convert to clib corrector
-    self.btag_effs.name = "btag_efficiencies"
-    self.btag_effs.label = "eff"
-    self.wp_eff_corrector = clib.convert.from_histogram(self.btag_effs).to_evaluator()
+    effs.name = "btag_efficiencies"
+    effs.label = "eff"
+    self.wp_eff_corrector = clib.convert.from_histogram(effs).to_evaluator()
