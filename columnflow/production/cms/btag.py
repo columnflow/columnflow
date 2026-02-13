@@ -459,7 +459,7 @@ def btag_wp_weights(
 
         # get scale factor
         sf = self.btag_wp_sf_corrector(
-            *(variable_map[inp.name] for inp in self.btag_wp_sf_corrector.inputs)
+            *(variable_map[inp.name] for inp in self.btag_wp_sf_corrector.inputs),
         )
 
         # add further variables needed by the efficiency corrector
@@ -467,7 +467,7 @@ def btag_wp_weights(
 
         # get efficiency
         eff = self.wp_eff_corrector(
-            *(variable_map[inp.name] for inp in self.wp_eff_corrector.inputs)
+            *(variable_map[inp.name] for inp in self.wp_eff_corrector.inputs),
         )
 
         # complain in cases of empty efficiency values
