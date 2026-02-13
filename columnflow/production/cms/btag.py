@@ -431,6 +431,8 @@ def btag_wp_weights(
         variable_map: dict[str, ak.Array]
     ) -> tuple[ak.Array, ak.Array]:
 
+        variable_map = variable_map.copy()
+
         # for compatibility with BTV correction set naming
         convert_wp_str = {"loose": "L", "medium": "M", "tight": "T", "xtight": "XT", "xxtight": "XXT"}
         wp_btv = convert_wp_str[wp]
@@ -461,13 +463,12 @@ def btag_wp_weights(
     # helper to create and store the weight
     def add_wp_weight(syst_name, syst_direction, column_name):
 
-        # initialize btag_weight set 1.0
+        # initialize b-tag event weight with ones
         btag_weight = ak.ones_like(events.event, dtype=np.float32)
 
         # apply WP masks to each jet in the event falling between the WP thresholds
         for lower_key, upper_key in zip([None] + list(wps.keys()), list(wps.keys()) + [None]):
             jet_mask = (discr >= wps.get(lower_key, -np.inf)) & (discr < wps.get(upper_key, np.inf))
-            # ak.where(jet_mask, events.Jet[self.cfg.btag_column], float("nan"))
 
             # prepare arguments with specific WP jet_mask applied
             variable_map = {
@@ -478,7 +479,6 @@ def btag_wp_weights(
             }
 
             # handle three cases for sf calculation
-            # general sf formula: (sf_pass * wp_eff_pass - sf_fail * wp_eff_fail) / (wp_eff_pass - wp_eff_fail)
             if lower_key is None:  # jets that fail lowest WP
                 sf_fail, wp_eff_fail = get_sf_and_eff(upper_key, variable_map)
                 sf_pass, wp_eff_pass = 1.0, 1.0
@@ -486,16 +486,29 @@ def btag_wp_weights(
                 sf_fail, wp_eff_fail = 0.0, 0.0
                 sf_pass, wp_eff_pass = get_sf_and_eff(lower_key, variable_map)
             else:  # jets that pass one WP but fail the next one
-                sf_fail, wp_eff_fail = get_sf_and_eff(lower_key, variable_map)
-                sf_pass, wp_eff_pass = get_sf_and_eff(upper_key, variable_map)
+                sf_fail, wp_eff_fail = get_sf_and_eff(upper_key, variable_map)
+                sf_pass, wp_eff_pass = get_sf_and_eff(lower_key, variable_map)
 
-            from IPython import embed; embed(header="debugger")
+            # if ak.any(wp_eff_pass - wp_eff_fail <= 0):
+            #     raise ValueError(
+            #         """
+            #         Encountered a negative or null value when comparing working point efficiencies.
+            #         The efficiency of a tigher WP should be, by definition, lower than that of a looser one.
+            #         This error was likely caused by a lack of statistics in a measurement bin.
+            #         To ensure enough statistics, consider a more coarse binning in pT/eta, or merging process groups.
+            #         """
+            #     )
 
-
+            # calculate scale factor term per jet, depending on WP efficiency
             # sf_term = (sf_pass * wp_eff_pass - sf_fail * wp_eff_fail) / (wp_eff_pass - wp_eff_fail)
-            # sf_term = ak.where(sf_term <= 0, 1.0, sf_term)
+            denominator = ak.where(wp_eff_pass - wp_eff_fail <= 0, 1.0, wp_eff_pass - wp_eff_fail)
+            sf_term = (sf_pass * wp_eff_pass - sf_fail * wp_eff_fail) / denominator
 
-            # btag_weight = btag_weight * ak.prod(sf_term, axis=1, mask_identity=False)
+            # handle edge cases where the SF becomes negative (unphysical) or zero (killing the event)
+            sf_term = ak.where(sf_term <= 0, 1.0, sf_term)
+
+            # calculate final b-tag event weight as a product of the individual jet scale factor terms
+            btag_weight = btag_weight * ak.prod(sf_term, axis=1, mask_identity=False)
 
         return set_ak_column(events, column_name, btag_weight, value_type=np.float32)
 
