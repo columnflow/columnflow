@@ -365,7 +365,7 @@ class BTagWPSFConfig(TAFConfig):
     # ! note that, when given, these edges need to be a valid subset of the original bin edges of the counting hists
     pt_edges: tuple[float, ...] | None = None
     abs_eta_edges: tuple[float, ...] | None = None
-    # key of the histogram to save in selector hists
+    # key of the tagging counts histogram to load from MergeSelectionStats output
     hist_key: str = "btag_wp_counts"
     # name of the weight column to produce
     weight_name: str = "btag_weight"
@@ -383,7 +383,7 @@ class BTagWPSFConfig(TAFConfig):
     def __post_init__(self) -> None:
         # ensure group_datasets is always a callable
         if not self.dataset_groups:
-            self.dataset_groups = lambda dataset: [dataset]
+            self.dataset_groups = lambda dataset_inst: [dataset_inst]
         elif not callable(self.dataset_groups):
             # convert nested sequence to list of sets for faster lookup
             groups = list(set(seq) for seq in self.dataset_groups)
@@ -417,7 +417,7 @@ def btag_wp_weights(
     .. code-block:: python
 
         cfg.x.external_files = DotDict.wrap({
-            "btag_wp_sf_corr": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/BTV/2017_UL/btagging.json.gz",  # noqa
+            "btag_wp_sf_corr": "/afs/cern.ch/work/m/mrieger/public/hbt/external_files/custom_btv_files/btag_merged_2024.json.gz",  # noqa
         })
 
     *get_btag_wp_file* can be adapted in a subclass in case it is stored differently in the external files.
