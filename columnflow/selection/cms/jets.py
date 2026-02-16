@@ -57,10 +57,8 @@ def jet_veto_map(
         1. https://cms-jerc.web.cern.ch/Recommendations/#jet-veto-maps
         2. https://cms-talk.web.cern.ch/t/updated-jet-selection-criterion-for-jet-veto-map/130527
     """
-    jet = events.Jet
-    muon = events.Muon[events.Muon.isPFcand]
-
     # jet selection
+    jet = events.Jet
     jet_mask = (
         (jet.pt > 15) &
         ((jet.chEmEF + jet.neEmEF) < 0.9)
@@ -70,6 +68,7 @@ def jet_veto_map(
     if self.use_lepton_veto_id:
         jet_mask = jet_mask & (jet.jetId & (1 << 2))  # third bit is tightLepVeto
     else:
+        muon = events.Muon[events.Muon.isPFcand]
         jet_mask = jet_mask & (
             (jet.jetId & (1 << 1)) &  # second bit is tight
             ak.all(events.Jet.metric_table(muon) >= 0.2, axis=2)
@@ -82,14 +81,12 @@ def jet_veto_map(
             (events.Jet.pt >= 50)
         )
 
-    jet_phi = jet.phi
-    jet_eta = jet.eta
-
     # for some reason, math.pi is not included in the ranges, so we need to subtract a small number
     pi = math.pi - 1e-10
 
     # values outside [-pi, pi] are not included, so we need to clip the phi values
-    phi_outside_range = abs(jet.phi) > pi
+    jet_phi = jet.phi
+    phi_outside_range = abs(jet_phi) > pi
     if ak.any(phi_outside_range):
         # warn in severe cases
         if ak.any(severe := abs(jet_phi[phi_outside_range]) >= 3.15):
@@ -98,23 +95,24 @@ def jet_veto_map(
                 "with phi values outside [-pi, pi] that will be clipped",
             )
         jet_phi = ak.where(
-            np.abs(jet.phi) > pi,
-            jet.phi - 2 * pi * np.sign(jet.phi),
-            jet.phi,
+            np.abs(jet_phi) > pi,
+            jet_phi - 2 * pi * np.sign(jet_phi),
+            jet_phi,
         )
 
     # values outside [-5.19, 5.19] are not included, so we need to clip the eta values
-    eta_outside_range = np.abs(jet.eta) > 5.19
+    jet_eta = jet.eta
+    eta_outside_range = np.abs(jet_eta) > 5.19
     if ak.any(eta_outside_range):
-        jet_eta = ak.where(
-            np.abs(jet.eta) > 5.19,
-            5.19 * np.sign(jet.eta),
-            jet.eta,
-        )
         logger.warning(
-            f"Jet eta values {jet.eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]} outside [-5.19, 5.19] "
-            f"({ak.sum(eta_outside_range)} in total) "
-            f"detected and set to {jet_eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]}",
+            f"jet eta values {jet_eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]} outside [-5.19, 5.19] "
+            f"({ak.sum(eta_outside_range)} in total) detected and set to "
+            f"{jet_eta[eta_outside_range][ak.any(eta_outside_range, axis=1)]}",
+        )
+        jet_eta = ak.where(
+            np.abs(jet_eta) > 5.19,
+            5.19 * np.sign(jet_eta),
+            jet_eta,
         )
 
     # evalute the veto map only for selected jets
