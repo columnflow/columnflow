@@ -51,7 +51,7 @@ class _met_phi_base(Calibrator):
 
 @dataclass
 class METPhiConfigRun2:
-    correction_set_template = r"{variable}_metphicorr_pfmet_{data_source}"
+    correction_set_template: str = r"{variable}_metphicorr_pfmet_{data_source}"
     met_name: str = "MET"
     keep_uncorrected: bool = False
 
