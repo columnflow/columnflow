@@ -66,11 +66,11 @@ def jet_veto_map(
 
     # fold in veto id or manually filter against muons
     if self.use_lepton_veto_id:
-        jet_mask = jet_mask & (jet.jetId & (1 << 2))  # third bit is tightLepVeto
+        jet_mask = jet_mask & (jet.jetId & (1 << 2) != 0)  # third bit is tightLepVeto
     else:
         muon = events.Muon[events.Muon.isPFcand]
         jet_mask = jet_mask & (
-            (jet.jetId & (1 << 1)) &  # second bit is tight
+            (jet.jetId & (1 << 1) != 0) &  # second bit is tight
             ak.all(events.Jet.metric_table(muon) >= 0.2, axis=2)
         )
 
