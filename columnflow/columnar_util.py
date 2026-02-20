@@ -3369,12 +3369,10 @@ class ChunkedParquetReader(object):
 
     def __init__(self, path: str, open_options: dict | None = None) -> None:
         super().__init__()
-        if not open_options:
-            open_options = {}
 
         # store attributes
         self.path = path
-        self.open_options = open_options.copy()
+        self.open_options = open_options.copy() if open_options else {}
 
         # open and store meta data with updated open options
         # (when closing the reader, this attribute is set to None)
@@ -3385,7 +3383,7 @@ class ChunkedParquetReader(object):
         try:
             self.metadata = ak.metadata_from_parquet(path, **meta_options)
         except:
-            logger.error(f"unable to read {path}")
+            logger.error(f"unable to read meta data with options {meta_options} from {path}")
             raise
 
         # extract row group sizes for chunked reading
