@@ -225,95 +225,109 @@ class CreateHistograms(_CreateHistograms):
 
         # prepare inputs for localization
         with law.localize_file_targets([*file_targets, *reader_targets.values()], mode="r") as inps:
-            for (events, *columns), pos in self.iter_chunked_io(
+            for (all_events, *columns), pos in self.iter_chunked_io(
                 [inp.abspath for inp in inps],
                 source_type=len(file_targets) * ["awkward_parquet"] + [None] * len(reader_targets),
                 read_columns=(len(file_targets) + len(reader_targets)) * [read_columns],
                 chunk_size=self.hist_producer_inst.get_min_chunk_size(),
             ):
-                # optional check for overlapping inputs
-                if self.check_overlapping_inputs:
-                    self.raise_if_overlapping([events] + list(columns))
 
-                # add additional columns
-                events, *columns = remove_obj_overlap(events, *columns)
-                events = update_ak_array(events, *columns)
+                for shift_inst in [self.global_shift_inst, *getattr(self.hist_producer_inst, "sel_subshift_insts", [])]:
+                    if reader_targets:
+                        if shift_inst == self.global_shift_inst:
+                            shift_columns = columns[:len(file_targets) - 1]
+                        else:
+                            shift_columns_indices = [len(file_targets) + i - 1 for i, target in enumerate(
+                                list(reader_targets.values())) if f"/{shift_inst.name}/" in target.path]
+                            shift_columns = [columns[idx] for idx in shift_columns_indices]
+                    else:
+                        shift_columns = columns
 
-                # add aliases
-                events = add_ak_aliases(
-                    events,
-                    aliases,
-                    remove_src=True,
-                    missing_strategy=self.missing_column_alias_strategy,
-                )
+                    # optional check for overlapping inputs
+                    if self.check_overlapping_inputs:
+                        self.raise_if_overlapping([all_events] + list(shift_columns))
 
-                # invoke the hist producer, potentially updating columns and creating the event weight
-                events = attach_coffea_behavior(events)
-                events, weight = self.hist_producer_inst(events, task=self)
+                    # add additional columns
+                    events, *shift_columns = remove_obj_overlap(all_events, *shift_columns)
+                    events = update_ak_array(events, *shift_columns)
 
-                if len(events) == 0:
-                    self.publish_message(f"no events found in chunk {pos}")
-                    continue
+                    # add aliases
+                    sub_aliases = shift_inst.x("column_aliases", {})
 
-                # merge category ids and check that they are defined as leaf categories
-                category_ids = ak.concatenate(
-                    [Route(c).apply(events) for c in self.category_id_columns],
-                    axis=-1,
-                )
-                unique_category_ids = np.unique(ak.flatten(category_ids))
-                if any(cat_id not in leaf_category_map for cat_id in unique_category_ids):
-                    undefined_category_ids = list(map(str, set(unique_category_ids) - set(leaf_category_map)))
-                    raise ValueError(
-                        f"category_ids column contains ids {','.join(undefined_category_ids)} that are either not "
-                        "known to the config at all, or not as leaf categories (i.e., they have child categories); "
-                        "please ensure that category_ids only contains ids of known leaf categories",
+                    events = add_ak_aliases(
+                        events,
+                        sub_aliases,
+                        remove_src=True,
+                        missing_strategy=self.missing_column_alias_strategy,
                     )
 
-                # define and fill histograms, taking into account multiple axes
-                for var_key, var_names in self.variable_tuples.items():
-                    # get variable instances
-                    variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
+                    # invoke the hist producer, potentially updating columns and creating the event weight
+                    events = attach_coffea_behavior(events)
+                    events, weight = self.hist_producer_inst(events, task=self)
 
-                    if var_key not in histograms:
-                        # create the histogram in the first chunk
-                        histograms[var_key] = self.hist_producer_inst.run_create_hist(variable_insts, task=self)
+                    if len(events) == 0:
+                        self.publish_message(f"no events found in chunk {pos}")
+                        continue
 
-                    # mask events and weights when selection expressions are found
-                    masked_events = events
-                    masked_weights = weight
-                    masked_category_ids = category_ids
-                    for variable_inst in variable_insts:
-                        sel = variable_inst.selection
-                        if sel == "1":
-                            continue
-                        if not callable(sel):
-                            raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
-                        mask = sel(masked_events)
-                        masked_events = masked_events[mask]
-                        masked_weights = masked_weights[mask]
-                        masked_category_ids = masked_category_ids[mask]
+                    # merge category ids and check that they are defined as leaf categories
+                    category_ids = ak.concatenate(
+                        [Route(c).apply(events) for c in self.category_id_columns],
+                        axis=-1,
+                    )
+                    unique_category_ids = np.unique(ak.flatten(category_ids))
+                    if any(cat_id not in leaf_category_map for cat_id in unique_category_ids):
+                        undefined_category_ids = list(map(str, set(unique_category_ids) - set(leaf_category_map)))
+                        raise ValueError(
+                            f"category_ids column contains ids {','.join(undefined_category_ids)} that are either not "
+                            "known to the config at all, or not as leaf categories (i.e., they have child categories); "
+                            "please ensure that category_ids only contains ids of known leaf categories",
+                        )
 
-                    # broadcast arrays so that each event can be filled for all its categories
-                    fill_data = {
-                        "category": masked_category_ids,
-                        "process": masked_events.process_id,
-                        "shift": self.global_shift_inst.id,
-                        "weight": masked_weights,
-                    }
-                    for variable_inst in variable_insts:
-                        # prepare the expression
-                        expr = variable_inst.expression
-                        if isinstance(expr, str):
-                            route = Route(expr)
-                            def expr(events, *args, **kwargs):
-                                if len(events) == 0 and not has_ak_column(events, route):
-                                    return empty_i32 if variable_inst.discrete_x else empty_f32
-                                return route.apply(events, null_value=variable_inst.null_value)
-                        # apply it
-                        fill_data[variable_inst.name] = expr(masked_events)
+                    # define and fill histograms, taking into account multiple axes
+                    for var_key, var_names in self.variable_tuples.items():
+                        # get variable instances
+                        variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
-                    # let the hist producer fill it
-                    self.hist_producer_inst.run_fill_hist(histograms[var_key], fill_data, task=self)
+                        if var_key not in histograms:
+                            # create the histogram in the first chunk
+                            histograms[var_key] = self.hist_producer_inst.run_create_hist(variable_insts, task=self)
+
+                        # mask events and weights when selection expressions are found
+                        masked_events = events
+                        masked_weights = weight
+                        masked_category_ids = category_ids
+                        for variable_inst in variable_insts:
+                            sel = variable_inst.selection
+                            if sel == "1":
+                                continue
+                            if not callable(sel):
+                                raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
+                            mask = sel(masked_events)
+                            masked_events = masked_events[mask]
+                            masked_weights = masked_weights[mask]
+                            masked_category_ids = masked_category_ids[mask]
+
+                        # broadcast arrays so that each event can be filled for all its categories
+                        fill_data = {
+                            "category": masked_category_ids,
+                            "process": masked_events.process_id,
+                            "shift": shift_inst.id,
+                            "weight": masked_weights,
+                        }
+                        for variable_inst in variable_insts:
+                            # prepare the expression
+                            expr = variable_inst.expression
+                            if isinstance(expr, str):
+                                route = Route(expr)
+                                def expr(events, *args, **kwargs):
+                                    if len(events) == 0 and not has_ak_column(events, route):
+                                        return empty_i32 if variable_inst.discrete_x else empty_f32
+                                    return route.apply(events, null_value=variable_inst.null_value)
+                            # apply it
+                            fill_data[variable_inst.name] = expr(masked_events)
+
+                        # let the hist producer fill it
+                        self.hist_producer_inst.run_fill_hist(histograms[var_key], fill_data, task=self)
 
         # post-process the histograms
         for var_key in self.variable_tuples.keys():

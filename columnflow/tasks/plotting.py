@@ -145,9 +145,10 @@ class PlotVariablesBase(_PlotVariablesBase):
                 process_info = {
                     "dataset_proc_name_map": dataset_proc_name_map,
                     "config_shifts": {
-                        shift
+                        subshift
                         for dataset_inst in dataset_proc_name_map.keys()
                         for shift in requested_shifts_per_dataset[dataset_inst]
+                        for subshift in (getattr(config_inst.get_shift(shift).x, "subshifts", []) or [shift])
                     },
                 }
                 process_shift_map[process_inst.name].update(process_info["config_shifts"])
@@ -209,10 +210,12 @@ class PlotVariablesBase(_PlotVariablesBase):
                         }]
                         h = h[{"process": sum}]
 
-                        # create expected shift bins and fill them with the nominal histogram
-                        # change Ghent: replace all expected shifts with nominal.
-                        # not preffered by columnflow: https://github.com/columnflow/columnflow/pull/692
-                        expected_shifts = plot_shift_names  # & process_shift_map[process_inst.name]
+                        if h.sum().value == 0:
+                            continue
+                            # create expected shift bins and fill them with the nominal histogram
+                            # change Ghent: replace all expected shifts with nominal.
+                            # not preffered by columnflow: https://github.com/columnflow/columnflow/pull/692
+                        expected_shifts = plot_shift_names & process_shift_map[process_inst.name]
                         add_missing_shifts(h, expected_shifts, str_axis="shift", nominal_bin="nominal")
 
                         # add the histogram
@@ -310,6 +313,7 @@ class PlotVariablesBase(_PlotVariablesBase):
             lumi = sum([_config_inst.x.luminosity for _config_inst in self.config_insts])
             with law.util.patch_object(config_inst.x, "luminosity", lumi):
                 # call the plot function
+                breakpoint()
                 fig, _ = self.call_plot_func(
                     self.plot_function,
                     hists=hists,
@@ -512,8 +516,8 @@ class PlotVariablesBaseMultiShifts(
 
         req_cls = lambda dataset_name, config_inst: (
             self.reqs.MergeShiftedHistograms
-            if config_inst.get_dataset(dataset_name).is_mc
-            else self.reqs.MergeHistograms
+            # if config_inst.get_dataset(dataset_name).is_mc
+            # else self.reqs.MergeHistograms
         )
 
         for config_inst, datasets in zip(self.config_insts, self.datasets):
@@ -566,10 +570,15 @@ class PlotVariablesBaseMultiShifts(
         sources = self.shift_sources if self.combine_shifts else [self.branch_data.shift_source]
         shifts = []
         for source in sources:
-            shifts.append(get_shift_from_configs(self.config_insts, f"{source}_{od.Shift.UP}"))
-            shifts.append(get_shift_from_configs(self.config_insts, f"{source}_{od.Shift.DOWN}"))
+            for direction in (od.Shift.UP, od.Shift.DOWN):
+                shift = get_shift_from_configs(self.config_insts, f"{source}_{direction}")
+                if (subshifts := getattr(shift.x, "subshifts", [])):
+                    shifts.extend([get_shift_from_configs(self.config_insts, s) for s in subshifts])
+                else:
+                    shifts.append(get_shift_from_configs(self.config_insts, f"{source}_{direction}"))
 
         # add nominal
+        breakpoint()
         return [self.config_inst.get_shift("nominal"), *shifts]
 
     def get_plot_parameters(self):

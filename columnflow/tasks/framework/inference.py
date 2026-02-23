@@ -25,6 +25,8 @@ from columnflow.types import TYPE_CHECKING
 if TYPE_CHECKING:
     hist = maybe_import("hist")
 
+logger = law.logger.get_logger(__name__)
+
 
 class SerializeInferenceModelBase(
     CalibratorClassesMixin,
@@ -100,13 +102,21 @@ class SerializeInferenceModelBase(
         if not config_data.data_datasets:
             return []
 
+        # when datasets are defined on the process object itself, interpret them as patterns
+        if config_data.data_datasets:
+            return [
+                dataset.name
+                for dataset in config_inst.datasets
+                if (
+                    dataset.is_data and
+                    law.util.multi_match(dataset.name, config_data.data_datasets, mode=any)
+                )
+            ]
+
+        # otherwise, check the config
         return [
-            dataset.name
-            for dataset in config_inst.datasets
-            if (
-                dataset.is_data and
-                law.util.multi_match(dataset.name, config_data.data_datasets, mode=any)
-            )
+            dataset_inst.name
+            for dataset_inst in get_datasets_from_process(config_inst, config_data.process)
         ]
 
     @law.workflow_property(cache=True)
@@ -117,7 +127,7 @@ class SerializeInferenceModelBase(
                 # all variables used in this config in any datacard category
                 "variables": set(),
                 # plain set of names of real data datasets
-                "data_datasets": set(),
+                "data_datasets": {},
                 # per mc dataset name, the set of shift sources and the names processes to be extracted from them
                 "mc_datasets": {},
             }
@@ -142,7 +152,34 @@ class SerializeInferenceModelBase(
                 #   - data in that category is not faked from mc processes, or
                 #   - at least one process object is dynamic (that usually means data-driven)
                 if not cat_obj.data_from_processes or any(proc_obj.is_dynamic for proc_obj in cat_obj.processes):
-                    data["data_datasets"].update(self.get_data_datasets(config_inst, cat_obj))
+                    for proc_obj in cat_obj.processes:
+                        if not cat_obj.data_from_processes or proc_obj.is_dynamic:
+                            data_datasets = self.get_data_datasets(config_inst, cat_obj)
+                            for dataset_name in data_datasets:
+                                if dataset_name not in data["data_datasets"]:
+                                    data["data_datasets"][dataset_name] = {
+                                        "shift_sources": set(),
+                                        "proc_names": set(),
+                                    }
+                                data["data_datasets"][dataset_name]["proc_names"].add(
+                                    proc_obj.config_data[config_inst.name].process,
+                                )
+
+                            # shift sources
+                            for param_obj in proc_obj.parameters:
+                                if config_inst.name not in param_obj.config_data:
+                                    continue
+
+                                # only add if a shift is required for this parameter
+                                if not param_obj.is_dynamic and (
+                                    (param_obj.type.is_shape and not param_obj.transformations.any_from_rate) or
+                                    (param_obj.type.is_rate and param_obj.transformations.any_from_shape)
+                                ):
+                                    shift_source = param_obj.config_data[config_inst.name].shift_source
+                                    for data_dataset in data_datasets:
+                                        data_dataset_inst = config_inst.get_dataset(data_dataset)
+                                        if shift_source in getattr(data_dataset_inst.x, "known_shift_sources", []):
+                                            data["data_datasets"][data_dataset]["shift_sources"].add(shift_source)
 
                 # mc datasets over all process objects
                 #   - the process is not dynamic
@@ -215,7 +252,7 @@ class SerializeInferenceModelBase(
                     self,
                     config=config_inst.name,
                     dataset=dataset_name,
-                    shift_sources=(),
+                    shift_sources=tuple(sorted(data["data_datasets"][dataset_name]["shift_sources"])),
                     variables=tuple(sorted(data["variables"])),
                     **kwargs,
                 )
@@ -264,7 +301,11 @@ class SerializeInferenceModelBase(
 
                     # there must be at least one matching sub process
                     if not any(p.name in h.axes["process"] for p in sub_process_insts):
-                        raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
+                        logger.warning(
+                            f"no '{variable}' histograms found for process '{process_inst.name}'"
+                            f" in dataset {dataset_name} (config {config_inst.name})"
+                        )
+                        continue
 
                     # select and reduce over relevant processes
                     h_proc = h[{

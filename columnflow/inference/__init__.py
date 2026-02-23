@@ -500,6 +500,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         config_data: dict[str, DotDict] | None = None,
         effect: Any | None = 1.0,
         effect_precision: int = 4,
+        is_dynamic: bool = False,
     ) -> DotDict:
         """
         Returns a dictionary representing a (nuisance) parameter, forwarding all arguments.
@@ -526,6 +527,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
             )),
             ("effect", effect),
             ("effect_precision", effect_precision),
+            ("is_dynamic", bool(is_dynamic)),
         ])
 
     @classmethod
