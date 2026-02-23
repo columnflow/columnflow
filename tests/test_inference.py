@@ -111,6 +111,7 @@ class TestInferenceModel(unittest.TestCase):
         config_shift_source = "test_shift_source"
         effect = 1.5
         effect_precision = 4
+        is_dynamic = False
 
         # Expected result
         expected_result = DotDict(
@@ -124,6 +125,7 @@ class TestInferenceModel(unittest.TestCase):
             },
             effect=effect,
             effect_precision=effect_precision,
+            is_dynamic=False,
         )
 
         # Call the method

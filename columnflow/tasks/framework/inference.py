@@ -303,7 +303,7 @@ class SerializeInferenceModelBase(
                     if not any(p.name in h.axes["process"] for p in sub_process_insts):
                         logger.warning(
                             f"no '{variable}' histograms found for process '{process_inst.name}'"
-                            f" in dataset {dataset_name} (config {config_inst.name})"
+                            f" in dataset {dataset_name} (config {config_inst.name})",
                         )
                         continue
 
