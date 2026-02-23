@@ -313,7 +313,6 @@ class PlotVariablesBase(_PlotVariablesBase):
             lumi = sum([_config_inst.x.luminosity for _config_inst in self.config_insts])
             with law.util.patch_object(config_inst.x, "luminosity", lumi):
                 # call the plot function
-                breakpoint()
                 fig, _ = self.call_plot_func(
                     self.plot_function,
                     hists=hists,
@@ -578,7 +577,6 @@ class PlotVariablesBaseMultiShifts(
                     shifts.append(get_shift_from_configs(self.config_insts, f"{source}_{direction}"))
 
         # add nominal
-        breakpoint()
         return [self.config_inst.get_shift("nominal"), *shifts]
 
     def get_plot_parameters(self):
