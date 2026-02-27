@@ -8,6 +8,7 @@ import importlib
 
 import law
 import luigi
+import order as od
 
 from columnflow.types import Any, Callable
 from columnflow.tasks.framework.base import ConfigTask, RESOLVE_DEFAULT
@@ -43,7 +44,7 @@ class PlotBase(ConfigTask):
     )
     general_settings = SettingsParameter(
         default=DotDict(),
-        significant=False,
+        significant=True,
         description="parameter to set a list of custom plotting parameters; format: "
         "'option1=val1,option2=val2,...'",
     )
@@ -82,6 +83,118 @@ class PlotBase(ConfigTask):
     exclude_params_remote_workflow = {"debug_plot"}
 
     @classmethod
+    def _resolve_settings(cls, settings, config_inst, settings_key, default_key, groups_key):
+        """
+        Generic helper to resolve settings, supporting defaults and group lookups.
+
+        Args:
+            settings: The current settings object (dict-like or tuple)
+            config_inst: The config instance to pull defaults/groups from
+            settings_key: The parameter name (e.g., "general_settings")
+            default_key: The config auxiliary key for defaults
+            groups_key: The config auxiliary key for groups
+
+        Returns:
+            Resolved settings object
+        """
+        # Derive the parameter class from settings_key
+        settings_param = getattr(cls, settings_key)
+
+        # Use defaults if settings are empty
+        if not settings and config_inst.x(default_key, ()):
+            settings = config_inst.x(default_key, ())
+            if isinstance(settings, tuple):
+                settings = settings_param.parse(settings)
+
+        # Look up group if first key matches a group name
+        groups = config_inst.x(groups_key, {})
+        if settings:
+            first_key = next(iter(settings), None)
+            if first_key and first_key in groups:
+                group_settings = groups[first_key]
+                if isinstance(group_settings, tuple):
+                    group_settings = settings_param.parse(group_settings)
+                settings = law.util.merge_dicts(group_settings, settings, deep=True)
+
+        return settings
+
+    @classmethod
+    def _resolve_multi_settings(cls, settings, config_inst, settings_key, default_key, groups_key):
+        """
+        Generic helper to resolve settings, supporting defaults and group lookups.
+        Works for both SettingsParameter and MultiSettingsParameter.
+        """
+        settings_param = getattr(cls, settings_key)
+
+        # Use defaults if settings are empty
+        if not settings and config_inst.x(default_key, ()):
+            settings = config_inst.x(default_key, ())
+            if isinstance(settings, tuple):
+                settings = settings_param.parse(settings)
+
+        # Look up group if settings match a group key
+        groups = config_inst.x(groups_key, {})
+        if settings and groups:
+            # For single dict: check first key
+            first_key = next(iter(settings), None)
+            if first_key and first_key in groups and len(settings) == 1 and not settings[first_key]:
+                # Pattern: {"group_name": {}} means user just specified "group_name"
+                group_settings = groups[first_key]
+                if isinstance(group_settings, tuple):
+                    group_settings = settings_param.parse(group_settings)
+                settings = group_settings
+            elif first_key and first_key in groups:
+                # Pattern: {"group_name": {...overrides...}}
+                group_settings = groups[first_key]
+                if isinstance(group_settings, tuple):
+                    group_settings = settings_param.parse(group_settings)
+                # Merge: group base + user overrides
+                settings = law.util.merge_dicts(group_settings, settings, deep=True)
+
+        return settings
+
+    @classmethod
+    def _expand_wildcard_settings(cls, settings, config_inst, object_type="process"):
+        """
+        Expand wildcard patterns in settings keys against available config objects.
+
+        Args:
+            settings: Dict with potential wildcard keys (e.g., {"tt*": {"opt": "val"}})
+            config_inst: Config instance to lookup objects from
+            object_type: Type of object to match ("process" or "variable")
+
+        Returns:
+            Expanded settings dict with wildcards resolved to actual names
+        """
+        # determine the object class based on type
+        object_cls = od.Process if object_type == "process" else od.Variable
+
+        expanded = DotDict()
+        for pattern, opts in settings.items():
+            # use find_config_objects to resolve patterns and groups
+            matches = cls.find_config_objects(
+                names=[pattern],
+                container=config_inst,
+                object_cls=object_cls,
+                groups_str=f"{object_type}_groups",
+                accept_patterns=True,
+                deep=True,
+                strict=False,
+            )
+
+            if matches:
+                # expand to all matching names
+                for name in matches:
+                    expanded.setdefault(name, DotDict())
+                    expanded[name] = law.util.merge_dicts(expanded[name], opts, deep=True)
+            else:
+                # no matches, keep as-is (might be a literal name not yet in config)
+                expanded.setdefault(pattern, DotDict())
+                expanded[pattern] = law.util.merge_dicts(expanded[pattern], opts, deep=True)
+
+        return expanded
+
+    @classmethod
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
 
@@ -93,21 +206,13 @@ class PlotBase(ConfigTask):
         # NOTE: we currently assume that general_settings defaults and groups are the same for all
         # config instances
         if "general_settings" in params:
-            settings = params["general_settings"]
-            # when empty and default general_settings are defined, use them instead
-            if not settings and config_inst.x("default_general_settings", ()):
-                settings = config_inst.x("default_general_settings", ())
-                if isinstance(settings, tuple):
-                    settings = cls.general_settings.parse(settings)
-
-            # when general_settings are a key to a general_settings_groups, use them instead
-            groups = config_inst.x("general_settings_groups", {})
-            if settings and list(settings.keys())[0] in groups.keys():
-                settings = groups[list(settings.keys())[0]]
-                if isinstance(settings, tuple):
-                    settings = cls.general_settings.parse(settings)
-
-            params["general_settings"] = settings
+            params["general_settings"] = cls._resolve_settings(
+                params["general_settings"],
+                config_inst,
+                "general_settings",
+                "default_general_settings",
+                "general_settings_groups",
+            )
 
         return params
 
@@ -427,7 +532,7 @@ class ProcessPlotSettingMixin(
 
     process_settings = MultiSettingsParameter(
         default=DotDict(),
-        significant=False,
+        significant=True,
         description="parameter for changing different process settings; format: "
         "'process1,option1=value1,option3=value3:process2,option2=value2'; options implemented: "
         "scale, unstack, label; can also be the key of a mapping defined in 'process_settings_groups; "
@@ -447,21 +552,32 @@ class ProcessPlotSettingMixin(
         # NOTE: we currently assume that process_settings defaults and groups are the same for all
         # config instances
         if "process_settings" in params:
-            settings = params["process_settings"]
-            # when empty and default process_settings are defined, use them instead
-            if not settings and config_inst.x("default_process_settings", ()):
-                settings = config_inst.x("default_process_settings", ())
-                if isinstance(settings, tuple):
-                    settings = cls.process_settings.parse(settings)
+            params["process_settings"] = cls._resolve_multi_settings(
+                params["process_settings"],
+                config_inst,
+                "process_settings",
+                "default_process_settings",
+                "process_settings_groups",
+            )
 
-            # when process_settings are a key to a process_settings_groups, use them instead
-            groups = config_inst.x("process_settings_groups", {})
-            if settings and cls.process_settings.serialize(settings) in groups.keys():
-                settings = groups[cls.process_settings.serialize(settings)]
-                if isinstance(settings, tuple):
-                    settings = cls.process_settings.parse(settings)
-
-            params["process_settings"] = settings
+            # Expand wildcards against actual processes
+            if params["process_settings"]:
+                params["process_settings"] = cls._expand_wildcard_settings(
+                    params["process_settings"],
+                    config_inst,
+                    object_type="process",
+                )
+            # Filter to only requested processes
+            if "processes" in params and params["processes"]:
+                unique_processes = (
+                    set(params["processes"]) if cls.has_single_config() else
+                    set(entry for subtuple in params["processes"] for entry in subtuple)
+                )
+                params["process_settings"] = DotDict({
+                    name: opts
+                    for name, opts in params["process_settings"].items()
+                    if name in unique_processes
+                })
 
         return params
 
@@ -503,21 +619,29 @@ class VariablePlotSettingMixin(
         # NOTE: we currently assume that variable_settings defaults and groups are the same for all
         # config instances
         if "variable_settings" in params:
-            settings = params["variable_settings"]
-            # when empty and default variable_settings are defined, use them instead
-            if not settings and config_inst.x("default_variable_settings", ()):
-                settings = config_inst.x("default_variable_settings", ())
-                if isinstance(settings, tuple):
-                    settings = cls.variable_settings.parse(settings)
+            params["variable_settings"] = cls._resolve_multi_settings(
+                params["variable_settings"],
+                config_inst,
+                "variable_settings",
+                "default_variable_settings",
+                "variable_settings_groups",
+            )
 
-            # when variable_settings are a key to a variable_settings_groups, use them instead
-            groups = config_inst.x("variable_settings_groups", {})
-            if settings and cls.variable_settings.serialize(settings) in groups.keys():
-                settings = groups[cls.variable_settings.serialize(settings)]
-                if isinstance(settings, tuple):
-                    settings = cls.variable_settings.parse(settings)
-
-            params["variable_settings"] = settings
+            # Expand wildcards against actual processes
+            if params["variable_settings"]:
+                params["variable_settings"] = cls._expand_wildcard_settings(
+                    params["variable_settings"],
+                    config_inst,
+                    object_type="variable",
+                )
+            # Filter to only requested variables
+            if "variables" in params and params["variables"]:
+                requested_variables = set(params["variables"])
+                params["variable_settings"] = DotDict({
+                    name: opts
+                    for name, opts in params["variable_settings"].items()
+                    if name in requested_variables
+                })
 
         return params
 
