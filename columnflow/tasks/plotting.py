@@ -30,6 +30,32 @@ from columnflow.hist_util import add_missing_shifts
 from columnflow.config_util import get_shift_from_configs
 
 
+def update_ax_labels(hists: list, config_inst: od.Config, variable_name: str) -> None:
+    """
+    Helper function to update the axis labels of histograms based on variable instances from
+    the *config_inst*.
+
+    :param hists: List of histograms to update.
+    :param config_inst: Configuration instance containing variable definitions.
+    :param variable_name: Name of the variable to update labels for, formatted as a string
+                         with variable names separated by hyphens (e.g., "var1-var2").
+    :raises ValueError: If a variable name is not found in the histogram axes.
+    """
+    labels = {}
+    for var_name in variable_name.split("-"):
+        var_inst = config_inst.get_variable(var_name, None)
+        if var_inst:
+            labels[var_name] = var_inst.x_title
+
+    for h in law.util.make_list(hists):
+        for var_name, label in labels.items():
+            ax_names = [ax.name for ax in h.axes]
+            if var_name in ax_names:
+                h.axes[var_name].label = label
+            else:
+                raise ValueError(f"variable '{var_name}' not found in histogram axes: {h.axes}")
+
+
 class _PlotVariablesBase(
     CalibratorClassesMixin,
     SelectorClassMixin,
@@ -221,6 +247,9 @@ class PlotVariablesBase(_PlotVariablesBase):
                         # create expected shift bins and fill them with the nominal histogram
                         expected_shifts = plot_shift_names & process_shift_map[process_inst.name]
                         add_missing_shifts(h, expected_shifts, str_axis="shift", nominal_bin="nominal")
+
+                        # update axis labels
+                        update_ax_labels(h, config_inst, self.branch_data.variable)
 
                         # add the histogram
                         if process_inst in hists_config:
