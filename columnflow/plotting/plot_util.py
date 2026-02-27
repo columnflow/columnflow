@@ -45,6 +45,7 @@ label_options = {
     "odwip": "OpenData work in progress",
     "odpw": "OpenData private work",
     "public": "",
+    "suppl": "Supplementary",
 }
 
 
@@ -279,6 +280,12 @@ def apply_variable_settings(
         if try_int(rebin_factor):
             for proc_inst, h in list(hists.items()):
                 rebin_factor = int(rebin_factor)
+                if h.axes[var_inst.name].size < rebin_factor:
+                    logger.warning(
+                        f"cannot rebin variable '{var_inst.name}' with factor {rebin_factor} since it only has "
+                        f"{h.axes[var_inst.name].size} bins; skipping rebinning for this variable and histogram",
+                    )
+                    continue
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
                 hists[proc_inst] = h
 
