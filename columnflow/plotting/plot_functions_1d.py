@@ -127,6 +127,8 @@ def plot_variable_efficiency(
     style_config: dict | None = None,
     shape_norm: bool = True,
     cumsum_reverse: bool = True,
+    process_settings: dict | None = None,
+    variable_settings: dict | None = None,
     **kwargs,
 ):
     """
@@ -134,6 +136,14 @@ def plot_variable_efficiency(
     Per default, each bin shows the efficiency of requiring value >= bin edge (cumsum_reverse=True).
     Setting cumsum_reverse=False will instead show the efficiency of requiring value <= bin edge.
     """
+    if variable_insts[0].has_aux("cumsum_reverse"):
+        cumsum_reverse = variable_insts[0].x("cumsum_reverse")
+
+    # process-based settings (styles and attributes)
+    hists, process_style_config = apply_process_settings(hists, process_settings)
+    # variable-based settings (rebinning, slicing, flow handling)
+    hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
+
     for proc_inst, proc_hist in hists.items():
         if cumsum_reverse:
             proc_hist.values()[...] = np.cumsum(proc_hist.values()[..., ::-1], axis=-1)[..., ::-1]
@@ -156,6 +166,8 @@ def plot_variable_efficiency(
         shape_norm=shape_norm,
         shape_norm_func=shape_norm_func,
         style_config=style_config,
+        process_settings=process_settings,
+        variable_settings=variable_settings,
         **kwargs,
     )
 
