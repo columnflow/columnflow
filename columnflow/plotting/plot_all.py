@@ -311,6 +311,9 @@ def draw_errorbars(
             yerr[np.isinf(yerr)] = np.nan
         defaults["yerr"] = yerr
 
+    if "xerr" not in defaults:
+        defaults["xerr"] = (h.axes[0].edges[1:] - h.axes[0].edges[:-1]) / 2
+
     ax.errorbar(**defaults)
 
 
@@ -523,6 +526,17 @@ def plot_all(
 
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
         mplhep.cms.label(**cms_label_kwargs)
+
+    if kwargs.get("grid", False):
+        # add grid lines
+        ax.grid(True, which="major", linestyle="--", alpha=0.6)
+        ax.grid(True, which="minor", linestyle=":", alpha=0.3)
+        ax.set_axisbelow(True)
+
+        if not skip_ratio:
+            rax.grid(True, which="major", linestyle="--", alpha=0.6)
+            rax.grid(True, which="minor", linestyle=":", alpha=0.3)
+            rax.set_axisbelow(True)
 
     # finalization
     fig.tight_layout()
