@@ -408,6 +408,8 @@ def select_category_bins(
     :param reduce: Whether to sum the selected bins before returning the resulting histogram.
     :return: The resulting histogram.
     """
+    import hist
+
     # get the category axis
     axis = h.axes["category"]
 
