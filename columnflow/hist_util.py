@@ -9,12 +9,14 @@ from __future__ import annotations
 __all__ = []
 
 import functools
+import operator
+
 import law
 import order as od
 
 from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.util import maybe_import
-from columnflow.types import TYPE_CHECKING, Any, Sequence
+from columnflow.types import TYPE_CHECKING, Any, Sequence, Callable
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -269,13 +271,17 @@ create_columnflow_hist = functools.partial(create_hist_from_variables, categoric
 def translate_hist_intcat_to_strcat(
     h: hist.Hist,
     axis_name: str,
-    id_map: dict[int, str],
+    id_map: Callable[[int], str] | dict[int, str],
 ) -> hist.Hist:
     import hist
 
+    # wrap id_map in a callable if it is given as a dict
+    if isinstance(id_map, dict):
+        id_map = functools.partial(operator.getitem, id_map)
+
     out_axes = [
         ax if ax.name != axis_name else hist.axis.StrCategory(
-            [id_map[v] for v in list(ax)],
+            [id_map(v) for v in list(ax)],
             name=ax.name,
             label=ax.label,
             growth=ax.traits.growth,
@@ -321,7 +327,7 @@ def update_ax_labels(hists: list[hist.Hist], config_inst: od.Config, variable_na
     :param hists: List of histograms to update.
     :param config_inst: Configuration instance containing variable definitions.
     :param variable_name: Name of the variable to update labels for, formatted as a string
-                         with variable names separated by hyphens (e.g., "var1-var2").
+                          with variable names separated by hyphens (e.g., "var1-var2").
     :raises ValueError: If a variable name is not found in the histogram axes.
     """
     labels = {}
@@ -371,3 +377,65 @@ def sum_hists(hists: Sequence[hist.Hist]) -> hist.Hist:
         h_sum = h_sum + (h if h_aligned_labels is None else h_aligned_labels)
 
     return h_sum
+
+
+def select_category_bins(
+    h: hist.Hist,
+    categories: od.Category | str | Sequence[od.Category | str],
+    use_leaves: bool = False,
+    prefer_parents: bool = False,
+    reduce: bool = False,
+) -> hist.Hist:
+    """
+    Given a histogram *h* that has a categorical "category" axis, this function selects bins on this axis according to
+    *categories*.
+
+    Depending on the types of the provided *categories*, the behavior can be more intricate. If *categories* are given
+    as strings, bins with matching names are selected with pattern support. If *categories* are
+    :py:class:`~order.Category` objects, the selection is similar (without pattern support). However, if *use_leaves* is
+    set to *True*, the selection is done based on the leaf categories of the provided *categories* instead. For
+    additional control in cases where the requested categories *and* their leaves might be present in this "category"
+    axis, *prefer_parents* can be altered to decide which of the two cases to prefer.
+
+    If *reduce* is set to *True*, the selected bins are summed before the resulting histogram is returned.
+
+    :param h: The histogram to select from. Must have a categorical "category" axis.
+    :param categories: The categories to select. Can be given as strings or :py:class:`~order.Category` objects.
+    :param use_leaves: Whether to select based on the leaf categories of the provided *categories* instead of the
+        provided *categories* themselves (if they are :py:class:`~order.Category` objects).
+    :param prefer_parents: Whether to prefer selection based on the provided *categories* themselves over their leaf
+        categories in cases where both are present in the "category" axis. Defaults to the value of *use_leaves*.
+    :param reduce: Whether to sum the selected bins before returning the resulting histogram.
+    :return: The resulting histogram.
+    """
+    # get the category axis
+    axis = h.axes["category"]
+
+    # obtain category names to select based on the provided types
+    categories = law.util.make_unique(law.util.make_list(categories))
+    if all(isinstance(c, str) for c in categories):
+        # interpret categories as sequence of patterns
+        selected_names = [name for name in axis if law.util.multi_match(name, categories, mode=any)]
+
+    elif all(isinstance(c, od.Category) for c in categories):
+        # categories are objects, so check leaf usage
+        if use_leaves:
+            selected_names = []
+            for c in categories:
+                if prefer_parents and c.name in axis:
+                    selected_names.append(c.name)
+                else:
+                    leaves = c.get_leaf_categories() or [c]
+                    selected_names.extend(l.name for l in leaves if l.name in axis)
+        else:
+            selected_names = [c.name for c in categories if c.name in axis]
+
+    else:
+        raise ValueError(f"categories must be given as all strings or od.Category objects, got {categories}")
+
+    # finally select and optionally reduce
+    h = h[{"category": [hist.loc(name) for name in selected_names]}]
+    if reduce:
+        h = h[{"category": sum}]
+
+    return h

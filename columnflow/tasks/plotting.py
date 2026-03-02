@@ -25,7 +25,7 @@ from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.util import DotDict, dev_sandbox, dict_add_strict
-from columnflow.hist_util import add_missing_shifts, sum_hists
+from columnflow.hist_util import add_missing_shifts, sum_hists, select_category_bins
 from columnflow.config_util import get_shift_from_configs, expand_shift_sources
 from columnflow.types import Any
 
@@ -193,7 +193,6 @@ class PlotVariablesBase(_PlotVariablesBase):
                 for i, (config, dataset_dict) in enumerate(inputs.items()):
                     config_inst = self.config_insts[i]
                     category_inst = config_inst.get_category(self.branch_data.category)
-                    leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
 
                     hists_config = {}
 
@@ -288,21 +287,10 @@ class PlotVariablesBase(_PlotVariablesBase):
                     expected_shifts = (process_shifts & plot_shift_names) or (process_shifts & {"nominal"})
                     if not expected_shifts:
                         raise Exception(f"no shifts to plot found for process {process_inst.name}")
-                    # selections
-                    h = h[{
-                        "category": [
-                            hist.loc(c.name)
-                            for c in leaf_category_insts
-                            if c.name in h.axes["category"]
-                        ],
-                        "shift": [
-                            hist.loc(s_name)
-                            for s_name in expected_shifts
-                            if s_name in h.axes["shift"]
-                        ],
-                    }]
-                    # reductions
-                    h = h[{"category": sum}]
+                    # select shifts
+                    h = h[{"shift": [hist.loc(s_name) for s_name in expected_shifts if s_name in h.axes["shift"]]}]
+                    # select and reduce categories
+                    h = select_category_bins(h, category_inst, use_leaves=True, prefer_parents=True, reduce=True)
                     # store
                     _hists[process_inst] = h
                 hists[var_name] = _hists

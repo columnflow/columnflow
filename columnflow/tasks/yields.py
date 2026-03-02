@@ -18,6 +18,7 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms
+from columnflow.hist_util import select_category_bins
 from columnflow.util import dev_sandbox, try_int
 
 
@@ -200,14 +201,7 @@ class CreateYieldTable(_CreateYieldTable):
                 processes.append(process_inst)
 
                 for category_inst in category_insts:
-                    leaf_category_insts = category_inst.get_leaf_categories() or [category_inst]
-
-                    h_cat = h[{"category": [
-                        hist.loc(c.name)
-                        for c in leaf_category_insts
-                        if c.name in h.axes["category"]
-                    ]}]
-                    h_cat = h_cat[{"category": sum}]
+                    h_cat = select_category_bins(h, category_inst, use_leaves=True, prefer_parents=True, reduce=True)
 
                     value = Number(h_cat.value)
                     if not self.skip_uncertainties:

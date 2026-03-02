@@ -6,6 +6,8 @@ Default histogram producers that define columnflow's default behavior.
 
 from __future__ import annotations
 
+import functools
+
 import law
 import order as od
 
@@ -73,8 +75,10 @@ def cf_default_post_process_hist(self: HistProducer, h: hist.Hist, task: law.Tas
 
     # translate axes
     if "category" in axis_names:
-        category_map = {cat.id: cat.name for cat in self.config_inst.get_leaf_categories()}
-        h = translate_hist_intcat_to_strcat(h, "category", category_map)
+        @functools.cache
+        def get_category_name(cat_id: int) -> str:
+            return self.config_inst.get_category(cat_id).name
+        h = translate_hist_intcat_to_strcat(h, "category", get_category_name)
     if "process" in axis_names:
         process_map = {proc_id: self.config_inst.get_process(proc_id).name for proc_id in h.axes["process"]}
         h = translate_hist_intcat_to_strcat(h, "process", process_map)

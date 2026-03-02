@@ -15,6 +15,7 @@ from columnflow.tasks.framework.mixins import (
     HistProducerClassMixin, VariablesMixin, DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin,
 )
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
+from columnflow.hist_util import select_category_bins
 from columnflow.util import dev_sandbox, maybe_import
 from columnflow.types import TYPE_CHECKING
 
@@ -107,59 +108,29 @@ class HistogramsUserBase(
         def flatten_nested_list(nested_list):
             return [item for sublist in nested_list for item in sublist]
 
-        selection_dict = {}
+        # work on a copy
+        h = histogram.copy()
 
+        # select processes
         if processes:
-            # transform into lists if necessary
-            processes = law.util.make_list(processes)
-            # get all sub processes
-
-            process_insts = list(map(config_inst.get_process, processes))
+            process_insts = list(map(config_inst.get_process, law.util.make_unique(law.util.make_list(processes))))
             sub_process_insts = set(flatten_nested_list([
                 [sub for sub, _, _ in proc.walk_processes(include_self=True)]
                 for proc in process_insts
             ]))
-            selection_dict["process"] = [
-                hist.loc(p.name)
-                for p in sub_process_insts
-                if p.name in histogram.axes["process"]
-            ]
+            h = h[{"process": [hist.loc(p.name) for p in sub_process_insts if p.name in histogram.axes["process"]]}]
+
+        # select categories
         if categories:
-            # transform into lists if necessary
-            categories = law.util.make_list(categories)
+            h = select_category_bins(h, categories, use_leaves=True, prefer_parents=True, reduce=False)
 
-            # get all leaf categories
-            category_insts = list(map(config_inst.get_category, categories))
-            leaf_category_insts = set(flatten_nested_list([
-                category_inst.get_leaf_categories() or [category_inst]
-                for category_inst in category_insts
-            ]))
-            selection_dict["category"] = [
-                hist.loc(c.name)
-                for c in leaf_category_insts
-                if c.name in histogram.axes["category"]
-            ]
-
+        # select shifts
         if shifts:
-            # transform into lists if necessary
-            shifts = law.util.make_list(shifts)
+            shift_insts = [config_inst.get_shift(shift) for shift in law.util.make_unique(law.util.make_list(shifts))]
+            h = h[{"shift": [hist.loc(s.name) for s in shift_insts if s.name in histogram.axes["shift"]]}]
 
-            # get all shift instances
-            shift_insts = [config_inst.get_shift(shift) for shift in shifts]
-            selection_dict["shift"] = [
-                hist.loc(s.name)
-                for s in shift_insts
-                if s.name in histogram.axes["shift"]
-            ]
-
-        # work on a copy
-        h = histogram.copy()
-
-        # axis selections
-        h = h[selection_dict]
-
+        # optional axis reductions
         if reduce_axes:
-            # axis reductions
             h = h[{"process": sum, "category": sum, "shift": sum}]
 
         return h

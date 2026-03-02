@@ -26,8 +26,8 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.selection import MergeSelectionMasks
+from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_to_strcat, select_category_bins
 from columnflow.util import DotDict, dev_sandbox
-from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_to_strcat
 
 
 class _CreateCutflowHistograms(
@@ -422,7 +422,6 @@ class PlotCutflow(_PlotCutflow):
 
         # prepare config objects
         category_inst = self.config_inst.get_category(self.branch_data)
-        leaf_category_insts = [category_inst] + (category_inst.get_leaf_categories() or [])
         sub_process_insts = {
             proc: [sub for sub, _, _ in proc.walk_processes(include_self=True)]
             for proc in process_insts
@@ -475,16 +474,8 @@ class PlotCutflow(_PlotCutflow):
             _hists = OrderedDict()
             for process_inst in sorted(hists, key=process_insts.index):
                 h = hists[process_inst]
-                # selections
-                h = h[{
-                    "category": [
-                        hist.loc(c.name)
-                        for c in leaf_category_insts
-                        if c.name in h.axes["category"]
-                    ],
-                }]
-                # reductions
-                h = h[{"category": sum, self.variable: sum}]
+                # select and reduce categories
+                h = select_category_bins(h, category_inst, use_leaves=True, prefer_parents=True, reduce=True)
                 # store
                 _hists[process_inst] = h
             hists = _hists
@@ -608,7 +599,6 @@ class PlotCutflowVariablesBase(
             for var_name in variable_tuple
         ]
         category_inst = self.config_inst.get_category(self.branch_data.category)
-        leaf_category_insts = [category_inst] + (category_inst.get_leaf_categories() or [])
         sub_process_insts = {
             process_inst: [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
             for process_inst in process_insts
@@ -661,16 +651,8 @@ class PlotCutflowVariablesBase(
             _hists = OrderedDict()
             for process_inst in sorted(hists, key=process_insts.index):
                 h = hists[process_inst]
-                # selections
-                h = h[{
-                    "category": [
-                        hist.loc(c.name)
-                        for c in leaf_category_insts
-                        if c.name in h.axes["category"]
-                    ],
-                }]
-                # reductions
-                h = h[{"category": sum}]
+                # select and reduce categories
+                h = select_category_bins(h, category_inst, use_leaves=True, prefer_parents=True, reduce=True)
                 # store
                 _hists[process_inst] = h
             hists = _hists
