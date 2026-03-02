@@ -49,7 +49,7 @@ def get_events_from_categories(
             f"{get_events_from_categories.__name__} requires the 'category_ids' field to be present",
         )
 
-    categories = law.util.make_list(categories)
+    categories = law.util.make_unique(law.util.make_list(categories))
     if config_inst:
         # get category insts
         categories = [config_inst.get_category(cat) for cat in categories]
