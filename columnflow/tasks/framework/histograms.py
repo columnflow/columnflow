@@ -113,7 +113,7 @@ class HistogramsUserBase(
 
         # select processes
         if processes:
-            process_insts = list(map(config_inst.get_process, law.util.make_list(processes)))
+            process_insts = list(map(config_inst.get_process, law.util.make_unique(law.util.make_list(processes))))
             sub_process_insts = set(flatten_nested_list([
                 [sub for sub, _, _ in proc.walk_processes(include_self=True)]
                 for proc in process_insts
@@ -126,7 +126,7 @@ class HistogramsUserBase(
 
         # select shifts
         if shifts:
-            shift_insts = [config_inst.get_shift(shift) for shift in law.util.make_list(shifts)]
+            shift_insts = [config_inst.get_shift(shift) for shift in law.util.make_unique(law.util.make_list(shifts))]
             h = h[{"shift": [hist.loc(s.name) for s in shift_insts if s.name in histogram.axes["shift"]]}]
 
         # optional axis reductions
