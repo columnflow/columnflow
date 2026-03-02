@@ -9,12 +9,14 @@ from __future__ import annotations
 __all__ = []
 
 import functools
+import operator
+
 import law
 import order as od
 
 from columnflow.columnar_util import flat_np_view, layout_ak_array
 from columnflow.util import maybe_import
-from columnflow.types import TYPE_CHECKING, Any, Sequence
+from columnflow.types import TYPE_CHECKING, Any, Sequence, Callable
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -269,13 +271,17 @@ create_columnflow_hist = functools.partial(create_hist_from_variables, categoric
 def translate_hist_intcat_to_strcat(
     h: hist.Hist,
     axis_name: str,
-    id_map: dict[int, str],
+    id_map: Callable[[int], str] | dict[int, str],
 ) -> hist.Hist:
     import hist
 
+    # wrap id_map in a callable if it is given as a dict
+    if isinstance(id_map, dict):
+        id_map = functools.partial(operator.getitem, id_map)
+
     out_axes = [
         ax if ax.name != axis_name else hist.axis.StrCategory(
-            [id_map[v] for v in list(ax)],
+            [id_map(v) for v in list(ax)],
             name=ax.name,
             label=ax.label,
             growth=ax.traits.growth,
