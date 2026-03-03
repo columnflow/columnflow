@@ -376,7 +376,7 @@ cf_setup_interactive_common_variables() {
     query CF_VENV_SETUP_MODE_UPDATE "Automatically update virtual envs if needed" "false"
     [ "${CF_VENV_SETUP_MODE_UPDATE}" != "true" ] && export_and_save CF_VENV_SETUP_MODE "update"
     unset CF_VENV_SETUP_MODE_UPDATE
-    query CF_INTERACTIVE_VENV_FILE "Custom venv setup fill to use for interactive work instead of 'cf_dev'" "" "''"
+    query CF_INTERACTIVE_VENV_FILE "Custom venv setup file to use for interactive work instead of 'cf_dev'" "" "''"
 
     query CF_LOCAL_SCHEDULER "Use a local scheduler for law tasks" "true"
     if [ "${CF_LOCAL_SCHEDULER}" != "true" ]; then
