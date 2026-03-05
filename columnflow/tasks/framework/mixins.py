@@ -2317,10 +2317,18 @@ class DatasetsProcessesMixin(ConfigTask):
                     )
                     # reduce processes to those present in selected datasets when none were given initially
                     if datasets and processes and processes_orig in {law.no_value, ()}:
+                        def use_process_for_dataset(process_inst: od.Process, dataset_inst: od.Dataset) -> bool:
+                            return (
+                                dataset_inst.has_process(process_inst) or
+                                process_inst.has_process(dataset_inst.processes.get_first())
+                            )
                         dataset_insts = list(map(config_inst.get_dataset, datasets))
                         processes = tuple(
                             process for process in processes
-                            if any(dataset_inst.has_process(process) for dataset_inst in dataset_insts)
+                            if any(
+                                use_process_for_dataset(config_inst.get_process(process), dataset_inst)
+                                for dataset_inst in dataset_insts
+                            )
                         )
                 elif processes and processes != law.no_value:
                     # pick all datasets that contain any of the requested (sub)processes
