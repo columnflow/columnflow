@@ -824,7 +824,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                         raise Exception(
                             f"definition of '{groups_str}' contains circular references involving group '{value}'",
                         )
-                    lookup.extendleft(law.util.make_list(param_groups[value]))
+                    lookup.extendleft(law.util.make_list(param_groups[value])[::-1])
                     handled_groups.add(value)
                 else:
                     _values.append(value)
