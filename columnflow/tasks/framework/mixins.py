@@ -2151,7 +2151,7 @@ class VariablesMixin(ConfigTask):
                     multi_strategy="union",
                 )
                 # since there can be multi-dimensional variables, resolve each part separately
-                resolved_variables = set()
+                resolved_variables = []
                 for variable in variables:
                     resolved_parts = [
                         cls.find_config_objects(
@@ -2164,8 +2164,8 @@ class VariablesMixin(ConfigTask):
                         for part in cls.split_multi_variable(variable)
                     ]
                     # build combinatrics
-                    resolved_variables.update(map(cls.join_multi_variable, itertools.product(*resolved_parts)))
-                variables = resolved_variables
+                    resolved_variables.extend(map(cls.join_multi_variable, itertools.product(*resolved_parts)))
+                variables = law.util.make_unique(resolved_variables)
 
             # when still empty, fallback to using all known variables
             if not variables:

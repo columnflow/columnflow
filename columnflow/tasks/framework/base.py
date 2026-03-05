@@ -587,6 +587,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         container: str | od.AuxDataMixin | Sequence[od.AuxDataMixin],
         default_str: str | None = None,
         multi_strategy: str = "first",
+        debug: bool = False,
     ) -> Any | list[Any] | dict[od.AuxDataMixin, Any]:
         """
         Resolves a given parameter value *param*, checks if it should be placed with a default value when empty, and in
@@ -707,11 +708,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return params
         if multi_strategy == "first":
             return params[container[0]]
-        # NOTE: in there two strategies, we loose all order information
-        if multi_strategy == "union":
-            return list(set.union(*map(set, params.values())))
-        if multi_strategy == "intersection":
-            return list(set.intersection(*map(set, params.values())))
+        if multi_strategy in {"union", "intersection"}:
+            union = law.util.make_unique(sum(map(list, params.values()), []))
+            if multi_strategy == "union":
+                return union
+            # for intersection, use ordered union as index for sorting
+            return sorted(set.intersection(*map(set, params.values())), key=union.index)
         # "same", so check that values are identical
         first = params[container[0]]
         if not all(params[c] == first for c in container[1:]):
@@ -729,7 +731,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         groups_str: str,
         default_str: str | None = None,
         multi_strategy: str = "first",
-        debug=False,
+        debug: bool = False,
     ) -> Any | list[Any] | dict[od.AuxDataMixin, Any]:
         """
         This method is similar to :py:meth:`~.resolve_config_default` in that it checks if a parameter value *param* is
@@ -837,10 +839,12 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return values
         if multi_strategy == "first":
             return values[container[0]]
-        if multi_strategy == "union":
-            return list(set.union(*map(set, values.values())))
-        if multi_strategy == "intersection":
-            return list(set.intersection(*map(set, values.values())))
+        if multi_strategy in {"union", "intersection"}:
+            union = law.util.make_unique(sum(map(list, values.values()), []))
+            if multi_strategy == "union":
+                return union
+            # for intersection, use ordered union as index for sorting
+            return sorted(set.intersection(*map(set, values.values())), key=union.index)
         # "same", so check that values are identical
         first = values[container[0]]
         if not all(values[c] == first for c in container[1:]):
