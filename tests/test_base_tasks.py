@@ -143,7 +143,7 @@ class AnalysisTaskTests(unittest.TestCase):
             groups_str="producer_groups",
             multi_strategy="first",
         )
-        self.assertEqual(resolved_producer_groups, ("b", "a", "B", "d", "c"))  # TODO: order reversed
+        self.assertEqual(resolved_producer_groups, ("c", "d", "B", "a", "b"))
 
         # multi config
         for multi_strategy, expected_producer in (
