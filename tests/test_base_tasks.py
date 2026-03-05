@@ -159,8 +159,7 @@ class AnalysisTaskTests(unittest.TestCase):
                 default_str="default_producer",
                 multi_strategy=multi_strategy,
             )
-            # TODO: remove set() when order is fixed
-            self.assertEqual(set(resolved_producer), set(expected_producer))
+            self.assertEqual(resolved_producer, expected_producer)
 
         # "same" strategy
         resolved_calibrator = AnalysisTask.resolve_config_default(
