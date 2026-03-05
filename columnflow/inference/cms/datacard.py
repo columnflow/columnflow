@@ -247,7 +247,7 @@ class DatacardWriter(object):
         cat_objects = [self.inference_model_inst.get_category(cat_name) for cat_name in rates]
 
         # prepare blocks and lines to write
-        blocks = DotDict()
+        blocks: DotDict[str, list] = DotDict()
         separators = set()
         empty_lines = set()
 
@@ -464,7 +464,7 @@ class DatacardWriter(object):
                         type_str = "shape"
                 elif types == {ParameterType.rate_gauss, ParameterType.shape}:
                     # when mixing lnN and shape effects, combine expects the "shape?" type and makes the actual decision
-                    # dependend on the presence of shape variations in the accompaying shape files, see
+                    # dependent on the presence of shape variations in the accompanying shape files, see
                     # https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/v10.2.X/part2/settinguptheanalysis/?h=shape%3F#template-shape-uncertainties # noqa
                     type_str = "shape?"
                 if not type_str:
@@ -539,6 +539,9 @@ class DatacardWriter(object):
             blocks.groups = self.align_lines(list(blocks.groups), end=3)
         if blocks.mc_stats:
             blocks.mc_stats = self.align_lines(list(blocks.mc_stats))
+
+        # allow modification before writing via hook
+        blocks, separators, empty_lines = self.modify_before_write(blocks, separators, empty_lines)
 
         # write the blocks
         with open(datacard_path, "w") as f:
@@ -920,6 +923,22 @@ class DatacardWriter(object):
                 logger.warning(f"neither real data found nor fake data created in category '{cat_name}'")
 
         return (rates, effects, nom_pattern_comb, syst_pattern_comb)
+
+    def modify_before_write(
+        self,
+        blocks: DotDict[str, list],
+        separators: set[str],
+        empty_lines: set[str],
+    ) -> tuple[DotDict[str, list], set[str], set[str]]:
+        """
+        Hook to modify the datacard blocks, empty lines and separators before they are written to the datacard file.
+
+        :param blocks: Datacard blocks.
+        :param separators: Set of block names after which a separator line should be inserted.
+        :param empty_lines: Set of block names after which an empty line should be inserted.
+        :returns: The modified datacard blocks, separators and empty lines.
+        """
+        return blocks, separators, empty_lines
 
     @classmethod
     def align_lines(
