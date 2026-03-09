@@ -1142,6 +1142,20 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         raise Exception(f"cannot determine output location based on '{location}'")
 
+    def pilot_workflow_requires(self, task: law.Task) -> Any:
+        """
+        Helper for situtations where *this* task is a workflow with ``--pilot`` activated to decide if an upstream task
+        itself should be required, or its own upstream dependencies.
+
+        :param task: The task to be required.
+        :return: Either the task itself or the result of its :py:meth:`~.workflow_requires` method.
+        """
+        return (
+            task.workflow_requires()
+            if self.pilot and isinstance(task, law.BaseWorkflow) and task.is_workflow()
+            else task
+        )
+
     def get_parquet_writer_opts(self, repeating_values: bool = False) -> dict[str, Any]:
         """
         Returns an option dictionary that can be passed as *writer_opts* to :py:meth:`~law.pyarrow.merge_parquet_task`,

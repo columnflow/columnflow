@@ -94,26 +94,20 @@ class CreateHistograms(_CreateHistograms):
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        if not self.pilot:
-            if self.producer_insts:
-                reqs["producers"] = [
-                    self.reqs.ProduceColumns.req(
-                        self,
-                        producer=producer_inst.cls_name,
-                        producer_inst=producer_inst,
-                    )
-                    for producer_inst in self.producer_insts
-                    if producer_inst.produced_columns
-                ]
-            if self.ml_model_insts:
-                reqs["ml"] = [
-                    self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
-                    for ml_model_inst in self.ml_model_insts
-                ]
-        elif self.producer_insts:
-            # pass-through pilot workflow requirements of upstream task
-            t = self.reqs.ProduceColumns.req(self)
-            law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+        # depending on pilot flag, add upstream workflows or pass-through their own requirements only
+        reqs["producers"] = list(map(self.pilot_workflow_requires, (
+            self.reqs.ProduceColumns.req(
+                self,
+                producer=producer_inst.cls_name,
+                producer_inst=producer_inst,
+            )
+            for producer_inst in self.producer_insts
+            if producer_inst.produced_columns
+        )))
+        reqs["ml"] = list(map(self.pilot_workflow_requires, (
+            self.reqs.MLEvaluation.req(self, ml_model=ml_model_inst.cls_name)
+            for ml_model_inst in self.ml_model_insts
+        )))
 
         # add hist producer dependent requirements
         reqs["hist_producer"] = law.util.make_unique(law.util.flatten(self.hist_producer_inst.run_requires(task=self)))
