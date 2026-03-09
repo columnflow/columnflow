@@ -195,6 +195,7 @@ _ProduceColumnsWrapperBase = wrapper_factory(
     enable=["configs", "skip_configs", "datasets", "skip_datasets", "shifts", "skip_shifts"],
 )
 _ProduceColumnsWrapperBase.exclude_index = True
+delattr(_ProduceColumnsWrapperBase, "producer")
 
 
 class ProduceColumnsWrapper(_ProduceColumnsWrapperBase):
