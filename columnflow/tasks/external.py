@@ -565,12 +565,11 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
 
     @law.decorator.notify
     @law.decorator.log
-    @law.decorator.safe_output
     def run(self):
         outputs = self.output()
 
         # remove the bundle if recreating
-        if outputs["bundle"].exists() and self.recreate:
+        if self.recreate and outputs["bundle"].exists():
             outputs["bundle"].remove()
 
         # bundle only if needed
@@ -661,19 +660,25 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
             # transfer the result
             self.transfer(tmp, outputs["bundle"])
 
-        # unpack the bundle to have local files available
-        with self.publish_step(f"unpacking to {outputs['local_files'].dir.abspath} ..."):
+        # remove all local files if recreating or if only existing partially to do a full refresh
+        local_files_exist = outputs["local_files"].exists()
+        if (self.recreate and local_files_exist) or not local_files_exist:
             outputs["local_files"].dir.remove()
-            bundle = outputs["bundle"]
-            if isinstance(bundle, law.FileCollection):
-                bundle = bundle.random_target()
-            bundle.load(outputs["local_files"].dir, formatter="tar")
+            local_files_exist = False
 
-            # check if unpacked files/directories are described by the correct target class
-            for target in outputs["local_files"]._flat_target_list:
-                mismatch = (
-                    (isinstance(target, law.FileSystemFileTarget) and not os.path.isfile(target.abspath)) or
-                    (isinstance(target, law.FileSystemDirectoryTarget) and not os.path.isdir(target.abspath))
-                )
-                if mismatch:
-                    raise Exception(f"mismatching file/directory type of unpacked target {target!r}")
+        # unpack the bundle to have local files available if needed
+        if not local_files_exist:
+            with self.publish_step(f"unpacking to {outputs['local_files'].dir.abspath} ..."):
+                bundle = outputs["bundle"]
+                if isinstance(bundle, law.FileCollection):
+                    bundle = bundle.random_target()
+                bundle.load(outputs["local_files"].dir, formatter="tar")
+
+                # check if unpacked files/directories are described by the correct target class
+                for target in outputs["local_files"]._flat_target_list:
+                    mismatch = (
+                        (isinstance(target, law.FileSystemFileTarget) and not os.path.isfile(target.abspath)) or
+                        (isinstance(target, law.FileSystemDirectoryTarget) and not os.path.isdir(target.abspath))
+                    )
+                    if mismatch:
+                        raise Exception(f"mismatching file/directory type of unpacked target {target!r}")
