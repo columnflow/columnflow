@@ -2075,7 +2075,8 @@ def wrapper_factory(
         class
     :param docs: Manually set the documentation string `__doc__` of the new :py:class:`~law.task.base.WrapperTask` class
         instance
-    :param port_parameters: Whether to port the parameters of the `require_cls`.
+    :param port_parameters: Whether to port the parameters of the `require_cls`. When a sequence of strings is passed,
+        only parameters with these names are ported.
     :raises ValueError: If a parameter provided with `enable` is not in the list of known parameters
     :raises TypeError: If any parameter in `enable` is incompatible with the :py:class:`~law.task.base.WrapperTask`
         class instance or the inheritance structure of corresponding classes
