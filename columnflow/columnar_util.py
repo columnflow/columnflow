@@ -1446,9 +1446,9 @@ def slice_across_chunks(
     entry_stop: int | None = None,
 ) -> ak.Array | np.ndarray:
     """
-    Loads multiple array chunks according to, concatenates them and returns the result. Each chunk is loaded by its own
-    slicing function in *slice_funcs* which receives the start and stop entry of the chunk to load. The total sizes of
-    the chunks are given in *sizes* and used for internal range calculation. By default, the full range of all chunks is
+    Loads multiple array chunks, concatenates them and returns the result. Each chunk is loaded by its own slicing
+    function in *slice_funcs* which receives the start and stop entry of the chunk to load. The total sizes of the
+    chunks are given in *sizes* and used for internal range calculation. By default, the full range of all chunks is
     loaded, but this can be limited by setting *entry_start* and *entry_stop* to the global start and stop entry to
     load, respectively.
 
