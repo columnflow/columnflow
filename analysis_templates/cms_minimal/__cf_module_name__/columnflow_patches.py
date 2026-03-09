@@ -25,7 +25,7 @@ def patch_bundle_repo_exclude_files():
 
     # add additional files
     exclude_files.extend([
-        "docs", "tests", "data", "assets", ".law", ".setups", ".data", ".github",
+        "docs", "tests", "data", "assets", ".law/cms", ".setups", ".data", ".github",
     ])
 
     # overwrite them

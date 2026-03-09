@@ -322,12 +322,6 @@ class MergeReductionStats(_MergeReductionStats):
     def resolve_param_values(cls, params: dict[str, Any]) -> dict[str, Any]:
         params = super().resolve_param_values(params)
 
-        # cap n_inputs
-        if "n_inputs" in params and (dataset_info_inst := params.get("dataset_info_inst")):
-            n_files = dataset_info_inst.n_files
-            if params["n_inputs"] < 0 or params["n_inputs"] > n_files:
-                params["n_inputs"] = n_files
-
         # check for the default merged size
         if "merged_size" in params:
             if params["merged_size"] in {None, law.NO_FLOAT}:
@@ -339,6 +333,14 @@ class MergeReductionStats(_MergeReductionStats):
                 params["n_inputs"] = 0
 
         return params
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        # cap n_inputs
+        n_merged_files = self.n_merged_files
+        if self.n_inputs < 0 or self.n_inputs > n_merged_files:
+            self.n_inputs = n_merged_files
 
     def create_branch_map(self):
         # single branch without payload
@@ -414,6 +416,7 @@ class MergeReductionStats(_MergeReductionStats):
         stats["max_size_merged"] = self.merged_size * 1024**2  # MB to bytes
 
         # determine the number of files after merging, allowing a possible ~15% increase per file
+        # TODO: merging: check n_files usage
         n_total = self.dataset_info_inst.n_files
         if n_total > 1:
             # get the expected number of files after merging
@@ -435,13 +438,15 @@ class MergeReductionStats(_MergeReductionStats):
         # print them
         self.publish_message(f" stats of {n} input files ".center(40, "-"))
         self.publish_message(f"average size: {law.util.human_bytes(stats['avg_size'], fmt=True)}")
-        deviation = stats["std_size"] / stats["avg_size"]
-        self.publish_message(f"deviation   : {deviation * 100:.2f}% (std/avg)")
+        self.publish_message(f"deviation   : {law.util.human_bytes(stats['std_size'], fmt=True)}")
         self.publish_message(" merging info ".center(40, "-"))
         self.publish_message(f"target size : {self.merged_size} MB")
         self.publish_message(f"merging     : {stats['merge_factor']} into 1")
         self.publish_message(f"files before: {n_total}")
         self.publish_message(f"files after : {n_merged_files}")
+        tot_size = stats["avg_size"] * n_merged_files
+        rel_err = stats["std_size"] / stats["avg_size"]
+        self.publish_message(f"total size  : {law.util.human_bytes(tot_size, fmt=True)} +- {rel_err * 100:.1f} %")
         self.publish_message(40 * "-")
 
 
@@ -506,6 +511,7 @@ class MergeReducedEvents(_MergeReducedEvents):
         reqs["stats"] = self.reqs.MergeReductionStats.req_different_branching(self)
         reqs["events"] = self.reqs.ReduceEvents.req_different_branching(
             self,
+            # TODO: merging: check n_files usage
             branches=((0, self.dataset_info_inst.n_files),),
         )
         return reqs
@@ -597,6 +603,7 @@ class ProvideReducedEvents(_ProvideReducedEvents):
 
     @law.workflow_property(setter=True, cache=True, empty_value=0)
     def file_merging(self):
+        # TODO: merging: check n_files usage
         if self.skip_merging or self.dataset_info_inst.n_files == 1:
             return 1
 
@@ -624,6 +631,7 @@ class ProvideReducedEvents(_ProvideReducedEvents):
         # - otherwise, always require the reduction stats as they are needed to make a decision
         # - when merging is forced, require it
         # - otherwise, and if the merging is already known, require either reduced or merged events
+        # TODO: merging: check n_files usage
         if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
             # reduced events are used directly without having to look into the file merging factor
             if not self.pilot:
@@ -653,6 +661,7 @@ class ProvideReducedEvents(_ProvideReducedEvents):
     def requires(self):
         # same as for workflow requirements without optional pilot check
         reqs = DotDict()
+        # TODO: merging: check n_files usage
         if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
             reqs["events"] = self._req_reduced_events()
         else:
@@ -684,6 +693,7 @@ class ProvideReducedEvents(_ProvideReducedEvents):
 
     def _yield_dynamic_deps(self):
         # do nothing if a decision was pre-set in which case requirements were already triggered
+        # TODO: merging: check n_files usage
         if self.skip_merging or (not self.force_merging and self.dataset_info_inst.n_files == 1):
             return
 

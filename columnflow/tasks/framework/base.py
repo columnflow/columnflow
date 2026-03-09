@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import abc
+import math
 import enum
 import importlib
 import itertools
@@ -1850,18 +1851,29 @@ class DatasetTask(ShiftTask):
         Consecutive merging steps are not handled yet.
         """
         n_files = self.dataset_info_inst.n_files
+        file_merging = self.file_merging
 
-        if isinstance(self.file_merging, int):
+        if isinstance(file_merging, int):
             # interpret the file_merging attribute as the merging factor itself
             # zero means "merge all in one"
-            if self.file_merging < 0:
-                raise ValueError(f"invalid file_merging value {self.file_merging}")
-            n_merge = n_files if self.file_merging == 0 else self.file_merging
+            if file_merging < 0:
+                raise ValueError(f"invalid file_merging value {file_merging}")
+            n_merge = n_files if file_merging == 0 else file_merging
         else:
             # no merging at all
             n_merge = 1
 
         return n_merge
+
+    @property
+    def n_merged_files(self) -> int:
+        """
+        Returns the number of files that are expected after merging, making use of :py:attr:`file_merging_factor` which
+        can depend on dynamic, dataset-dependent information.
+        """
+        n_files = self.dataset_info_inst.n_files
+        n_merge = self.file_merging_factor
+        return int(math.ceil((1.0 * n_files / n_merge)))
 
     def create_branch_map(self):
         """
@@ -1870,8 +1882,8 @@ class DatasetTask(ShiftTask):
         branches to one or more input file indices. E.g. `1 -> [3, 4, 5]` would mean that branch 1
         is simultaneously handling input file indices 3, 4 and 5.
         """
-        n_merge = self.file_merging_factor
         n_files = self.dataset_info_inst.n_files
+        n_merge = self.file_merging_factor
 
         # use iter_chunks which splits a list of length n_files into chunks of maximum size n_merge
         chunks = law.util.iter_chunks(n_files, n_merge)

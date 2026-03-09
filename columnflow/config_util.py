@@ -11,7 +11,7 @@ __all__ = []
 import re
 import dataclasses
 import itertools
-from collections import OrderedDict, defaultdict
+import collections
 
 import law
 import order as od
@@ -249,7 +249,7 @@ def get_datasets_from_process(
         return law.util.make_unique(dataset_insts)
 
     # at this point, strategy is exclusive or exclusive_strict
-    dataset_insts_dict: OrderedDict[str, od.Dataset] = OrderedDict()
+    dataset_insts_dict: collections.OrderedDict[str, od.Dataset] = collections.OrderedDict()
     for process_inst, _, child_insts in root_inst.walk_processes(include_self=True, algo="dfs_post"):
         # check if child processes have matched datasets already
         if child_insts:
@@ -263,7 +263,7 @@ def get_datasets_from_process(
                 continue
             # at this point, the process itself must be checked,
             # so remove potentially found datasets of children
-            dataset_insts_dict = OrderedDict({
+            dataset_insts_dict = collections.OrderedDict({
                 child_inst: _dataset_insts
                 for child_inst, _dataset_insts in dataset_insts_dict.items()
                 if child_inst not in child_insts
@@ -371,7 +371,7 @@ def group_shifts(
     An exception is raised in case a shift source is represented only by its up or down shift.
     """
     nominal = None
-    grouped = defaultdict(lambda: [None, None])
+    grouped = collections.defaultdict(lambda: [None, None])
 
     up_sources = set()
     down_sources = set()

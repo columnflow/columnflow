@@ -177,8 +177,8 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         :param lfn_indices: List of indices of LFNs that are processed by this *task* instance, defaults to None
         :param eager_lookup: Look at the next fs if stat takes too long, defaults to 1
         :param skip_fallback: Skip the fallback mechanism to fetch the LFN, defaults to False
-        :raises TypeError: If *task* is not of type :external+law:py:class:`~law.workflow.base.BaseWorkflow` or not
-            a task analyzing a single branch in the task tree
+        :raises TypeError: If *task* is not of type :external+law:py:class:`~law.workflow.base.BaseWorkflow` or not a
+            task analyzing a single branch in the task tree
         :raises Exception: If current task is not complete as indicated with ``self.complete()``
         :raises ValueError: If no fs is provided at call and none can be found in either the config instance or the law
             config.
@@ -213,8 +213,6 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
 
         # loop
         for lfn_index in lfn_indices:
-            task.publish_message(f"handling file {lfn_index}")
-
             # get the lfn of the file referenced by this file index
             lfn = str(lfns[lfn_index])
 
@@ -247,7 +245,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 input_stat = input_file.exists(stat=True)
                 duration = time.perf_counter() - t1
                 i += 1
-                logger.info(f"lfn {lfn} does{'' if input_stat else ' not'} exist at fs {selected_fs}")
+                logger.info(f"lfn {lfn} (lfn {lfn_index}) does{'' if input_stat else ' not'} exist at fs {selected_fs}")
 
                 # when the stat query took longer than some duration, eagerly try the next fs
                 # and check if it responds faster and if so, take it instead
@@ -273,16 +271,15 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
                 # stop when the stat was successful at this point
                 if input_stat:
                     task.publish_message(
-                        f"using fs {selected_fs}, stat responded in "
-                        f"{law.util.human_duration(seconds=duration)}",
+                        f"using fs {selected_fs}, stat responded in {law.util.human_duration(seconds=duration)}",
                     )
                     break
             else:
-                raise Exception(f"lfn {lfn} not found at any remote fs {fs}")
+                raise Exception(f"lfn {lfn} (lfn {lfn_index}) not found at any remote fs {fs}")
 
             # log the file size
             input_size = law.util.human_bytes(input_stat.st_size, fmt=True)
-            task.publish_message(f"lfn {lfn}, size is {input_size}")
+            task.publish_message(f"lfn {lfn} (lfn {lfn_index}), size is {input_size}")
 
             yield (lfn_index, input_file)
 

@@ -36,7 +36,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
         "tests",
         "data",
         "assets",
-        ".law",
+        ".law/cms",
         ".setups",
         ".data",
         ".github",
@@ -50,6 +50,7 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
 
     include_files = [
         "law_user.cfg",
+        ".law",
     ]
 
     def get_repo_path(self):
