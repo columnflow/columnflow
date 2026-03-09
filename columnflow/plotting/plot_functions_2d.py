@@ -173,7 +173,7 @@ def plot_2d(
             "loc": "upper right",
         },
         "cms_label_cfg": {
-            "lumi": round(0.001 * config_inst.x.luminosity.get("nominal"), 1),  # /pb -> /fb
+            "lumi": round(0.001 * config_inst.x.luminosity.get("nominal")),  # /pb -> /fb
             "com": config_inst.campaign.ecm,
         },
         "plot2d_cfg": {
@@ -227,11 +227,11 @@ def plot_2d(
         label_options = {
             "wip": "Work in progress",
             "pre": "Preliminary",
-            "pw": "Private work",
+            "pw": "Private work (CMS data/simulation)",
             "sim": "Simulation",
             "simwip": "Simulation work in progress",
             "simpre": "Simulation preliminary",
-            "simpw": "Simulation private work",
+            "simpw": "Private work (CMS simulation)",
             "od": "OpenData",
             "odwip": "OpenData work in progress",
             "odpw": "OpenData private work",
@@ -242,6 +242,7 @@ def plot_2d(
             "llabel": label_options.get(cms_label, cms_label),
             "fontsize": 22,
             "data": False,
+            "exp": "",
         }
 
         cms_label_kwargs.update(style_config.get("cms_label_cfg", {}))
@@ -265,6 +266,8 @@ def plot_2d(
     with patch.object(plt, "colorbar", partial(plt.colorbar, extend=extend)):
         h_sum.plot2d(ax=ax, **style_config["plot2d_cfg"])
 
+    # ax.set_xlim(0, 2)
+    # ax.set_ylim(0, 250)
     # fix color bar minor ticks with SymLogNorm
     if isinstance(cbar_norm, mpl.colors.SymLogNorm):
         # returned collections can vary -> brute-force set

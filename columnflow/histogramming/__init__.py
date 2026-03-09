@@ -239,11 +239,11 @@ class HistProducer(TaskArrayFunctionWithProducerRequirements):
         """
         return self.create_hist_func(variables, task=task)
 
-    def run_fill_hist(self, h: Any, data: dict[str, Any], task: law.Task) -> None:
+    def run_fill_hist(self, h: Any, data: dict[str, Any], task: law.Task, **kwargs) -> None:
         """
         Invokes the :py:meth:`fill_hist_func` of this instance and returns its result, forwarding all arguments.
         """
-        return self.fill_hist_func(h, data, task=task)
+        return self.fill_hist_func(h, data, task=task, **kwargs)
 
     def run_post_process_hist(self, h: Any, task: law.Task) -> Any:
         """
