@@ -17,6 +17,7 @@ import queue
 import threading
 import subprocess
 import importlib
+import pathlib
 import fnmatch
 import inspect
 import pprint
@@ -29,7 +30,7 @@ import law
 import luigi
 
 from columnflow import env_is_dev, env_is_remote, docs_url, github_url
-from columnflow.types import Callable, Any, Sequence, Union, ModuleType, Type, T, Hashable
+from columnflow.types import Callable, Any, Sequence, Union, ModuleType, Type, T, Hashable, Protocol, runtime_checkable
 
 
 #: Placeholder for an unset value.
@@ -1025,6 +1026,78 @@ class KeyValueMessage(luigi.worker.SchedulerMessage):
 
     def __str__(self) -> str:
         return str(self.value)
+
+
+@runtime_checkable
+class CacheBase(Protocol):
+
+    def has(self, key: Hashable) -> bool:
+        ...
+
+    def get(self, key: Hashable) -> Any:
+        ...
+
+    def set(self, key: Hashable, value: Any) -> None:
+        ...
+
+
+class PersistentCache(CacheBase):
+
+    def __init__(self, cache_path: str | pathlib.Path | law.FileSystemFileTarget) -> None:
+        super().__init__()
+
+        self.cache_target = (
+            cache_path
+            if isinstance(cache_path, law.FileSystemFileTarget)
+            else law.LocalFileTarget(cache_path)
+        )
+
+        # state
+        self.cache: dict[Hashable, Any] = {}
+        self.opened: bool = False
+        self.modified: bool = False
+
+    def __enter__(self) -> PersistentCache:
+        return self.open()
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    def open(self) -> PersistentCache:
+        if self.opened:
+            raise Exception(f"{self.__class__.__name__} is already opened")
+
+        # when existing, overwrite cache in memory with that from file
+        self.cache.clear()
+        if self.cache_target.exists():
+            self.cache |= self.cache_target.load(formatter="json")
+
+        self.modified = False
+        self.opened = True
+
+        return self
+
+    def close(self) -> None:
+        if not self.opened:
+            raise Exception(f"{self.__class__.__name__} is not opened")
+
+        # write to file when modified
+        if self.modified:
+            self.cache_target.dump(self.cache, formatter="json", indent=2)
+
+        self.modified = False
+        self.opened = False
+
+    def has(self, key: Hashable) -> bool:
+        return key in self.cache
+
+    def get(self, key: Hashable) -> Any:
+        return self.cache[key]
+
+    def set(self, key: Hashable, value: Any) -> None:
+        if not self.modified and (not self.has(key) or self.get(key) != value):
+            self.modified = True
+        self.cache[key] = value
 
 
 def load_correction_set(target: law.FileSystemFileTarget | str) -> Any:
