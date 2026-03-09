@@ -2023,6 +2023,7 @@ def wrapper_factory(
     cls_name: str | None = None,
     attributes: dict | None = None,
     docs: str | None = None,
+    port_parameters: bool | Sequence[str] = True,
 ) -> law.task.base.Register:
     """
     Factory function creating wrapper task classes, inheriting from *base_cls* and
@@ -2074,6 +2075,7 @@ def wrapper_factory(
         class
     :param docs: Manually set the documentation string `__doc__` of the new :py:class:`~law.task.base.WrapperTask` class
         instance
+    :param port_parameters: Whether to port the parameters of the `require_cls`.
     :raises ValueError: If a parameter provided with `enable` is not in the list of known parameters
     :raises TypeError: If any parameter in `enable` is incompatible with the :py:class:`~law.task.base.WrapperTask`
         class instance or the inheritance structure of corresponding classes
@@ -2342,5 +2344,36 @@ def wrapper_factory(
     # set docs
     if docs:
         Wrapper.__docs__ = docs
+
+    # port parameters from require_cls
+    if port_parameters:
+        # define which parameters to port
+        upstream_params = dict(require_cls.get_params())
+        if isinstance(port_parameters, bool):
+            port_params = (
+                # start from all non-private upstream parameters
+                set(
+                    name for name, param in upstream_params.items()
+                    if param.visibility != luigi.parameter.ParameterVisibility.PRIVATE
+                ) -
+                # skip existing parameters
+                set(dict(Wrapper.get_params())) -
+                # skip interactive parameters
+                set(require_cls.interactive_params) -
+                # skip with some heuristics
+                {"config", "dataset", "shift", "effective_workflow", "local_shift", "known_shifts"}
+            )
+        else:
+            # take sequence as is, but check for existence
+            port_params = law.util.make_unique(port_parameters)
+            for name in port_params:
+                if name not in upstream_params:
+                    raise ValueError(
+                        f"cannot port parameter '{name}' to '{Wrapper.__name__}': not existing in "
+                        f"'{require_cls.__name__}'",
+                    )
+        # actual porting
+        for name in port_params:
+            setattr(Wrapper, name, upstream_params[name])
 
     return Wrapper
