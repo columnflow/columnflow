@@ -441,7 +441,6 @@ def btag_wp_weights(
         3. https://indico.cern.ch/event/1583955/contributions/6771046/attachments/3176162/5648591/BTVreportHIGPAG_18112025.pdf  # noqa
     """
     # get inputs, evaluated at jet_mask
-    jet_mask = (True if jet_mask is Ellipsis else jet_mask)
     discr = events.Jet[self.cfg.btag_column][jet_mask]
     flavor = events[self.cfg.jet_name].hadronFlavour[jet_mask]
     abs_eta = abs(events[self.cfg.jet_name].eta[jet_mask])
@@ -576,7 +575,7 @@ def btag_wp_weights_init(self: Producer, **kwargs) -> None:
             (dataset if isinstance(dataset, od.Dataset) else self.config_inst.get_dataset(dataset))
             for dataset in group
         ]
-        logger.info_once(
+        logger.debug_once(
             log_id,
             f"{self.cls_name}: found {len(group)} dataset(s) for grouping tagging counts for requested dataset "
             f"'{self.dataset_inst.name}': {', '.join(dataset.name for dataset in group)}",
