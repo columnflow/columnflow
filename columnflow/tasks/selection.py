@@ -10,16 +10,15 @@ from collections import defaultdict
 import luigi
 import law
 
-from columnflow.types import Any
-
 from columnflow.tasks.framework.base import Requirements, AnalysisTask, wrapper_factory
 from columnflow.tasks.framework.mixins import CalibratorsMixin, SelectorMixin, ChunkedIOMixin, ProducerMixin
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import on_failure
+from columnflow.tasks.framework.parameters import DerivableInstParameter
 from columnflow.tasks.external import GetDatasetLFNs
 from columnflow.tasks.calibration import CalibrateEvents
 from columnflow.util import maybe_import, ensure_proxy, dev_sandbox, safe_div, DotDict
-from columnflow.tasks.framework.parameters import DerivableInstParameter
+from columnflow.types import Any
 
 np = maybe_import("numpy")
 ak = maybe_import("awkward")
@@ -70,20 +69,16 @@ class SelectEvents(_SelectEvents):
 
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
-        if not self.pilot:
-            reqs["calibrations"] = [
-                self.reqs.CalibrateEvents.req(
-                    self,
-                    calibrator=calibrator_inst.cls_name,
-                    calibrator_inst=calibrator_inst,
-                )
-                for calibrator_inst in self.calibrator_insts
-                if calibrator_inst.produced_columns
-            ]
-        elif self.calibrator_insts:
-            # pass-through pilot workflow requirements of upstream task
-            t = self.reqs.CalibrateEvents.req(self)
-            law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+        # depending on pilot flag, add upstream workflows or pass-through their own requirements only
+        reqs["calibrations"] = list(map(self.pilot_workflow_requires, (
+            self.reqs.CalibrateEvents.req(
+                self,
+                calibrator=calibrator_inst.cls_name,
+                calibrator_inst=calibrator_inst,
+            )
+            for calibrator_inst in self.calibrator_insts
+            if calibrator_inst.produced_columns
+        )))
 
         # add selector dependent requirements
         reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires(task=self)))
