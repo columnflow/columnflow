@@ -102,7 +102,7 @@ def fill_hist(
             for association in var_associations.keys():
                 # check that two or more variables are associated with each other
                 if len(var_associations[association]) < 2:
-                    raise logger.info(
+                    logger.info(
                         f"Variable '{var_associations[association][0]}' has unmatched association '{association}'"
                         ", skipping association for this variable.",
                     )
