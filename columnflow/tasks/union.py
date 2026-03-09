@@ -63,22 +63,20 @@ class UniteColumns(_UniteColumns):
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        if not self.pilot:
-            if self.producer_insts:
-                reqs["producers"] = [
-                    self.reqs.ProduceColumns.req(
-                        self,
-                        producer=producer_inst.cls_name,
-                        producer_inst=producer_inst,
-                    )
-                    for producer_inst in self.producer_insts
-                    if producer_inst.produced_columns
-                ]
-            if self.ml_model_insts:
-                reqs["ml"] = [
-                    self.reqs.MLEvaluation.req(self, ml_model=m)
-                    for m in self.ml_models
-                ]
+        # depending on pilot flag, add upstream workflows or pass-through their own requirements only
+        reqs["producers"] = list(map(self.pilot_workflow_requires, (
+            self.reqs.ProduceColumns.req(
+                self,
+                producer=producer_inst.cls_name,
+                producer_inst=producer_inst,
+            )
+            for producer_inst in self.producer_insts
+            if producer_inst.produced_columns
+        )))
+        reqs["ml"] = list(map(self.pilot_workflow_requires, (
+            self.reqs.MLEvaluation.req(self, ml_model=m)
+            for m in self.ml_models
+        )))
 
         # require the full merge forest
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)

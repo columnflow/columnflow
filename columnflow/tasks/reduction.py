@@ -63,21 +63,17 @@ class ReduceEvents(_ReduceEvents):
 
         reqs["lfns"] = self.reqs.GetDatasetLFNs.req(self)
 
-        if not self.pilot:
-            reqs["calibrations"] = [
-                self.reqs.CalibrateEvents.req(
-                    self,
-                    calibrator=calibrator_inst.cls_name,
-                    calibrator_inst=calibrator_inst,
-                )
-                for calibrator_inst in self.calibrator_insts
-                if calibrator_inst.produced_columns
-            ]
-            reqs["selection"] = self.reqs.SelectEvents.req(self)
-        else:
-            # pass-through pilot workflow requirements of upstream task
-            t = self.reqs.SelectEvents.req(self)
-            law.util.merge_dicts(reqs, t.workflow_requires(), inplace=True)
+        # depending on pilot flag, add upstream workflows or pass-through their own requirements only
+        reqs["calibrations"] = list(map(self.pilot_workflow_requires, (
+            self.reqs.CalibrateEvents.req(
+                self,
+                calibrator=calibrator_inst.cls_name,
+                calibrator_inst=calibrator_inst,
+            )
+            for calibrator_inst in self.calibrator_insts
+            if calibrator_inst.produced_columns
+        )))
+        reqs["selection"] = self.pilot_workflow_requires(self.reqs.SelectEvents.req(self))
 
         # add reducer dependent requirements
         reqs["reducer"] = law.util.make_unique(law.util.flatten(self.reducer_inst.run_requires(task=self)))

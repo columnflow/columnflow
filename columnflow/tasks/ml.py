@@ -86,17 +86,16 @@ class PrepareMLEvents(
         if self.preparation_producer_inst:
             reqs["preparation_producer"] = self.preparation_producer_inst.run_requires(task=self)
 
-        # add producers to requirements
-        if not self.pilot and self.producer_insts:
-            reqs["producers"] = [
-                self.reqs.ProduceColumns.req(
-                    self,
-                    producer=producer_inst.cls_name,
-                    producer_inst=producer_inst,
-                )
-                for producer_inst in self.producer_insts
-                if producer_inst.produced_columns
-            ]
+        # depending on pilot flag, add upstream workflows or pass-through their own requirements only
+        reqs["producers"] = list(map(self.pilot_workflow_requires, (
+            self.reqs.ProduceColumns.req(
+                self,
+                producer=producer_inst.cls_name,
+                producer_inst=producer_inst,
+            )
+            for producer_inst in self.producer_insts
+            if producer_inst.produced_columns
+        )))
 
         # require the full merge forest
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
