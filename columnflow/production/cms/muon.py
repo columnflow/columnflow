@@ -25,9 +25,6 @@ class MuonSFConfig:
     campaign: str = ""
     min_pt: float = 0.0
     max_pt: float = 0.0
-    # switch to get efficiency values if efficiency in scale_factors, instead of different corrections
-    data_effs_in_scale_factors: bool = False
-    mc_effs_in_scale_factors: bool = False
 
     @classmethod
     def new(cls, obj: MuonSFConfig | tuple[str, str]) -> MuonSFConfig:
@@ -45,9 +42,6 @@ class MuonSFConfig:
     def __post_init__(self):
         if 0.0 < self.max_pt <= self.min_pt:
             raise ValueError(f"{self.__class__.__name__}: max_pt must be larger than min_pt")
-        if self.data_effs_in_scale_factors and self.mc_effs_in_scale_factors:
-            raise ValueError(f"{self.__class__.__name__}: both data_effs_in_scale_factors and "
-            f"mc_effs_in_scale_factors cannot be True at the same time")
 
 
 @producer(
@@ -62,6 +56,8 @@ class MuonSFConfig:
     # name of the saved weight column
     weight_name="muon_weight",
     supported_versions={1, 2},
+    # function to update variables before jec corrector call
+    update_corrector_variables=(lambda self, corrector, variables: variables),
 )
 def muon_weights(
     self: Producer,
@@ -111,26 +107,23 @@ def muon_weights(
         "pt": muons.pt,
     }
 
-    if self.muon_config.data_effs_in_scale_factors:
-        scale_factors_postfix = "_DATAeff"
-    elif self.muon_config.mc_effs_in_scale_factors:
-        scale_factors_postfix = "_MCeff"
-    else:
-        scale_factors_postfix = ""
-
     # loop over systematics
     for syst, postfix in [
         ("sf", ""),
-        (f"systup{scale_factors_postfix}", "_up"),
-        (f"systdown{scale_factors_postfix}", "_down"),
+        ("systup", "_up"),
+        ("systdown", "_down"),
     ]:
         # get the inputs for this type of variation
-        variable_map_syst = {
+        _variable_map = {
             **variable_map,
-            "scale_factors": f"nominal{scale_factors_postfix}" if syst == "sf" else syst,  # syst key in 2022
-            "efficiencies": f"nominal{scale_factors_postfix}" if syst == "sf" else syst,
-            "ValType": syst,  # syst key in 2017
+            "scale_factors": "nominal" if syst == "sf" else syst,
+            "ValType": syst,
         }
+
+        # optionally update variables for this corrector call
+        if callable(self.update_corrector_variables):
+            _variable_map = self.update_corrector_variables(corrector, _variable_map)
+
         inputs = [variable_map_syst[inp.name] for inp in self.muon_sf_corrector.inputs]
         sf = self.muon_sf_corrector.evaluate(*inputs)
 
