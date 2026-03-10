@@ -13,7 +13,7 @@ import order as od
 
 from columnflow.production import Producer, producer
 from columnflow.columnar_util import set_ak_column, DotDict, TAFConfig, EMPTY_FLOAT
-from columnflow.hist_util import sum_hists
+from columnflow.hist_util import sum_hists, merge_axis_bins
 from columnflow.util import maybe_import, load_correction_set
 from columnflow.types import Any, Callable, Sequence
 
@@ -365,6 +365,9 @@ class BTagWPSFConfig(TAFConfig):
     # ! note that, when given, these edges need to be a valid subset of the original bin edges of the counting hists
     pt_edges: tuple[float, ...] | None = None
     abs_eta_edges: tuple[float, ...] | None = None
+    # same for merging working points in a dictionary like {"xtight": ["xtight", "xxtight"]} to merge xtight and xxtight
+    # and call the resulting bin on the "wp" axis "xtight"
+    wp_merging: dict[str, Sequence[str]] = dataclasses.field(default_factory=dict)
     # key of the tagging counts histogram to load from MergeSelectionStats output
     hist_key: str = "btag_wp_counts"
     # name of the weight column to produce
@@ -654,6 +657,9 @@ def btag_wp_weights_setup(
         counts = counts[{"pt": hist.rebin(edges=self.cfg.pt_edges)}]
     if self.cfg.abs_eta_edges:
         counts = counts[{"abs_eta": hist.rebin(edges=self.cfg.abs_eta_edges)}]
+    # merge wp bins if necessary
+    for merged_wp, wps in self.cfg.wp_merging.items():
+        counts = merge_axis_bins(counts, "wp", merged_wp, wps)
     # get the total counts
     counts_total = counts[{"wp": "total"}].view()
     # compute efficiencies
