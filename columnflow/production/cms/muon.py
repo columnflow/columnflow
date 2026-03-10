@@ -122,9 +122,9 @@ def muon_weights(
 
         # optionally update variables for this corrector call
         if callable(self.update_corrector_variables):
-            _variable_map = self.update_corrector_variables(corrector, _variable_map)
+            _variable_map = self.update_corrector_variables(self.muon_sf_corrector, _variable_map)
 
-        inputs = [variable_map_syst[inp.name] for inp in self.muon_sf_corrector.inputs]
+        inputs = [_variable_map[inp.name] for inp in self.muon_sf_corrector.inputs]
         sf = self.muon_sf_corrector.evaluate(*inputs)
 
         # create the product over all muons in one event
