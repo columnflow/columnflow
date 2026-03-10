@@ -441,3 +441,28 @@ def select_category_bins(
         h = h[{"category": sum}]
 
     return h
+
+
+def merge_axis_bins(
+    h: hist.Hist,
+    axis_name: str,
+    merged_bin_name: str,
+    bins_to_merge: Sequence[str],
+) -> hist.Hist:
+
+    # sanity checks
+    if (merged_bin_name not in h.axes[axis_name]) or (merged_bin_name not in bins_to_merge):
+        raise ValueError(f"target bin '{merged_bin_name}' not found in axis '{axis_name}' or in {bins_to_merge}")
+    for bin_name in bins_to_merge:
+        if bin_name not in h.axes[axis_name]:
+            raise ValueError(f"bin '{bin_name}' not found in axis '{axis_name}'")
+
+    h_ = h.copy()
+    for bin_name in bins_to_merge:
+        # avoid double counting the events in the target bin to merge into
+        if bin_name == merged_bin_name:
+            continue
+        else:
+            h_[{axis_name: merged_bin_name}] += h_[{axis_name: bin_name}]
+
+    return h_
