@@ -184,11 +184,13 @@ class ReduceEvents(_ReduceEvents):
         n_all = 0
         n_reduced = 0
 
-        # let the lfn_task prepare the nano file (basically determine a good pfn)
-        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
+        # let the lfn_task locate and prepare the nano file(s)
+        nano_input = [nano_target for _, nano_target in lfn_task.iter_nano_files(self)]
+        if len(nano_input) == 1:
+            nano_input = nano_input[0]
 
         # collect input targets
-        input_targets = [input_file]
+        input_targets = [nano_input]
         input_targets.append(inputs["selection"]["results"])
         input_targets.extend([inp["columns"] for inp in inputs["calibrations"]])
         if self.selector_inst.produced_columns:
@@ -199,7 +201,7 @@ class ReduceEvents(_ReduceEvents):
         with law.localize_file_targets(input_targets, mode="r") as inps:
             # iterate over chunks of events and diffs
             for (events, sel, *diffs), pos in self.iter_chunked_io(
-                [inp.abspath for inp in inps],
+                law.util.map_struct(law.target.file.get_path, inps),
                 source_type=["coffea_root"] + (len(inps) - 1) * ["awkward_parquet"],
                 read_columns=[read_columns, read_sel_columns] + (len(inps) - 2) * [read_columns],
                 chunk_size=self.reducer_inst.get_min_chunk_size(),
@@ -238,7 +240,7 @@ class ReduceEvents(_ReduceEvents):
                     self.raise_if_not_finite(events)
 
                 # save as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"file_{lfn_index}_{pos.index}.parquet", type="f")
+                chunk = tmp_dir.child(f"file_{pos.index}.parquet", type="f")
                 output_chunks[pos.index] = chunk
                 self.chunked_io.queue(sorted_ak_to_parquet, (ak.to_packed(events), chunk.abspath))
 

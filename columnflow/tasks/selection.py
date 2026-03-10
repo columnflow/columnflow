@@ -180,13 +180,15 @@ class SelectEvents(_SelectEvents):
         write_columns |= self.selector_inst.produced_columns
         route_filter = RouteFilter(keep=write_columns)
 
-        # let the lfn_task prepare the nano file (basically determine a good pfn)
-        [(lfn_index, input_file)] = lfn_task.iter_nano_files(self)
+        # let the lfn_task locate and prepare the nano file(s)
+        nano_input = [nano_target for _, nano_target in lfn_task.iter_nano_files(self)]
+        if len(nano_input) == 1:
+            nano_input = nano_input[0]
 
         # prepare inputs for localization
         with law.localize_file_targets(
             [
-                input_file,
+                nano_input,
                 *(inp["columns"] for inp in inputs["calibrations"]),
                 *reader_targets.values(),
             ],
@@ -195,7 +197,7 @@ class SelectEvents(_SelectEvents):
             # iterate over chunks of events and diffs
             n_calib = len(inputs["calibrations"])
             for (events, *cols), pos in self.iter_chunked_io(
-                [inp.abspath for inp in inps],
+                law.util.map_struct(law.target.file.get_path, inps),
                 source_type=["coffea_root"] + ["awkward_parquet"] * n_calib + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_calib + n_ext),
                 chunk_size=self.selector_inst.get_min_chunk_size(),
@@ -233,8 +235,8 @@ class SelectEvents(_SelectEvents):
                     self.raise_if_not_finite(results_array)
 
                 # save results as parquet via a thread in the same pool
-                chunk = tmp_dir.child(f"res_{lfn_index}_{pos.index}.parquet", type="f")
-                result_chunks[(lfn_index, pos.index)] = chunk
+                chunk = tmp_dir.child(f"res_{pos.index}.parquet", type="f")
+                result_chunks[pos.index] = chunk
                 self.chunked_io.queue(sorted_ak_to_parquet, (results_array, chunk.abspath))
 
                 # remove columns
@@ -246,8 +248,8 @@ class SelectEvents(_SelectEvents):
                         self.raise_if_not_finite(events)
 
                     # save additional columns as parquet via a thread in the same pool
-                    chunk = tmp_dir.child(f"cols_{lfn_index}_{pos.index}.parquet", type="f")
-                    column_chunks[(lfn_index, pos.index)] = chunk
+                    chunk = tmp_dir.child(f"cols_{pos.index}.parquet", type="f")
+                    column_chunks[pos.index] = chunk
                     self.chunked_io.queue(sorted_ak_to_parquet, (events, chunk.abspath))
 
         # teardown the selector
