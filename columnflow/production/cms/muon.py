@@ -56,6 +56,8 @@ class MuonSFConfig:
     # name of the saved weight column
     weight_name="muon_weight",
     supported_versions={1, 2},
+    # function to update variables before jec corrector call
+    update_corrector_variables=(lambda self, corrector, variables: variables),
 )
 def muon_weights(
     self: Producer,
@@ -112,12 +114,17 @@ def muon_weights(
         ("systdown", "_down"),
     ]:
         # get the inputs for this type of variation
-        variable_map_syst = {
+        _variable_map = {
             **variable_map,
-            "scale_factors": "nominal" if syst == "sf" else syst,  # syst key in 2022
-            "ValType": syst,  # syst key in 2017
+            "scale_factors": "nominal" if syst == "sf" else syst,
+            "ValType": syst,
         }
-        inputs = [variable_map_syst[inp.name] for inp in self.muon_sf_corrector.inputs]
+
+        # optionally update variables for this corrector call
+        if callable(self.update_corrector_variables):
+            _variable_map = self.update_corrector_variables(self.muon_sf_corrector, _variable_map)
+
+        inputs = [_variable_map[inp.name] for inp in self.muon_sf_corrector.inputs]
         sf = self.muon_sf_corrector.evaluate(*inputs)
 
         # create the product over all muons in one event
