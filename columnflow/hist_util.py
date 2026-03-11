@@ -443,26 +443,135 @@ def select_category_bins(
     return h
 
 
+def ensure_bin_exists(
+    h: hist.Hist,
+    axis_name: str,
+    value: Any,
+    add_growth: bool = True,
+) -> hist.Hist:
+    """
+    Takes a histogram *h* and ensures that a certain *value* is a valid bin in a categorical axis
+    named *axis_name*. Optionally, *growth* can be activated on the selected axis.
+
+    :param h: The histogram.
+    :param axis_name: The name of the categorical axis to ammend.
+    :param value: The value for which a bin should be ensured on the axis.
+    :param add_growth: If growth should be enabled on the selected axis.
+    :return: The updated histogram.
+    """
+    import hist
+
+    # work on a copy
+    h = h.copy()
+
+    # find the axis and its index
+    for axis_index, axis in enumerate(h.axes):
+        if axis.name == axis_name:
+            break
+    else:
+        raise ValueError(f"no axis named '{axis_name}' found in histogram: {h}")
+
+    # for now, only adjustments to categorical axes are allowed
+    categorical_types = (hist.axis.IntCategory, hist.axis.StrCategory)
+    if not isinstance(axis, categorical_types):
+        raise TypeError(f"axis '{axis_name}' must be categorical, but found {axis.__class__.__name__}")
+
+    # helper to create advanced slice object using axis_index
+    def create_slice(where: Any) -> tuple:
+        return tuple(
+            axis_index * [slice(None, None)] +  # axes before target axis
+            [where] +  # last (= newest) position on amended axis
+            (h.ndim - axis_index - 1) * [slice(None, None)]  # remaining axes
+        )
+
+    # check that growth is enabled
+    if not axis.traits.growth:
+        if not add_growth:
+            raise ValueError(f"cannot extend values axis '{axis_name}' without growth enabled")
+        # enable growth
+        axis = copy_axis(axis, growth=True)
+        new_axes = [
+            (axis if ax.name == axis.name else copy_axis(ax))
+            for ax in h.axes
+        ]
+        # take the initial data but drop the overflow bin on the requested axis
+        # (which always exists on categorical axes that don't have growth enabled)
+        data = h.view(flow=True)[create_slice(slice(0, -1))]
+        h = hist.Hist(*new_axes, storage=h.storage_type(), data=data)
+
+    # nothing to do in case the value already exists
+    if value in axis:
+        return h
+
+    # strategy: fill dummy values, then zero them in view afterwards
+    # get bin centers of first bin in other axes
+    dummy_values = {
+        ax.name: (list(ax)[0] if isinstance(ax, categorical_types) else ax.centers[0])
+        for ax in h.axes if ax != axis
+    }
+    h.fill(**(dummy_values | {axis_name: value}))
+    # now zero array
+    view = h.view()
+    zero_pos = create_slice(-1)
+    if isinstance(h.storage_type, (hist.storage.Weight, hist.storage.WeightedMean)):
+        view.value[zero_pos] = 0
+        view.variance[zero_pos] = 0
+    else:
+        view[zero_pos] = 0
+
+    return h
+
+
 def merge_axis_bins(
     h: hist.Hist,
     axis_name: str,
     merged_bin_name: str,
     bins_to_merge: Sequence[str],
+    remove_bins: bool = True,
 ) -> hist.Hist:
+    """
+    This function merges categorical bins given in *bins_to_merge* onto the bin *merged_bin_name*.
+
+        - If *merged_bin_name* does not exist yet in *axis_name*, it is initialized with empty content.
+        - If *merged_bin_name* exists, it must be included in *bins_to_merge* to avoid merging into an existing bin.
+
+    :param h: The histogram.
+    :param axis_name: The name of the categorical axis to ammend.
+    :param merged_bin_name: The name of the merged bin which is optionally created.
+    :param bins_to_merge: The bins to merge and subsequently remove.
+    :param remove_bins: Optionally remove bins in *bins_to_merge* after merging.
+    :return: The updated histogram.
+    """
+    import hist
 
     # sanity checks
-    if (merged_bin_name not in h.axes[axis_name]) or (merged_bin_name not in bins_to_merge):
-        raise ValueError(f"target bin '{merged_bin_name}' not found in axis '{axis_name}' or in {bins_to_merge}")
     for bin_name in bins_to_merge:
         if bin_name not in h.axes[axis_name]:
             raise ValueError(f"bin '{bin_name}' not found in axis '{axis_name}'")
 
-    h_ = h.copy()
-    for bin_name in bins_to_merge:
-        # avoid double counting the events in the target bin to merge into
-        if bin_name == merged_bin_name:
-            continue
-        else:
-            h_[{axis_name: merged_bin_name}] += h_[{axis_name: bin_name}]
+    if merged_bin_name in h.axes[axis_name] and merged_bin_name not in bins_to_merge:
+        raise ValueError(
+            f"bin '{merged_bin_name}' already exists but is not found in bins to be merged '{bins_to_merge}', "
+            "leading to unclear bin content handling",
+        )
 
-    return h_
+    # ensure merged_bin_name exists in axis, it may or may not be already filled
+    h = ensure_bin_exists(h, axis_name, merged_bin_name)
+
+    # add up bin contents
+    for bin_name in bins_to_merge:
+        # avoid double counting in case merged_bin_name is also in bins_to_merge
+        if bin_name != merged_bin_name:
+            h[{axis_name: merged_bin_name}] += h[{axis_name: bin_name}]
+
+    # remove unneeded bins
+    if remove_bins:
+        bins_to_remove = set(bins_to_merge) - {merged_bin_name}
+        h = h[{
+            axis_name: [
+                hist.loc(bin_name) for bin_name in h.axes[axis_name]
+                if bin_name not in bins_to_remove
+            ]
+        }]
+
+    return h
