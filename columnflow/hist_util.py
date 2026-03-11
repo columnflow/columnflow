@@ -481,7 +481,7 @@ def ensure_bin_exists(
         return tuple(
             axis_index * [slice(None, None)] +  # axes before target axis
             [where] +  # last (= newest) position on amended axis
-            (h.ndim - axis_index - 1) * [slice(None, None)]  # remaining axes
+            (h.ndim - axis_index - 1) * [slice(None, None)],  # remaining axes
         )
 
     # check that growth is enabled
@@ -571,7 +571,7 @@ def merge_axis_bins(
             axis_name: [
                 hist.loc(bin_name) for bin_name in h.axes[axis_name]
                 if bin_name not in bins_to_remove
-            ]
+            ],
         }]
 
     return h
