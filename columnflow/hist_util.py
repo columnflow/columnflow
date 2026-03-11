@@ -110,8 +110,8 @@ def fill_hist(
                     vars_to_zip = {}
                     for var in var_associations[association]:
                         vars_to_zip[var] = data.pop(var)
-                        associated_vars = ak.zip(vars_to_zip)
-                        data[association] = associated_vars
+
+                    data[association] = ak.zip(vars_to_zip)
 
             # build event level combinations of all axes
             arrays = ak.cartesian(data)
