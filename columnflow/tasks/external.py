@@ -11,6 +11,7 @@ import time
 import shutil
 import subprocess
 import dataclasses
+import copy
 
 import luigi
 import law
@@ -388,23 +389,6 @@ class ExternalFile:
     single: bool = dataclasses.field(init=False, default=False)
     single_key: ClassVar[str] = "_single_key"
 
-    def __post_init__(self) -> None:
-        # convert different types of subpaths to dict
-        if isinstance(self.subpaths, str):
-            self.subpaths = DotDict({self.single_key: self.subpaths})
-            self.single = True
-        elif isinstance(self.subpaths, (list, tuple)):
-            self.subpaths = DotDict(zip(enumerate(self.subpaths)))
-
-    def __str__(self) -> str:
-        sub = ""
-        if self.subpaths:
-            if self.single:
-                sub = f"/{self.subpaths[self.single_key]}"
-            else:
-                sub = " / " + ",".join(f"{n}={p}" for n, p in self.subpaths.items())
-        return f"{self.location}{sub} ({self.version})"
-
     @classmethod
     def new(cls, resource: ExternalFile | str | tuple[str] | tuple[str, str]) -> ExternalFile:
         """
@@ -421,6 +405,29 @@ class ExternalFile:
             if len(resource) == 2:
                 return cls(location=resource[0], version=resource[1])
         raise ValueError(f"invalid resource type and format: {resource}")
+
+    def __post_init__(self) -> None:
+        # convert different types of subpaths to dict
+        if isinstance(self.subpaths, str):
+            self.subpaths = DotDict({self.single_key: self.subpaths})
+            self.single = True
+        elif isinstance(self.subpaths, (list, tuple)):
+            self.subpaths = DotDict(zip(enumerate(self.subpaths)))
+        else:
+            self.subpaths = DotDict.wrap(copy.deepcopy(self.subpaths))
+        # remove None's
+        for key in list(self.subpaths.keys()):
+            if self.subpaths[key] is None:
+                del self.subpaths[key]
+
+    def __str__(self) -> str:
+        sub = ""
+        if self.subpaths:
+            if self.single:
+                sub = f"/{self.subpaths[self.single_key]}"
+            else:
+                sub = " / " + ",".join(f"{n}={p}" for n, p in self.subpaths.items())
+        return f"{self.location}{sub} ({self.version})"
 
     def __getattr__(self, attr: str) -> str:
         if attr in self.subpaths:
