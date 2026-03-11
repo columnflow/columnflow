@@ -672,7 +672,9 @@ def btag_wp_weights_setup(
     # convert to clib corrector
     effs.name = "btag_efficiencies"
     effs.label = "eff"
-    self.wp_eff_corrector = clib.convert.from_histogram(effs).to_evaluator()
+    cset = clib.convert.from_histogram(effs)
+    cset.data.flow = "clamp"  # clamps the pt and abs eta axis
+    self.wp_eff_corrector = cset.to_evaluator()
 
     # dictionary for BTV naming scheme compatibility
     self.convert_wp_str = {
