@@ -689,3 +689,14 @@ class BundleExternalFiles(ConfigTask, law.tasks.TransferLocalFile):
                     )
                     if mismatch:
                         raise Exception(f"mismatching file/directory type of unpacked target {target!r}")
+
+
+BundleExternalFilesWrapper = wrapper_factory(
+    base_cls=AnalysisTask,
+    require_cls=BundleExternalFiles,
+    enable=["configs", "skip_configs"],
+    attributes={"version": None},
+    docs="""
+Wrapper task trigger the BundleExternalFiles task for multiple configs.
+""",
+)
