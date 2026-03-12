@@ -442,7 +442,7 @@ class MergeReductionStats(_MergeReductionStats):
         self.publish_message(f"merging     : {stats['merge_factor']} into 1")
         self.publish_message(f"files before: {n_total}")
         self.publish_message(f"files after : {n_merged_files}")
-        tot_size = stats["avg_size"] * n_merged_files
+        tot_size = stats["avg_size"] * n_total
         rel_err = stats["std_size"] / stats["avg_size"]
         self.publish_message(f"total size  : {law.util.human_bytes(tot_size, fmt=True)} +- {rel_err * 100:.1f} %")
         self.publish_message(40 * "-")
@@ -545,6 +545,12 @@ class MergeReducedEvents(_MergeReducedEvents):
             writer_opts=self.get_parquet_writer_opts(),
             target_row_group_size=self.merging_row_group_size,
         )
+
+        # log the number of events after merging
+        n_events = output.load(formatter="parquet").metadata.num_rows
+        self.publish_message(f"merged file contains {n_events:_} events")
+        if not n_events:
+            self.logger.warning("the merged file contains no events")
 
         # optionally remove initial inputs
         if not self.keep_reduced_events and self.is_leaf():
