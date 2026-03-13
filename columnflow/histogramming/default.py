@@ -65,8 +65,11 @@ def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any],
     # in case multiple variable axes are given that refer to data arrays with more than one dimension (i.e. nested),
     # check if they are broadcasting-compatible since otherwise, the full combinatorics of values would be fille which
     # is not supported by fill_hist in its default implementation
-    var_axes = [ax for ax in h.axes if isinstance(ax, hist.axis.Variable) and ax.name in data]
-    if len(var_axes) > 1 and any(data[ax.name].ndim > 1 for ax in var_axes):
+    var_axes = [
+        ax for ax in h.axes
+        if isinstance(ax, hist.axis.Variable) and ax.name in data and data[ax.name].ndim > 1
+    ]
+    if len(var_axes) > 1:
         ref_counts = ak.count(data[var_axes[0].name], axis=1)
         for ax in var_axes[1:]:
             counts = ak.count(data[ax.name], axis=1)
