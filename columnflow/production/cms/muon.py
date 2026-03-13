@@ -56,7 +56,7 @@ class MuonSFConfig:
     # name of the saved weight column
     weight_name="muon_weight",
     supported_versions={1, 2},
-    # function to update variables before jec corrector call
+    # function to update variables before corrector call
     update_corrector_variables=(lambda self, corrector, variables: variables),
 )
 def muon_weights(
