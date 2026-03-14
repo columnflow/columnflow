@@ -1111,7 +1111,7 @@ def load_correction_set(target: law.FileSystemFileTarget | str) -> Any:
 
     # convert str to target
     if isinstance(target, str):
-        target = law.LocalFileTarget(target)
+        target = law.LocalFileTarget(os.path.abspath(target))
 
     # use the path when the input file is a normal json
     if target.ext() == "json":

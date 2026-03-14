@@ -193,21 +193,25 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
 
         # loop through configs
         for config_inst in self.config_insts:
+            if not (cat_info := config_inst.x("cat_info", None)):
+                self.logger.warning(f"no 'cat_info' entry found in config '{config_inst.name}', skipping")
+                continue
+
             with self.publish_step(
                 f"checking CAT metadata updates for config '{law.util.colored(config_inst.name, style='bright')}' in "
-                f"{config_inst.x.cat_info.metadata_root}",
+                f"{cat_info.metadata_root}",
             ):
                 newest_dates = {}
                 updated_any = False
-                for pog, date_str in config_inst.x.cat_info.snapshot.items():
+                for pog, date_str in cat_info.snapshot.items():
                     if not date_str:
                         continue
 
                     # get all versions in the cat directory, split by date numbers
                     pog_era_dir = os.path.join(
-                        config_inst.x.cat_info.metadata_root,
+                        cat_info.metadata_root,
                         pog.upper(),
-                        config_inst.x.cat_info.get_era_directory(pog),
+                        cat_info.get_era_directory(pog),
                     )
                     if not os.path.isdir(pog_era_dir):
                         self.logger.warning(f"CAT metadata directory '{pog_era_dir}' does not exist, skipping")
@@ -226,7 +230,7 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                         updated_any = True
                         self.publish_message(
                             f"found newer {law.util.colored(pog.upper(), color='cyan')} snapshot: {date_str} -> "
-                            f"{latest_date_str} ({os.path.join(pog_era_dir, latest_date_str)})",
+                            f"{latest_date_str} ({cat_info.get_era_url(pog, latest_date_str)})",
                         )
                     else:
                         newest_dates[pog] = date_str
