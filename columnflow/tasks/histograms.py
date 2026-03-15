@@ -300,7 +300,14 @@ class CreateHistograms(_CreateHistograms):
                         "shift": self.global_shift_inst.id,
                         "weight": masked_weights,
                     }
+                    associations = {}
                     for variable_inst in variable_insts:
+                        if variable_inst.x("associated_with", False):
+                            if variable_inst.x("associated_with") in associations.keys():
+                                associations[variable_inst.x("associated_with")].append(variable_inst.name)
+                            else:
+                                associations[variable_inst.x("associated_with")] = [variable_inst.name]
+
                         # prepare the expression
                         expr = variable_inst.expression
                         if isinstance(expr, str):
@@ -313,7 +320,12 @@ class CreateHistograms(_CreateHistograms):
                         fill_data[variable_inst.name] = expr(masked_events)
 
                     # let the hist producer fill it
-                    self.hist_producer_inst.run_fill_hist(histograms[var_key], fill_data, task=self)
+                    self.hist_producer_inst.run_fill_hist(
+                        histograms[var_key],
+                        fill_data,
+                        task=self,
+                        var_associations=associations,
+                    )
 
         # post-process the histograms
         for var_key in self.variable_tuples.keys():

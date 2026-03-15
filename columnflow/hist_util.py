@@ -33,6 +33,7 @@ def fill_hist(
     *,
     last_edge_inclusive: bool | None = None,
     fill_kwargs: dict[str, Any] | None = None,
+    **kwargs,
 ) -> None:
     """
     Fills a histogram *h* with data from an awkward array, numpy array or nested dictionary *data*. The data is assumed
@@ -95,9 +96,42 @@ def fill_hist(
 
     # actual conversion
     if convert:
-        arrays = ak.flatten(ak.cartesian(data))
-        data = {field: arrays[field] for field in arrays.fields}
-        del arrays
+        if kwargs.get("var_associations", None):
+            var_associations = kwargs["var_associations"]
+            # build pairwise combinations for object level associated variables
+            for association in var_associations.keys():
+                # check that two or more variables are associated with each other
+                if len(var_associations[association]) < 2:
+                    logger.info(
+                        f"Variable '{var_associations[association][0]}' has unmatched association '{association}'"
+                        ", skipping association for this variable.",
+                    )
+                else:
+                    vars_to_zip = {}
+                    for var in var_associations[association]:
+                        vars_to_zip[var] = data.pop(var)
+
+                    data[association] = ak.zip(vars_to_zip)
+
+            # build event level combinations of all axes
+            arrays = ak.cartesian(data)
+            # unpack the entries for the associated variables
+            unpacked_dict = {}
+            for field in arrays.fields:
+                if field not in var_associations.keys():
+                    unpacked_dict[field] = arrays[field]
+                else:
+                    for var in arrays[field].fields:
+                        unpacked_dict[var] = arrays[field][var]
+            unpacked_arrays = ak.zip(unpacked_dict)
+            # flatten
+            data = {field: ak.flatten(unpacked_arrays[field]) for field in unpacked_arrays.fields}
+            del arrays, unpacked_arrays
+
+        else:
+            arrays = ak.flatten(ak.cartesian(data))
+            data = {field: arrays[field] for field in arrays.fields}
+            del arrays
 
     # fill
     h.fill(**fill_kwargs, **data)
