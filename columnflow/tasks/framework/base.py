@@ -562,7 +562,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 object_names.append(name)
             elif groups_str and name in (object_groups := container.x(groups_str, {})):
                 # a key in the object group dict
-                lookup.extend(list(object_groups[name]))
+                for entry in list(object_groups[name]):
+                    lookup.extend(law.util.brace_expand(entry))
             elif accept_patterns:
                 # must eventually be a pattern, perform an object traversal
                 found = []
