@@ -82,7 +82,7 @@ def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any],
                 )
                 raise ValueError(err)
 
-    fill_hist(h, data, last_edge_inclusive=task.last_edge_inclusive)
+    fill_hist(h, data, last_edge_inclusive=task.last_edge_inclusive, var_axes=var_axes)
 
 
 @cf_default.post_process_hist

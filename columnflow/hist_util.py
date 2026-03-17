@@ -32,6 +32,7 @@ def fill_hist(
     data: ak.Array | np.array | dict[str, ak.Array | np.array],
     *,
     last_edge_inclusive: bool | None = None,
+    var_axes: list[hist.axis.Variable] | None = None,
     fill_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """
@@ -95,9 +96,34 @@ def fill_hist(
 
     # actual conversion
     if convert:
-        arrays = ak.flatten(ak.cartesian(data))
-        data = {field: arrays[field] for field in arrays.fields}
-        del arrays
+        if len(var_axes) > 1:
+            # build pairwise combinations of obj level variables
+            vars_to_zip = {}
+            for ax in var_axes:
+                vars_to_zip[ax.name] = data.pop(ax.name)
+
+            data["obj_lvl_combinations"] = ak.zip(vars_to_zip)
+
+            # build event level combinations of all axes
+            arrays = ak.cartesian(data)
+
+            # unpack entries of the object level combinations
+            unpacked_dict = {}
+            for field in arrays.fields:
+                if field != "obj_lvl_combinations":
+                    unpacked_dict[field] = arrays[field]
+                else:
+                    for ax in var_axes:
+                        unpacked_dict[ax.name] = arrays[field][ax.name]
+            unpacked_arrays = ak.zip(unpacked_dict)
+            # flatten
+            data = {field: ak.flatten(unpacked_arrays[field]) for field in unpacked_arrays.fields}
+            del arrays, unpacked_arrays, unpacked_dict, vars_to_zip
+
+        else:
+            arrays = ak.flatten(ak.cartesian(data))
+            data = {field: arrays[field] for field in arrays.fields}
+            del arrays
 
     # fill
     h.fill(**fill_kwargs, **data)
