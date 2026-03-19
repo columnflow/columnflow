@@ -58,11 +58,11 @@ def cf_default_create_hist(
 
 
 @cf_default.fill_hist
-def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any], task: law.Task) -> None:
+def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any], task: law.Task, **kwargs) -> None:
     """
     Fill the histogram with the data.
     """
-    fill_hist(h, data, last_edge_inclusive=task.last_edge_inclusive)
+    fill_hist(h, data, last_edge_inclusive=task.last_edge_inclusive, **kwargs)
 
 
 @cf_default.post_process_hist
