@@ -20,6 +20,9 @@ from columnflow.types import ClassVar, Generator
 #: Default root path to CAT metadata.
 cat_metadata_root = "/cvmfs/cms-griddata.cern.ch/cat/metadata"
 
+#: Default URL of CAT metadata website.
+cat_metadata_url = "https://cms-analysis-corrections.docs.cern.ch"
+
 
 @dataclasses.dataclass
 class CATSnapshot:
@@ -73,6 +76,7 @@ class CATInfo:
     pog_directories: dict[str, str] = dataclasses.field(default_factory=dict)
 
     metadata_root: ClassVar[str] = cat_metadata_root
+    metadata_url: ClassVar[str] = cat_metadata_url
 
     def get_era_directory(self, pog: str = "") -> str:
         """
@@ -89,6 +93,26 @@ class CATInfo:
         # build common directory name from run, era, and vnano
         era = self.pog_eras.get(pog.lower(), self.era) if pog else self.era
         return f"Run{self.run}-{era}-NanoAODv{self.vnano}"
+
+    def get_era_url(self, pog: str = "", timestamp: str = "") -> str:
+        """
+        Returns the URL to the era directory on the CAT metadata website. When a *pog* or *timestamp* is given, the URL
+        will point to the specific POG era directory or timestamp subdirectory, respectively.
+
+        :param pog: Optional POG name to get the era URL for.
+        :param timestamp: Optional timestamp to get the URL for.
+        """
+        url_parts = [
+            self.metadata_url,
+            "corrections_era",
+            self.get_era_directory(pog=pog),
+        ]
+        if pog:
+            url_parts.append(pog.upper())
+        if timestamp:
+            url_parts.append(timestamp)
+
+        return "/".join(url_parts)
 
     def get_file(self, pog: str, *paths: str | pathlib.Path) -> str:
         """
