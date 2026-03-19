@@ -78,7 +78,7 @@ def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any],
                 err = (
                     "detected multiple variable axes with data to be filled that is not broadcasting-compatible:\n" +
                     "\n  - ".join(f"{ax.name}: {data[ax.name]}" for ax in var_axes) +
-                    "please use a custom histogram produce whose fill_hist implementation can handle the desired "
+                    "please use a custom histogram producer whose fill_hist implementation supports the desired "
                     "filling logic including combinatorics or custom broadcasting"
                 )
                 raise ValueError(err)
