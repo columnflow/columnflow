@@ -66,6 +66,7 @@ def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any],
     # check if they are broadcasting-compatible since otherwise, the full combinatorics of values would be fille which
     # is not supported by fill_hist in its default implementation
     import hist
+
     var_axes = [
         ax for ax in h.axes
         if isinstance(ax, hist.axis.Variable) and ax.name in data and data[ax.name].ndim > 1
@@ -83,7 +84,7 @@ def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any],
                 )
                 raise ValueError(err)
 
-    fill_hist(h, data, last_edge_inclusive=task.last_edge_inclusive, var_axes=var_axes)
+    fill_hist(h, data, last_edge_inclusive=task.last_edge_inclusive)
 
 
 @cf_default.post_process_hist

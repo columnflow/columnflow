@@ -32,7 +32,6 @@ def fill_hist(
     data: ak.Array | np.array | dict[str, ak.Array | np.array],
     *,
     last_edge_inclusive: bool | None = None,
-    var_axes: list[hist.axis.Variable] | None = None,
     fill_kwargs: dict[str, Any] | None = None,
 ) -> None:
     """
@@ -96,29 +95,32 @@ def fill_hist(
 
     # actual conversion
     if convert:
+        # in case there is more than one variable axis that will be filled with data with ndim > 1, we need to build
+        # object level combinations
+        var_axes = [
+            ax for ax in h.axes
+            if isinstance(ax, hist.axis.Variable) and ax.name in data and data[ax.name].ndim > 1
+        ]
         if len(var_axes) > 1:
             # build pairwise combinations of obj level variables
-            vars_to_zip = {}
-            for ax in var_axes:
-                vars_to_zip[ax.name] = data.pop(ax.name)
+            combi_key = "cf_hist_fill_obj_lvl_combinations"
+            data[combi_key] = ak.zip({ax.name: data.pop(ax.name) for ax in var_axes})
 
-            data["obj_lvl_combinations"] = ak.zip(vars_to_zip)
-
-            # build event level combinations of all axes
+            # build event level combinations of all remaining axes
             arrays = ak.cartesian(data)
 
             # unpack entries of the object level combinations
             unpacked_dict = {}
             for field in arrays.fields:
-                if field != "obj_lvl_combinations":
-                    unpacked_dict[field] = arrays[field]
-                else:
+                if field == combi_key:
                     for ax in var_axes:
                         unpacked_dict[ax.name] = arrays[field][ax.name]
+                else:
+                    unpacked_dict[field] = arrays[field]
             unpacked_arrays = ak.zip(unpacked_dict)
             # flatten
             data = {field: ak.flatten(unpacked_arrays[field]) for field in unpacked_arrays.fields}
-            del arrays, unpacked_arrays, unpacked_dict, vars_to_zip
+            del arrays, unpacked_arrays, unpacked_dict
 
         else:
             arrays = ak.flatten(ak.cartesian(data))
