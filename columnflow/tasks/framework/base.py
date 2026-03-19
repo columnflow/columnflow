@@ -2357,6 +2357,9 @@ def wrapper_factory(
     # overwrite __name__
     Wrapper.__name__ = cls_name or f"{require_cls.__name__}Wrapper"
 
+    # use same task family
+    Wrapper.task_namespace = require_cls.task_namespace
+
     # set docs
     if docs:
         Wrapper.__docs__ = docs
