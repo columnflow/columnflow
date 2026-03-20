@@ -95,9 +95,37 @@ def fill_hist(
 
     # actual conversion
     if convert:
-        arrays = ak.flatten(ak.cartesian(data))
-        data = {field: arrays[field] for field in arrays.fields}
-        del arrays
+        # in case there is more than one variable axis that will be filled with data with ndim > 1, we need to build
+        # object level combinations
+        var_axes = [
+            ax for ax in h.axes
+            if isinstance(ax, hist.axis.Variable) and ax.name in data and data[ax.name].ndim > 1
+        ]
+        if len(var_axes) > 1:
+            # build pairwise combinations of obj level variables
+            combi_key = "cf_hist_fill_obj_lvl_combinations"
+            data[combi_key] = ak.zip({ax.name: data.pop(ax.name) for ax in var_axes})
+
+            # build event level combinations of all remaining axes
+            arrays = ak.cartesian(data)
+
+            # unpack entries of the object level combinations
+            unpacked_dict = {}
+            for field in arrays.fields:
+                if field == combi_key:
+                    for ax in var_axes:
+                        unpacked_dict[ax.name] = arrays[field][ax.name]
+                else:
+                    unpacked_dict[field] = arrays[field]
+            unpacked_arrays = ak.zip(unpacked_dict)
+            # flatten
+            data = {field: ak.flatten(unpacked_arrays[field]) for field in unpacked_arrays.fields}
+            del arrays, unpacked_arrays, unpacked_dict
+
+        else:
+            arrays = ak.flatten(ak.cartesian(data))
+            data = {field: arrays[field] for field in arrays.fields}
+            del arrays
 
     # fill
     h.fill(**fill_kwargs, **data)

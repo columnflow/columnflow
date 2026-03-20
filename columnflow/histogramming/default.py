@@ -62,6 +62,28 @@ def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any],
     """
     Fill the histogram with the data.
     """
+    # in case multiple variable axes are given that refer to data arrays with more than one dimension (i.e. nested),
+    # check if they are broadcasting-compatible since otherwise, the full combinatorics of values would be fille which
+    # is not supported by fill_hist in its default implementation
+    import hist
+
+    var_axes = [
+        ax for ax in h.axes
+        if isinstance(ax, hist.axis.Variable) and ax.name in data and data[ax.name].ndim > 1
+    ]
+    if len(var_axes) > 1:
+        ref_counts = ak.count(data[var_axes[0].name], axis=1)
+        for ax in var_axes[1:]:
+            counts = ak.count(data[ax.name], axis=1)
+            if not ak.all(counts == ref_counts):
+                err = (
+                    "detected multiple variable axes with data to be filled that is not broadcasting-compatible:\n" +
+                    "\n  - ".join(f"{ax.name}: {data[ax.name]}" for ax in var_axes) +
+                    "please use a custom histogram producer whose fill_hist implementation supports the desired "
+                    "filling logic including combinatorics or custom broadcasting"
+                )
+                raise ValueError(err)
+
     fill_hist(h, data, last_edge_inclusive=task.last_edge_inclusive)
 
 
