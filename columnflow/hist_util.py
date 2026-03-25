@@ -99,7 +99,7 @@ def fill_hist(
         # object level combinations
         var_axes = [
             ax for ax in h.axes
-            if isinstance(ax, hist.axis.Variable) and ax.name in data and data[ax.name].ndim > 1
+            if isinstance(ax, (hist.axis.Variable, hist.axis.Integer)) and ax.name in data and data[ax.name].ndim > 1
         ]
         if len(var_axes) > 1:
             # build pairwise combinations of obj level variables
@@ -131,12 +131,15 @@ def fill_hist(
     h.fill(**fill_kwargs, **data)
 
 
-def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist:
+def add_hist_axis(
+    h: hist.quick_construct.QuickConstruct,
+    variable_inst: od.Variable,
+) -> hist.quick_construct.QuickConstruct:
     """
     Add an axis to a histogram based on a variable instance. The axis_type is chosen based on the variable instance's
     "axis_type" auxiliary.
 
-    :param histogram: The histogram to add the axis to.
+    :param h: The histogram to add the axis to.
     :param variable_inst: The variable instance to use for the axis.
     :return: The histogram with the added axis.
     """
@@ -156,17 +159,17 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
     axis_type = variable_inst.x("axis_type", default_axis_type).lower()
 
     if axis_type in {"variable", "var"}:
-        return histogram.Var(variable_inst.bin_edges, **axis_kwargs)
+        return h.Variable(variable_inst.bin_edges, **axis_kwargs)
 
     if axis_type in {"integer", "int"}:
-        return histogram.Integer(
+        return h.Integer(
             int(variable_inst.bin_edges[0]),
             int(variable_inst.bin_edges[-1]),
             **axis_kwargs,
         )
 
     if axis_type in {"boolean", "bool"}:
-        return histogram.Boolean(**axis_kwargs)
+        return h.Boolean(**axis_kwargs)
 
     if axis_type in {"intcategory", "intcat"}:
         binning = (
@@ -175,16 +178,16 @@ def add_hist_axis(histogram: hist.Hist, variable_inst: od.Variable) -> hist.Hist
             else []
         )
         axis_kwargs.setdefault("growth", True)
-        return histogram.IntCat(binning, **axis_kwargs)
+        return h.IntCategory(binning, **axis_kwargs)
 
     if axis_type in {"strcategory", "strcat"}:
         axis_kwargs.setdefault("growth", True)
-        return histogram.StrCat([], **axis_kwargs)
+        return h.StrCategory([], **axis_kwargs)
 
     if axis_type in {"regular", "reg"}:
         if not variable_inst.even_binning:
             logger.warning("regular axis with uneven binning is not supported, using first and last bin edge instead")
-        return histogram.Regular(
+        return h.Regular(
             variable_inst.n_bins,
             variable_inst.bin_edges[0],
             variable_inst.bin_edges[-1],
@@ -277,14 +280,16 @@ def create_hist_from_variables(
         storage = "weight" if weight else "double"
     else:
         storage = storage.lower()
+
+    # actual creation
     if storage == "weight":
-        histogram = histogram.Weight()
+        h = histogram.Weight()
     elif storage == "double":
-        histogram = histogram.Double()
+        h = histogram.Double()
     else:
         raise ValueError(f"unknown storage type '{storage}'")
 
-    return histogram
+    return h
 
 
 create_columnflow_hist = functools.partial(create_hist_from_variables, categorical_axes=(

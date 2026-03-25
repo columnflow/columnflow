@@ -69,7 +69,7 @@ def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any],
 
     var_axes = [
         ax for ax in h.axes
-        if isinstance(ax, hist.axis.Variable) and ax.name in data and data[ax.name].ndim > 1
+        if isinstance(ax, (hist.axis.Variable, hist.axis.Integer)) and ax.name in data and data[ax.name].ndim > 1
     ]
     if len(var_axes) > 1:
         ref_counts = ak.count(data[var_axes[0].name], axis=1)
