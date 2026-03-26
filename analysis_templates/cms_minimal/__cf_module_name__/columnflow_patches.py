@@ -4,8 +4,6 @@
 Collection of patches of underlying columnflow tasks.
 """
 
-import os
-
 import law
 from columnflow.util import memoize
 
@@ -17,19 +15,8 @@ logger = law.logger.get_logger(__name__)
 def patch_bundle_repo_exclude_files():
     from columnflow.tasks.framework.remote import BundleRepo
 
-    # get the relative path to CF_BASE
-    cf_rel = os.path.relpath(os.environ["CF_BASE"], os.environ["__cf_short_name_uc___BASE"])
-
-    # amend exclude files to start with the relative path to CF_BASE
-    exclude_files = [os.path.join(cf_rel, path) for path in BundleRepo.exclude_files]
-
-    # add additional files
-    exclude_files.extend([
-        "docs", "tests", "data", "assets", ".law/cms", ".setups", ".data", ".github",
-    ])
-
-    # overwrite them
-    BundleRepo.exclude_files[:] = exclude_files
+    # add additional files to exclude
+    BundleRepo.exclude_files += ["docs"]
 
     logger.debug("patched exclude_files of cf.BundleRepo")
 

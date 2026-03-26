@@ -22,6 +22,12 @@ from columnflow.util import UNSET, real_path
 from columnflow.types import Any
 
 
+# helpers to join paths relative to some base directories
+_cf_path = lambda *p: os.path.join(os.environ["CF_BASE"], *map(str, p))
+_repo_path = lambda *p: os.path.join(os.environ["CF_REPO_BASE"], *map(str, p))
+_cf_repo_path = lambda *p: [_cf_path(*p), _repo_path(*p)]
+
+
 class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLocalFile):
 
     replicas = luigi.IntParameter(
@@ -32,16 +38,19 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     version = None
 
     exclude_files = [
-        "docs",
-        "tests",
-        "data",
-        "assets",
-        ".law/cms",
-        ".setups",
-        ".data",
-        ".github",
-        # also make sure that CF specific files that are not part of
-        # the repository are excluded
+        # excluded from cf _and_ analysis repos
+        *_cf_repo_path("docs"),
+        *_cf_repo_path("tests"),
+        *_cf_repo_path("data"),
+        *_cf_repo_path("tmp"),
+        *_cf_repo_path(".data"),
+        *_cf_repo_path(".github"),
+        # excluded from cf repo
+        _cf_path("assets"),
+        # excluded from analysis repo
+        _repo_path(".law", "cms"),
+        _repo_path(".setups"),
+        # also make sure that CF specific files that are not part of the repository are excluded
         os.environ["CF_STORE_LOCAL"],
         os.environ["CF_SOFTWARE_BASE"],
         os.environ["CF_VENV_BASE"],
@@ -49,8 +58,8 @@ class BundleRepo(AnalysisTask, law.git.BundleGitRepository, law.tasks.TransferLo
     ]
 
     include_files = [
-        "law_user.cfg",
-        ".law",
+        _repo_path("law_user.cfg"),
+        _repo_path(".law"),
     ]
 
     def get_repo_path(self):
