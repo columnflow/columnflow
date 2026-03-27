@@ -12,8 +12,8 @@ import law
 import order as od
 
 from columnflow.production import TaskArrayFunctionWithProducerRequirements
-from columnflow.util import DerivableMeta, maybe_import
-from columnflow.types import TYPE_CHECKING, Any, Callable, Sequence
+from columnflow.util import DerivableMeta, maybe_import, UNSET
+from columnflow.types import TYPE_CHECKING, Any, Callable, Sequence, UNSET_TYPE
 
 if TYPE_CHECKING:
     hist = maybe_import("hist")
@@ -66,9 +66,9 @@ class HistProducer(TaskArrayFunctionWithProducerRequirements):
         cls,
         func: Callable | None = None,
         bases: tuple = (),
-        mc_only: bool = False,
-        data_only: bool = False,
-        require_producers: Sequence[str] | set[str] | None = None,
+        mc_only: bool | UNSET_TYPE = UNSET,
+        data_only: bool | UNSET_TYPE = UNSET,
+        require_producers: Sequence[str] | set[str] | None | UNSET_TYPE = UNSET,
         **kwargs,
     ) -> DerivableMeta | Callable:
         """
@@ -92,13 +92,13 @@ class HistProducer(TaskArrayFunctionWithProducerRequirements):
         """
         def decorator(func: Callable) -> DerivableMeta:
             # create the class dict
-            cls_dict = {
-                **kwargs,
-                "call_func": func,
-                "mc_only": mc_only,
-                "data_only": data_only,
-                "require_producers": require_producers,
-            }
+            cls_dict = {**kwargs, "call_func": func}
+            if mc_only is not UNSET:
+                cls_dict["mc_only"] = mc_only
+            if data_only is not UNSET:
+                cls_dict["data_only"] = data_only
+            if require_producers is not UNSET:
+                cls_dict["require_producers"] = require_producers
 
             # get the module name
             frame = inspect.stack()[1]
@@ -119,8 +119,8 @@ class HistProducer(TaskArrayFunctionWithProducerRequirements):
                 if mc_only or data_only:
                     if cls_dict.get("skip_func"):
                         raise Exception(
-                            f"hist producer {cls_name} received custom skip_func, but either mc_only or data_only "
-                            "are set",
+                            f"hist producer {cls_name} received custom skip_func, but either mc_only or data_only are "
+                            "set",
                         )
 
                 if "skip_func" not in cls_dict:

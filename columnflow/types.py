@@ -31,3 +31,6 @@ from typing_extensions import Annotated, _AnnotatedAlias as AnnotatedType, TypeA
 
 #: Generic type variable, more stringent than Any.
 T = TypeVar("T")
+
+#: Type of the UNSET attribute in util
+UNSET_TYPE = object

@@ -374,10 +374,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         """
         def decorator(func: Callable) -> Type[T]:
             # create the class dict
-            cls_dict = {
-                **kwargs,
-                "init_func": func,
-            }
+            cls_dict = {**kwargs, "init_func": func}
 
             # create the subclass
             subclass = cls.derive(func.__name__, bases=bases, cls_dict=cls_dict)
