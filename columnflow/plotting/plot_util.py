@@ -678,7 +678,8 @@ def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
     set_kwargs, other_kwargs = {}, {}
     other_keys = {
         "xmajorticks", "xminorticks", "xmajorticklabels", "xminorticklabels", "xloc", "xrotation",
-        "ymajorticks", "yminorticks", "yloc", "yrotation",
+        "ymajorticks", "yminorticks", "yloc", "yrotation", "xticklabelformat", "yticklabelformat",
+        "xoffsettext", "yoffsettext",
     }
     for key, value in kwargs.items():
         (other_kwargs if key in other_keys else set_kwargs)[key] = value
@@ -717,6 +718,14 @@ def apply_ax_kwargs(ax: plt.Axes, kwargs: dict[str, Any]) -> None:
         ax.tick_params(axis="x", labelrotation=other_kwargs.get("xrotation"))
     if other_kwargs.get("yrotation") is not None:
         ax.tick_params(axis="y", labelrotation=other_kwargs.get("yrotation"))
+    if other_kwargs.get("xticklabelformat") is not None:
+        ax.ticklabel_format(axis="x", **other_kwargs["xticklabelformat"])
+    if other_kwargs.get("yticklabelformat") is not None:
+        ax.ticklabel_format(axis="y", **other_kwargs["yticklabelformat"])
+    if other_kwargs.get("xoffsettext") is not None:
+        ax.xaxis.get_offset_text().set(**other_kwargs["xoffsettext"])
+    if other_kwargs.get("yoffsettext") is not None:
+        ax.yaxis.get_offset_text().set(**other_kwargs["yoffsettext"])
 
 
 def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: bool = False) -> float:

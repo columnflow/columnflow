@@ -411,6 +411,9 @@ def plot_all(
         "ylabel": "Counts",
         "xlabel": "variable",
         "yscale": "linear",
+        "xticklabelformat": {"style": "sci", "useMathText": True},
+        "yticklabelformat": {"style": "sci", "useMathText": True},
+        "yoffsettext": {"horizontalalignment": "right", "fontsize": 18},
     }
 
     # some default ylim settings based on yscale
@@ -435,6 +438,7 @@ def plot_all(
             "ylabel": "Ratio",
             "xlabel": "Variable",
             "yscale": "linear",
+            "xticklabelformat": {"style": "sci", "useMathText": True},
         }
         rax_kwargs.update(style_config.get("rax_cfg", {}))
 

@@ -93,21 +93,21 @@ class PlotBase(ConfigTask):
         # NOTE: we currently assume that general_settings defaults and groups are the same for all
         # config instances
         if "general_settings" in params:
-            settings = params["general_settings"]
-            # when empty and default general_settings are defined, use them instead
-            if not settings and config_inst.x("default_general_settings", ()):
-                settings = config_inst.x("default_general_settings", ())
+            settings = params["general_settings"] or {}
+            if settings:
+                groups = config_inst.x("general_settings_groups", {})
+                settings = groups.get(list(settings.keys())[0], settings)
                 if isinstance(settings, tuple):
                     settings = cls.general_settings.parse(settings)
 
-            # when general_settings are a key to a general_settings_groups, use them instead
-            groups = config_inst.x("general_settings_groups", {})
-            if settings and list(settings.keys())[0] in groups.keys():
-                settings = groups[list(settings.keys())[0]]
-                if isinstance(settings, tuple):
-                    settings = cls.general_settings.parse(settings)
+            # add defaults
+            default_settings = config_inst.x("default_general_settings", ())
+            if isinstance(default_settings, tuple):
+                default_settings = cls.general_settings.parse(default_settings)
+            if default_settings:
+                settings = law.util.merge_dicts(default_settings, settings, deep=True)
 
-            params["general_settings"] = settings
+            params["general_settings"] = DotDict.wrap(settings)
 
         return params
 
@@ -275,7 +275,7 @@ class PlotBase(ConfigTask):
         # update style_config
         style_config = kwargs.get("style_config", {})
         if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
-            style_config = law.util.merge_dicts(style_config, custom_style_config)
+            style_config = law.util.merge_dicts(style_config, custom_style_config, deep=True)
             kwargs["style_config"] = style_config
 
         # update other defaults
