@@ -37,6 +37,8 @@ setup_columnflow() {
     #       serves as a default for e.g. $CF_SOFTWARE_BASE, $CF_CMSSW_BASE, $CF_JOB_BASE and
     #       $CF_VENV_BASE which can, however, potentially point to a different directory. Queried
     #       during the interactive setup.
+    #   CF_PYTHON_VERSION
+    #       The python version to use for the conda and venv installations. Defaults to "3.9".
     #   CF_SOFTWARE_BASE
     #       The directory where general software is installed. Might point to $CF_DATA/software.
     #       Queried during the interactive setup.
@@ -529,6 +531,8 @@ cf_setup_software_stack() {
     #       The base directory were virtual envs are installed.
     #
     # Optional environments variables:
+    #   CF_PYTHON_VERSION
+    #       The python version for the conda and venv installations. Defaults to "3.9".
     #   CF_REMOTE_ENV
     #       When true-ish, the software stack is sourced but not built.
     #   CF_LOCAL_ENV
@@ -562,7 +566,6 @@ cf_setup_software_stack() {
     local setup_name="${1}"
     local setup_is_default="false"
     [ "${setup_name}" = "default" ] && setup_is_default="true"
-    local pyv="${CF_PYTHON_VERSION:-3.9}"
     local conda_arch="${CF_CONDA_ARCH:-linux-64}"
     local ret
 
@@ -571,6 +574,9 @@ cf_setup_software_stack() {
         emulate -L bash
         setopt globdots
     fi
+
+    # default python version
+    export CF_PYTHON_VERSION="${CF_PYTHON_VERSION:-3.9}"
 
     # empty the PYTHONPATH, except for specific customizable paths
     export PYTHONPATH="${CF_INITIAL_PYTHONPATH:-}"
@@ -590,7 +596,7 @@ cf_setup_software_stack() {
     export PYTHONPATH="${CF_PERSISTENT_PYTHONPATH}:${PYTHONPATH}"
 
     # also add the python path of the venv to be installed to propagate changes to any outer venv
-    export CF_CONDA_PYTHONPATH="${CF_CONDA_BASE}/lib/python${pyv}/site-packages"
+    export CF_CONDA_PYTHONPATH="${CF_CONDA_BASE}/lib/python${CF_PYTHON_VERSION}/site-packages"
     export PYTHONPATH="${PYTHONPATH}:${CF_CONDA_PYTHONPATH}"
 
     # update paths and flags
@@ -655,7 +661,7 @@ EOF
             # initialize micromamba
             source "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh" "" || return "$?"
             micromamba activate || return "$?"
-            echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
+            echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${CF_PYTHON_VERSION}" )"
 
             # install packages
             if ${conda_missing}; then
@@ -666,7 +672,7 @@ EOF
                     libgcc \
                     bash \
                     zsh \
-                    "python=${pyv}" \
+                    "python=${CF_PYTHON_VERSION}" \
                     git \
                     git-lfs \
                     gfal2 \
@@ -770,7 +776,7 @@ EOF
         # initialize conda
         source "${CF_CONDA_BASE}/etc/profile.d/micromamba.sh" "" || return "$?"
         micromamba activate || return "$?"
-        echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${pyv}" )"
+        echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${CF_PYTHON_VERSION}" )"
 
         # source the production sandbox
         source "${CF_BASE}/sandboxes/cf.sh" "" "no"

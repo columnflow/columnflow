@@ -773,6 +773,7 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
         "CF_STORE_NAME": "cf_store_name",
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
+        "CF_PYTHON_VERSION": "cf_python_version",
     }
 
     # whether to show a memory summary histogram after workflow completion
@@ -986,6 +987,7 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
         "CF_STORE_NAME": "cf_store_name",
         "CF_STORE_LOCAL": "cf_store_local",
         "CF_LOCAL_SCHEDULER": "cf_local_scheduler",
+        "CF_PYTHON_VERSION": "cf_python_version",
     }
 
     # upstream requirements

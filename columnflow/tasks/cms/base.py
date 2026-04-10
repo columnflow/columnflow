@@ -51,6 +51,7 @@ class CrabWorkflow(RemoteWorkflowMixin, law.cms.CrabWorkflow):
     crab_forward_env_variables = {
         "CF_CERN_USER": "cf_cern_user",
         "CF_STORE_NAME": "cf_store_name",
+        "CF_PYTHON_VERSION": "cf_python_version",
     }
 
     # upstream requirements

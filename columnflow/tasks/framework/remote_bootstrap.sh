@@ -17,6 +17,7 @@ bootstrap_htcondor_standalone() {
     export CF_SOFTWARE_BASE="${CF_DATA}/software"
     export CF_CONDA_BASE="{{cf_conda_base}}"
     export CF_VENV_BASE="{{cf_venv_base}}"
+    export CF_PYTHON_VERSION="{{cf_python_version}}"
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_STORE_LOCAL="{{cf_store_local}}"
     export CF_LOCAL_SCHEDULER="{{cf_local_scheduler}}"
@@ -159,6 +160,7 @@ bootstrap_slurm() {
     export CF_SLURM_FLAVOR="{{cf_slurm_flavor}}"
     export CF_REPO_BASE="{{cf_repo_base}}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
+    export CF_PYTHON_VERSION="{{cf_python_version}}"
     export KRB5CCNAME="FILE:{{kerberosproxy_file}}"
     [ ! -z "{{vomsproxy_file}}" ] && export X509_USER_PROXY="{{vomsproxy_file}}"
 
@@ -187,6 +189,7 @@ bootstrap_crab() {
     export CF_SOFTWARE_BASE="${CF_DATA}/software"
     export CF_CONDA_BASE="${CF_SOFTWARE_BASE}/conda"
     export CF_VENV_BASE="${CF_SOFTWARE_BASE}/venvs"
+    export CF_PYTHON_VERSION="{{cf_python_version}}"
     export CF_STORE_NAME="{{cf_store_name}}"
     export CF_STORE_LOCAL="${CF_DATA}/${CF_STORE_NAME}"
     export CF_WLCG_CACHE_ROOT="${LAW_JOB_HOME}/cf_wlcg_cache"
