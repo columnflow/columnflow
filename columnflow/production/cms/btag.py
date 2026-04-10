@@ -444,7 +444,7 @@ def btag_wp_weights(
         3. https://indico.cern.ch/event/1583955/contributions/6771046/attachments/3176162/5648591/BTVreportHIGPAG_18112025.pdf  # noqa
     """
     # get inputs, evaluated at jet_mask
-    discr = events.Jet[self.cfg.btag_column][jet_mask]
+    discr = events[self.cfg.jet_name][self.cfg.btag_column][jet_mask]
     flavor = events[self.cfg.jet_name].hadronFlavour[jet_mask]
     abs_eta = abs(events[self.cfg.jet_name].eta[jet_mask])
     pt = events[self.cfg.jet_name].pt[jet_mask]
