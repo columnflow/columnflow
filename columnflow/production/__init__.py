@@ -19,6 +19,12 @@ class TaskArrayFunctionWithProducerRequirements(TaskArrayFunction):
 
     require_producers: Sequence[str] | set[str] | None = None
 
+    def __init__(self, *args, **kwargs):
+        kwargs["require_producers"] = list(
+            kwargs.get("require_producers") or self.__class__.require_producers or [],
+        )
+        super().__init__(*args, **kwargs)
+
     def _req_producer(self, task: law.Task, producer: str) -> Any:
         # hook to customize how required producers are requested
         from columnflow.tasks.production import ProduceColumns
@@ -31,7 +37,10 @@ class TaskArrayFunctionWithProducerRequirements(TaskArrayFunction):
 
         # add required producers when set
         if (prods := self.require_producers):
-            reqs["required_producers"] = {prod: self._req_producer(task, prod) for prod in prods}
+            reqs["required_producers"] = {
+                prod: self._req_producer(task, prod)
+                for prod in law.util.make_unique(prods)
+            }
 
     def setup_func(
         self,

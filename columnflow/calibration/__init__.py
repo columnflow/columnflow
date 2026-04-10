@@ -19,6 +19,12 @@ class TaskArrayFunctionWithCalibratorRequirements(TaskArrayFunction):
 
     require_calibrators: Sequence[str] | set[str] | None = None
 
+    def __init__(self, *args, **kwargs):
+        kwargs["require_calibrators"] = list(
+            kwargs.get("require_calibrators") or self.__class__.require_calibrators or [],
+        )
+        super().__init__(*args, **kwargs)
+
     def _req_calibrator(self, task: law.Task, calibrator: str) -> Any:
         # hook to customize how required calibrators are requested
         from columnflow.tasks.calibration import CalibrateEvents
@@ -31,7 +37,10 @@ class TaskArrayFunctionWithCalibratorRequirements(TaskArrayFunction):
 
         # add required calibrators when set
         if (calibs := self.require_calibrators):
-            reqs["required_calibrators"] = {calib: self._req_calibrator(task, calib) for calib in calibs}
+            reqs["required_calibrators"] = {
+                calib: self._req_calibrator(task, calib)
+                for calib in law.util.make_unique(calibs)
+            }
 
     def setup_func(
         self,
