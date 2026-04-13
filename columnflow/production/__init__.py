@@ -6,6 +6,7 @@ Tools for producing new array columns (e.g. high-level variables).
 
 from __future__ import annotations
 
+import copy
 import inspect
 
 import law
@@ -20,9 +21,11 @@ class TaskArrayFunctionWithProducerRequirements(TaskArrayFunction):
     require_producers: Sequence[str] | set[str] | None = None
 
     def __init__(self, *args, **kwargs):
-        kwargs["require_producers"] = list(
-            kwargs.get("require_producers") or self.__class__.require_producers or [],
-        )
+        if "require_producers" in kwargs or self.__class__.require_producers is None:
+            kwargs["require_producers"] = kwargs.get("require_producers") or []
+        elif isinstance(self.__class__.require_producers, (list, tuple)):
+            kwargs["require_producers"] = copy.copy(self.__class__.require_producers)
+
         super().__init__(*args, **kwargs)
 
     def _req_producer(self, task: law.Task, producer: str) -> Any:

@@ -6,6 +6,7 @@ Object and event calibration tools.
 
 from __future__ import annotations
 
+import copy
 import inspect
 
 import law
@@ -20,9 +21,11 @@ class TaskArrayFunctionWithCalibratorRequirements(TaskArrayFunction):
     require_calibrators: Sequence[str] | set[str] | None = None
 
     def __init__(self, *args, **kwargs):
-        kwargs["require_calibrators"] = list(
-            kwargs.get("require_calibrators") or self.__class__.require_calibrators or [],
-        )
+        if "require_calibrators" in kwargs or self.__class__.require_calibrators is None:
+            kwargs["require_calibrators"] = kwargs.get("require_calibrators") or []
+        elif isinstance(self.__class__.require_calibrators, (list, tuple)):
+            kwargs["require_calibrators"] = copy.copy(self.__class__.require_calibrators)
+
         super().__init__(*args, **kwargs)
 
     def _req_calibrator(self, task: law.Task, calibrator: str) -> Any:
