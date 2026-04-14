@@ -892,6 +892,7 @@ class HTCondorWorkflow(RemoteWorkflowMixin, law.htcondor.HTCondorWorkflow):
 
         # request memory
         if self.htcondor_memory is not None and self.htcondor_memory > 0:
+            config.custom_content.append(("RequestMemory", f"{self.htcondor_memory} Gb"))
             config.custom_content.append(("Request_Memory", f"{self.htcondor_memory} Gb"))
 
         # request disk space
