@@ -14,7 +14,7 @@ import pickle
 
 import awkward as ak
 
-from columnflow.columnar_util import update_ak_array
+from columnflow.columnar_util import update_ak_array, ChunkedIOHandler
 from columnflow.util import ipython_shell
 from columnflow.types import Any
 
@@ -35,7 +35,6 @@ def _load_parquet(fname: str, **kwargs) -> ak.Array:
 
 def _load_nano_root(fname: str, treepath: str | None = None, **kwargs) -> ak.Array:
     import uproot
-    from columnflow.columnar_util import coffea_nano_factory_from_root
 
     # get the default treepath
     source = uproot.open(fname)
@@ -48,13 +47,12 @@ def _load_nano_root(fname: str, treepath: str | None = None, **kwargs) -> ak.Arr
         else:
             raise ValueError(f"no default treepath determined in {fname}")
 
-    return coffea_nano_factory_from_root(
-        source=source,
-        tree_name=treepath,
-        read_columns=None,
-        entry_start=None,
-        entry_stop=None,
-    ).events()
+    # load the tree
+    tree = source[treepath]
+
+    # use the io handler to load arrays and attach nano schema
+    chunk_pos = ChunkedIOHandler.create_chunk_position(tree.num_entries, tree.num_entries, 0)
+    return ChunkedIOHandler.read_coffea_root(tree, chunk_pos)
 
 
 def load(fname: str, **kwargs) -> Any:
