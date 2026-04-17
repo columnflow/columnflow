@@ -324,6 +324,12 @@ class PlotBase1D(PlotBase):
         significant=False,
         description="when True, no error bands for statistical uncertainty histograms are drawn; default: None",
     )
+    draw_total_unc = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="when True, total error bands are drawn as root of sum of squares of statistical and systematic errors; default: None",
+    )
+
 
     def get_plot_parameters(self) -> DotDict:
         # convert parameters to usable values during plotting
@@ -333,6 +339,7 @@ class PlotBase1D(PlotBase):
         dict_add_strict(params, "yscale", None if self.yscale == law.NO_STR else self.yscale)
         dict_add_strict(params, "shape_norm", self.shape_norm)
         dict_add_strict(params, "hide_stat_errors", self.hide_stat_errors)
+        dict_add_strict(params, "draw_total_unc", self.draw_total_unc)
         return params
 
 
