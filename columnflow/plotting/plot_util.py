@@ -308,6 +308,12 @@ def apply_variable_settings(
             for proc_inst, h in list(hists.items()):
                 h = h[{var_inst.name: slice(slice_0, slice_1)}]
                 hists[proc_inst] = h
+        elif slices is not None:
+            logger.warning(
+                f"invalid slice setting '{slices}' for variable '{var_inst.name}'; expected two values that can be "
+                f"interpreted as integers or complex numbers; skipping slicing for this variable and all "
+                f"histograms",
+            )
 
         # additional x axis transformations
         for trafo in law.util.make_list(get_attr_or_aux(var_inst, "x_transformations", None) or []):

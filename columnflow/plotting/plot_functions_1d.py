@@ -114,7 +114,6 @@ def plot_variable_stack(
         style_config,
         deep=True,
     )
-
     return plot_all(plot_config, style_config, **kwargs)
 
 
@@ -287,8 +286,10 @@ def plot_shifted_variable(
         "up": "red",
         "down": "blue",
     }
-    for i, shift_name in enumerate(h_sum.axes["shift"]):
-        shift_inst = config_inst.get_shift(shift_name)
+    # for i, shift_name in enumerate(h_sum.axes["shift"]):
+    for shift_inst in shift_insts:
+        shift_name = shift_inst.name
+        # shift_inst = config_inst.get_shift(shift_name)
 
         h = h_sum[{"shift": hist.loc(shift_name)}]
         # assuming `nominal` always has shift id 0
@@ -316,6 +317,9 @@ def plot_shifted_variable(
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = None
+
+    # sort the plot config based on the shift id to ensure a consistent order of nominal, up, down
+    # plot_config = dict(sorted(plot_config.items(), key=lambda item: config_inst.get_shift(item[0]).id))
 
     # legend title setting
     if not legend_title and len(hists) == 1:
@@ -438,7 +442,7 @@ def plot_profile(
     style_config: dict | None = None,
     density: bool | None = False,
     yscale: str | None = "",
-    hide_stat_errors: bool | None = None,
+    hide_stat_errors: bool | None = True,  # fails otherwise?
     process_settings: dict | None = None,
     variable_settings: dict | None = None,
     skip_base_distribution: bool = False,
@@ -537,6 +541,7 @@ def plot_profile(
     )
 
     default_style_config["ax_cfg"]["ylabel"] = f"profiled {variable_insts[1].x_title}"
+    # default_style_config["ax_cfg"]["ylim"] = (-10., 10.) if yscale == "linear" else (0.01, 10.)
     style_config = law.util.merge_dicts(
         default_style_config,
         process_style_config,

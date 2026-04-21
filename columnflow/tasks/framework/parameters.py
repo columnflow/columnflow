@@ -84,13 +84,13 @@ class SettingsParameter(law.CSVParameter):
         => "param1=2,param2=False"
     """
     settings_delimiter = "="
-    tuple_delimiter = ";"
+    tuple_delimiter = "AAA"
 
     @classmethod
     def parse_setting(cls, setting: str) -> tuple[str, float | bool | str]:
         pair = setting.split(cls.settings_delimiter, 1)
         key, value = pair if len(pair) == 2 else (pair[0], "True")
-        if ";" in value:
+        if cls.tuple_delimiter in value:
             # split by ";" and parse each value
             value = tuple(cls.parse_value(v) for v in value.split(cls.tuple_delimiter))
         else:
@@ -111,7 +111,7 @@ class SettingsParameter(law.CSVParameter):
 
     @classmethod
     def serialize_setting(cls, name: str, value: str | Iterable[str]) -> str:
-        value = ";".join(str(v) for v in law.util.make_tuple(value))
+        value = cls.tuple_delimiter.join(str(v) for v in law.util.make_tuple(value))
         return f"{name}={value}"
 
     def __init__(self, **kwargs):
