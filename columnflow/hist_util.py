@@ -128,7 +128,11 @@ def fill_hist(
             del arrays
 
     # fill
-    h.fill(**fill_kwargs, **data)
+    try:
+        h.fill(**fill_kwargs, **data)
+    except MemoryError as e:
+        msg = f"error while filling histogram\n{h!r}\nwith data {data}\nand kwargs {fill_kwargs}"
+        raise MemoryError(msg) from e
 
 
 def add_hist_axis(
