@@ -127,7 +127,6 @@ def muon_sr(
             events.event,
             events.luminosityBlock,
             self.muon_correction_set,
-            rnd_gen="np",
             nested=True,
         )
         events = set_ak_column_f32(events, "Muon.pt", pt_scale_res_corr)
