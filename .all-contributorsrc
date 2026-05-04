@@ -184,6 +184,15 @@
       "contributions": [
         "code"
       ]
+    },
+    {
+      "login": "LennertGriesing",
+      "name": "Lennert Griesing",
+      "avatar_url": "https://avatars.githubusercontent.com/u/115483673?v=4",
+      "profile": "https://github.com/LennertGriesing",
+      "contributions": [
+        "code"
+      ]
     }
   ],
   "commitType": "docs"
