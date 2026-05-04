@@ -248,6 +248,7 @@ def pdf_weight_init(self: Producer, **kwargs) -> None:
     else:
         self.produces.add("pdf_weights")
 
+
 def _raise_unknown_action(attr: str, action: str, known_actions: tuple[str]) -> None:
     if action not in known_actions:
         raise ValueError(f"unknown {attr} '{action}', known values are {','.join(known_actions)}")
