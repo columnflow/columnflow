@@ -158,6 +158,7 @@ For a better overview of the tasks that are triggered by the commands below, che
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/philippgadow"><img src="https://avatars.githubusercontent.com/u/6804366?v=4?s=100" width="100px;" alt="philippgadow"/><br /><sub><b>philippgadow</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=philippgadow" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/LuSchaller"><img src="https://avatars.githubusercontent.com/u/30951523?v=4?s=100" width="100px;" alt="Lukas Schaller"/><br /><sub><b>Lukas Schaller</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=LuSchaller" title="Code">💻</a></td>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/Lara813"><img src="https://avatars.githubusercontent.com/u/67378765?v=4?s=100" width="100px;" alt="lamarkus"/><br /><sub><b>lamarkus</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=Lara813" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/LennertGriesing"><img src="https://avatars.githubusercontent.com/u/115483673?v=4?s=100" width="100px;" alt="Lennert Griesing"/><br /><sub><b>Lennert Griesing</b></sub></a><br /><a href="https://github.com/columnflow/columnflow/commits?author=LennertGriesing" title="Code">💻</a></td>
     </tr>
   </tbody>
 </table>
