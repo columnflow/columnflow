@@ -1115,9 +1115,19 @@ def sorted_ak_to_root(
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
 
+    # helper to linearize nested arrays
+    def pack(ak_array, prefix=""):
+        packed = {}
+        for field in ak_array.fields:
+            if ak_array[field].fields:
+                packed.update(pack(ak_array[field], prefix + field + "_"))
+            else:
+                packed[prefix + field] = ak_array[field]
+        return packed
+
     # create the file
     f = uproot.recreate(path)
-    f[tree_name] = {field: ak_array[field] for field in ak_array.fields}
+    f[tree_name] = pack(ak_array)
     f.close()
 
 
