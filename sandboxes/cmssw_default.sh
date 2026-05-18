@@ -10,8 +10,8 @@ action() {
 
     # set variables and source the generic CMSSW setup
     export CF_SANDBOX_FILE="${CF_SANDBOX_FILE:-${this_file}}"
-    export CF_SCRAM_ARCH="el9_amd64_gcc11"
-    export CF_CMSSW_VERSION="CMSSW_13_0_19"
+    export CF_SCRAM_ARCH="el9_amd64_gcc12"
+    export CF_CMSSW_VERSION="CMSSW_14_1_9"
     export CF_CMSSW_ENV_NAME="$( basename "${this_file%.sh}" )"
     export CF_CMSSW_FLAG="1"  # increment when content changed
 
