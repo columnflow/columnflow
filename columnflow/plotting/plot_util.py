@@ -440,7 +440,6 @@ def remove_residual_axis(
         for key, h in hists.items()
     }
 
-
 def prepare_style_config(
     config_inst: od.Config,
     category_inst: od.Category,
@@ -519,6 +518,7 @@ def prepare_stack_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
     hide_stat_errors: bool | None = None,
+    draw_total_unc: bool | None = None,
     shift_insts: Sequence[od.Shift] | None = None,
     density: bool = False,
     **kwargs,
@@ -527,8 +527,107 @@ def prepare_stack_plot_config(
     Prepares a plot config with one entry to create plots containing a stack of
     backgrounds with uncertainty bands, unstacked processes as lines and
     data entrys with errorbars.
+
+    Feature added:
+      - ensure QCD nominal is present in *all* up/down shift variations used for MC systematic bands,
+        by creating a QCD "syst hist" with a full shift axis and filling every shift slice with the
+        QCD nominal (value+variance), then appending it to mc_syst_hists (if needed).
+
+    Enable debug prints with:
+      kwargs["debug_qcd_nominal_in_systs"] = True
+    Disable the feature with:
+      kwargs["include_qcd_nominal_in_systs"] = False
     """
-    import hist
+    import numpy as np
+
+    include_qcd_nominal_in_systs = kwargs.get("include_qcd_nominal_in_systs", True)
+    debug_qcd_nominal_in_systs = kwargs.get("debug_qcd_nominal_in_systs", False)
+
+    def _fmt(a):
+        a = np.asarray(a)
+        return np.array2string(a, precision=6, separator=", ", threshold=30)
+
+    def storage_from(donor: hist.Hist):
+        for attr in ("_storage_type", "storage_type"):
+            if hasattr(donor, attr):
+                st = getattr(donor, attr)
+                try:
+                    st = st() if callable(st) else st
+                except TypeError:
+                    st = st
+                try:
+                    return st() if isinstance(st, type) else st
+                except Exception:
+                    return st
+        return hist.storage.Weight()
+
+    def book_like_with_shift_axis(donor: hist.Hist, shift_labels) -> hist.Hist:
+        axes = []
+        for ax in donor.axes:
+            if getattr(ax, "name", None) == "shift":
+                axes.append(hist.axis.StrCategory(list(shift_labels), name="shift", growth=True))
+            else:
+                axes.append(ax)
+        return hist.Hist(*axes, storage=storage_from(donor)).reset()
+
+    def ensure_qcd_nominal_in_syst_hists(
+        mc_syst_hists: list[hist.Hist],
+        qcd_hist: hist.Hist | None,
+        default_shift: str,
+        shift_insts: Sequence[od.Shift] | None,
+    ) -> list[hist.Hist]:
+        if qcd_hist is None:
+            return mc_syst_hists
+        if "shift" not in qcd_hist.axes.name:
+            return mc_syst_hists
+
+        # If QCD already has >1 shift entries and is already part of mc_syst_hists, do nothing.
+        # (i.e. assume QCD variations are already handled upstream)
+        try:
+            if qcd_hist.axes["shift"].size > 1 and any(h is qcd_hist for h in mc_syst_hists):
+                return mc_syst_hists
+        except Exception:
+            pass
+
+        # Determine the "target" shift labels used in syst band computation
+        if mc_syst_hists:
+            target_shift_labels = [str(x) for x in list(mc_syst_hists[0].axes["shift"])]
+        elif shift_insts is not None:
+            target_shift_labels = [s.name for s in shift_insts]
+        else:
+            target_shift_labels = [str(x) for x in list(qcd_hist.axes["shift"])]
+
+        if "nominal" not in target_shift_labels:
+            target_shift_labels.append("nominal")
+
+        # Select QCD nominal slice
+        qcd_shift_labels = [str(x) for x in list(qcd_hist.axes["shift"])]
+        qcd_nom_shift = "nominal" if "nominal" in qcd_shift_labels else default_shift
+
+        qcd_nom_h = remove_residual_axis_single(qcd_hist, "shift", select_value=qcd_nom_shift)
+        qcd_nom_val = qcd_nom_h.values()
+        qcd_nom_var = qcd_nom_h.view().variance
+
+        # Build a QCD syst hist with full shift axis and fill every shift slice with nominal
+        qcd_syst = book_like_with_shift_axis(qcd_hist, target_shift_labels)
+        arr = qcd_syst.view()
+
+        for sh in target_shift_labels:
+            i = qcd_syst.axes["shift"].index(sh)
+
+            if debug_qcd_nominal_in_systs and (sh.endswith("_up") or sh.endswith("_down")):
+                print(f"[QCD syst fill] {sh} BEFORE val={_fmt(arr[i].value)} var={_fmt(arr[i].variance)}")
+
+            arr[i].value = qcd_nom_val
+            arr[i].variance = qcd_nom_var
+
+            if debug_qcd_nominal_in_systs and (sh.endswith("_up") or sh.endswith("_down")):
+                print(f"[QCD syst fill] {sh} AFTER  val={_fmt(arr[i].value)} var={_fmt(arr[i].variance)}")
+
+        qcd_syst[...] = arr
+
+        # Append once so that systematic-summed MC variations include QCD nominal exactly once
+        return [*mc_syst_hists, qcd_syst]
 
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
@@ -538,6 +637,13 @@ def prepare_stack_plot_config(
     data_label = None
 
     default_shift = shift_insts[0].name if len(shift_insts) == 1 else "nominal"
+
+    # try to identify the QCD process instance
+    qcd_hist_full = None
+    try:
+        from cmsdb.processes.qcd import qcd as qcd_proc
+    except Exception:
+        qcd_proc = None
 
     for process_inst, h in hists.items():
         # if given, per-process setting overrides task parameter
@@ -557,8 +663,23 @@ def prepare_stack_plot_config(
             mc_colors.append(process_inst.color1)
             mc_edgecolors.append(process_inst.color2)
             mc_labels.append(process_inst.label)
+
+            # keep original (with shift axis) for syst bands
             if "shift" in h.axes.name and h.axes["shift"].size > 1:
                 mc_syst_hists.append(h)
+
+            # capture QCD hist (original, with shift axis) if available
+            if qcd_proc is not None and process_inst == qcd_proc:
+                qcd_hist_full = h
+
+    # ensure QCD nominal is present for all systematic variations (for uncertainty bands)
+    if include_qcd_nominal_in_systs:
+        mc_syst_hists = ensure_qcd_nominal_in_syst_hists(
+            mc_syst_hists=mc_syst_hists,
+            qcd_hist=qcd_hist_full,
+            default_shift=default_shift,
+            shift_insts=shift_insts,
+        )
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:
@@ -599,10 +720,6 @@ def prepare_stack_plot_config(
                 "color": line_colors[i],
                 "error_type": "variance",
             },
-            # "ratio_kwargs": {
-            #     "norm": h.values(),
-            #     "color": line_colors[i],
-            # },
         }
 
         # suppress error bars by overriding `yerr`
@@ -611,34 +728,60 @@ def prepare_stack_plot_config(
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = False
 
-    # draw statistical error for stack
-    if h_mc_stack is not None and not hide_stat_errors:
-        mc_norm = shape_norm_func(h_mc, shape_norm)
-        plot_config["mc_stat_unc"] = {
-            "method": "draw_stat_error_bands",
-            "hist": h_mc,
-            "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
-            "ratio_kwargs": {"norm": h_mc.values()},
-        }
+    # --- draw uncertainties for stack ---
+    if h_mc_stack is not None:
+        mc_norm = sum(h_mc.values()) if shape_norm else 1
+        if draw_total_unc:
+            print("drawing total uncertainty band")
+            if mc_syst_hists:
+                plot_config["mc_total_unc"] = {
+                    "method": "draw_total_error_bands",
+                    "hist": h_mc,
+                    "kwargs": {
+                        "syst_hists": mc_syst_hists,
+                        "shift_insts": shift_insts,
+                        "norm": mc_norm,
+                        "label": "MC total unc.",
+                    },
+                    "ratio_kwargs": {
+                        "syst_hists": mc_syst_hists,
+                        "shift_insts": shift_insts,
+                        "norm": h_mc.values(),
+                    },
+                }
+            else:
+                if not hide_stat_errors:
+                    plot_config["mc_stat_unc"] = {
+                        "method": "draw_stat_error_bands",
+                        "hist": h_mc,
+                        "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
+                        "ratio_kwargs": {"norm": h_mc.values()},
+                    }
+        else:
+            if not hide_stat_errors:
+                plot_config["mc_stat_unc"] = {
+                    "method": "draw_stat_error_bands",
+                    "hist": h_mc,
+                    "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
+                    "ratio_kwargs": {"norm": h_mc.values()},
+                }
 
-    # draw systematic error for stack
-    if h_mc_stack is not None and mc_syst_hists:
-        mc_norm = shape_norm_func(h_mc, shape_norm)
-        plot_config["mc_syst_unc"] = {
-            "method": "draw_syst_error_bands",
-            "hist": h_mc,
-            "kwargs": {
-                "syst_hists": mc_syst_hists,
-                "shift_insts": shift_insts,
-                "norm": mc_norm,
-                "label": "MC syst. unc.",
-            },
-            "ratio_kwargs": {
-                "syst_hists": mc_syst_hists,
-                "shift_insts": shift_insts,
-                "norm": h_mc.values(),
-            },
-        }
+            if mc_syst_hists:
+                plot_config["mc_syst_unc"] = {
+                    "method": "draw_syst_error_bands",
+                    "hist": h_mc,
+                    "kwargs": {
+                        "syst_hists": mc_syst_hists,
+                        "shift_insts": shift_insts,
+                        "norm": mc_norm,
+                        "label": "MC syst. unc.",
+                    },
+                    "ratio_kwargs": {
+                        "syst_hists": mc_syst_hists,
+                        "shift_insts": shift_insts,
+                        "norm": h_mc.values(),
+                    },
+                }
 
     # draw data
     if data_hists:
@@ -661,13 +804,13 @@ def prepare_stack_plot_config(
                 "density": density,
             }
 
-        # suppress error bars by overriding `yerr`
         if any(data_hide_stat_errors):
             for key in ("kwargs", "ratio_kwargs"):
                 if key in plot_cfg:
                     plot_cfg[key]["yerr"] = False
 
     return plot_config
+
 
 
 def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
