@@ -122,6 +122,8 @@ def jet_id_init(self: Producer, **kwargs) -> None:
     """
     Dynamically add the names of the used and produced columns depending on the jet name.
     """
+    super(jet_id, self).init_func(**kwargs)
+
     self.jet_columns = ["eta", "chHEF", "neHEF", "chEmEF", "neEmEF", "muEF", "chMultiplicity", "neMultiplicity"]
     self.uses.update(f"{self.jet_name}.{col}" for col in self.jet_columns)
     self.produces.add(f"{self.jet_name}.jetId")
@@ -132,6 +134,8 @@ def jet_id_requires(self: Producer, task: law.Task, reqs: dict, **kwargs) -> Non
     """
     Adds the requirements needed the underlying task to recompute the jet id into *reqs*.
     """
+    super(jet_id, self).requires_func(task, reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -151,6 +155,8 @@ def jet_id_setup(
     """
     Sets up the correction sets needed for the jet id using the external files.
     """
+    super(jet_id, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     bundle = reqs["external_files"]
 
     # get the jet id config
@@ -243,6 +249,8 @@ def msoftdrop_init(self: Producer, **kwargs) -> None:
     """
     Dynamically add `uses` and `produces`.
     """
+    super(msoftdrop, self).init_func(**kwargs)
+
     # input columns
     self.uses |= {
         f"{collection}.{var}"
@@ -262,6 +270,7 @@ def msoftdrop_init(self: Producer, **kwargs) -> None:
 
 @msoftdrop.setup
 def msoftdrop_setup(self: Producer, task: law.Task, reqs: dict, **kwargs) -> None:
-    import coffea
+    super(msoftdrop, self).setup_func(task, reqs, **kwargs)
 
+    import coffea
     self.nano_behavior = coffea.nanoevents.NanoAODSchema.behavior()

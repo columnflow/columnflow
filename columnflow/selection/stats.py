@@ -222,6 +222,8 @@ def increment_stats_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(increment_stats, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     # flags to descibe "number" and "sum" fields
     self.NUM, self.SUM = range(2)
 

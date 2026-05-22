@@ -139,6 +139,8 @@ def deterministic_event_seeds_init(self, **kwargs) -> None:
     Producer initialization that adds columns to the set of *used* columns based on the
     *event_columns*, *object_count_columns*, and *object_columns* lists.
     """
+    super(deterministic_event_seeds, self).init_func(**kwargs)
+
     # add used columns
     for column in self.event_columns + self.object_count_columns + self.object_columns:
         self.uses.add(Route(column))
@@ -156,6 +158,8 @@ def deterministic_event_seeds_setup(
     """
     Setup function that defines conventions methods needed during the producer function.
     """
+    super(deterministic_event_seeds, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     # store primes in array
     self.primes = np.array(primes, dtype=np.uint64)
 
@@ -230,6 +234,7 @@ class deterministic_object_seeds(Producer):
         return events
 
     def init_func(self, **kwargs) -> None:
+        super().init_func(**kwargs)
         self.uses |= {f"{self.object_field}.pt"}
         self.produces |= {f"{self.object_field}.deterministic_seed"}
 
@@ -249,6 +254,8 @@ class deterministic_object_seeds(Producer):
         :param inputs: Dictionary for inputs (not used).
         :param reader_targets: Dictionary for additional column to retrieve (not used).
         """
+        super().setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
         # store primes in array
         self.primes = np.array(primes, dtype=np.uint64)
 

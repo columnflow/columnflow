@@ -201,7 +201,9 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @dy_weights.init
-def dy_weights_init(self: Producer) -> None:
+def dy_weights_init(self: Producer, **kwargs) -> None:
+    super(dy_weights, self).init_func(**kwargs)
+
     if self.config_inst.campaign.x.year not in {2022, 2023, 2024}:
         raise NotImplementedError(
             f"campaign year {self.config_inst.campaign.x.year} is not yet supported by {self.cls_name}",
@@ -226,10 +228,12 @@ def dy_weights_init(self: Producer) -> None:
 
 
 @dy_weights.requires
-def dy_weights_requires(self: Producer, task: law.Task, reqs: dict) -> None:
+def dy_weights_requires(self: Producer, task: law.Task, reqs: dict, **kwargs) -> None:
     """
     Adds the requirements needed the underlying task to derive the Drell-Yan weights into *reqs*.
     """
+    super(dy_weights, self).requires_func(task, reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -244,12 +248,15 @@ def dy_weights_setup(
     reqs: dict,
     inputs: dict,
     reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
     """
     Loads the Drell-Yan weight calculator from the external files bundle and saves them in the py:attr:`dy_corrector`
     attribute for simpler access in the actual callable. The number of uncertainties is calculated, per era, by another
     correcter in the external file and is saved in the py:attr:`dy_unc_corrector` attribute.
     """
+    super(dy_weights, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     bundle = reqs["external_files"]
 
     # import all correctors from the external file
@@ -450,7 +457,9 @@ def recoil_corrected_met(self: Producer, events: ak.Array, **kwargs) -> ak.Array
 
 
 @recoil_corrected_met.init
-def recoil_corrected_met_init(self: Producer) -> None:
+def recoil_corrected_met_init(self: Producer, **kwargs) -> None:
+    super(recoil_corrected_met, self).init_func(**kwargs)
+
     if self.njet_column:
         self.uses.add(f"{self.njet_column}")
     else:
@@ -458,8 +467,9 @@ def recoil_corrected_met_init(self: Producer) -> None:
 
 
 @recoil_corrected_met.requires
-def recoil_corrected_met_requires(self: Producer, task: law.Task, reqs: dict) -> None:
-    # Ensure that external files are bundled.
+def recoil_corrected_met_requires(self: Producer, task: law.Task, reqs: dict, **kwargs) -> None:
+    super(recoil_corrected_met, self).requires_func(task, reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -474,7 +484,10 @@ def recoil_corrected_met_setup(
     reqs: dict,
     inputs: dict,
     reader_targets: law.util.InsertableDict,
+    **kwargs,
 ) -> None:
+    super(recoil_corrected_met, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     # load the correction set
     bundle = reqs["external_files"]
     correction_set = load_correction_set(self.get_dy_recoil_file(bundle.files))

@@ -127,6 +127,8 @@ def met_phi_run2(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @met_phi_run2.init
 def met_phi_run2_init(self: Calibrator, **kwargs) -> None:
+    super(met_phi_run2, self).init_func(**kwargs)
+
     self.met_config = self.get_met_config()
 
     # set used columns
@@ -147,6 +149,8 @@ def met_phi_run2_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(met_phi_run2, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     # create the pt and phi correctors
     met_file = self.get_met_file(reqs["external_files"].files)
     correction_set = load_correction_set(met_file)
@@ -281,6 +285,8 @@ def met_phi(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @met_phi.init
 def met_phi_init(self: Calibrator, **kwargs) -> None:
+    super(met_phi, self).init_func(**kwargs)
+
     self.met_config = self.get_met_config()
 
     # set used columns
@@ -304,6 +310,8 @@ def met_phi_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(met_phi, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     # load the corrector
     met_file = self.get_met_file(reqs["external_files"].files)
     correction_set = load_correction_set(met_file)

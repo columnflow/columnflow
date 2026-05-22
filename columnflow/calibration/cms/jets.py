@@ -505,6 +505,8 @@ def jec(
 
 @jec.init
 def jec_init(self: Calibrator, **kwargs) -> None:
+    super(jec, self).init_func(**kwargs)
+
     jec_cfg = self.get_jec_config()
 
     sources = self.uncertainty_sources
@@ -547,6 +549,8 @@ def jec_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
+    super(jec, self).requires_func(task, reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -615,6 +619,8 @@ def jec_setup(
     :param inputs: Additional inputs, currently not used
     :param reader_targets: TODO: add documentation
     """
+    super(jec, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     # import the correction sets from the external file
     jec_file = self.get_jec_file(reqs["external_files"].files)
     correction_set = load_correction_set(jec_file)
@@ -1021,6 +1027,8 @@ jer_horn_handling = jer.derive("jer_horn_handling", cls_dict={
 
 @jer.init
 def jer_init(self: Calibrator, **kwargs) -> None:
+    super(jer, self).init_func(**kwargs)
+
     # add jec_cfg for applying nominal smearing to jec variations
     jec_cfg = self.get_jec_config()
     jec_sources = self.jec_uncertainty_sources
@@ -1073,6 +1081,8 @@ def jer_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
+    super(jer, self).requires_func(task, reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -1121,6 +1131,8 @@ def jer_setup(
     :param inputs: Additional inputs, currently not used.
     :param reader_targets: TODO: add documentation.
     """
+    super(jer, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     # import the correction sets from the external file
     jer_file = self.get_jer_file(reqs["external_files"].files)
     correction_set = load_correction_set(jer_file)
@@ -1192,6 +1204,8 @@ def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
 
 @jets.init
 def jets_init(self: Calibrator, **kwargs) -> None:
+    super(jets, self).init_func(**kwargs)
+
     # create custom jec and jer calibrators, using the jet name as the identifying value
     def get_attrs(attrs):
         cls_dict = {}

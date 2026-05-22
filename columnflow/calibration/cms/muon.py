@@ -169,6 +169,8 @@ def muon_sr(
 
 @muon_sr.init
 def muon_sr_init(self: Calibrator, **kwargs) -> None:
+    super(muon_sr, self).init_func(**kwargs)
+
     self.muon_cfg = self.get_muon_sr_config()
 
     # add produced columns with unceratinties if requested
@@ -188,6 +190,8 @@ def muon_sr_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
+    super(muon_sr, self).requires_func(task, reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -204,6 +208,8 @@ def muon_sr_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(muon_sr, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     # load the correction set
     muon_sr_file = self.get_muon_sr_file(reqs["external_files"].files)
     self.muon_correction_set = load_correction_set(muon_sr_file)

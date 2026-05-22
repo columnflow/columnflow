@@ -138,6 +138,8 @@ def muon_weights(
 
 @muon_weights.init
 def muon_weights_init(self: Producer, **kwargs) -> None:
+    super(muon_weights, self).init_func(**kwargs)
+
     # add the product of nominal and up/down variations to produced columns
     self.produces.add(f"{self.weight_name}{{,_up,_down}}")
 
@@ -149,6 +151,8 @@ def muon_weights_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
+    super(muon_weights, self).requires_func(task, reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -165,6 +169,8 @@ def muon_weights_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(muon_weights, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+
     bundle = reqs["external_files"]
 
     # load the corrector

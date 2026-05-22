@@ -69,6 +69,8 @@ def category_ids(
 
 @category_ids.init
 def category_ids_init(self: Producer, **kwargs) -> None:
+    super(category_ids, self).init_func(**kwargs)
+
     # store a mapping from leaf category to categorizer classes for faster lookup
     self.categorizer_map = {}
 
