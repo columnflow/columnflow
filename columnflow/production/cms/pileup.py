@@ -66,7 +66,7 @@ def pu_weight_requires(
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
-    super(pu_weight, self).requires_func(task, reqs, **kwargs)
+    super(pu_weight, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -88,7 +88,7 @@ def pu_weight_setup(
     Loads the pileup calculator from the external files bundle and saves them in the
     py:attr:`pileup_corrector` attribute for simpler access in the actual callable.
     """
-    super(pu_weight, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(pu_weight, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     bundle = reqs["external_files"]
 
@@ -136,7 +136,7 @@ def pu_weights_from_columnflow_requires(
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
-    super(pu_weights_from_columnflow, self).requires_func(task, reqs, **kwargs)
+    super(pu_weights_from_columnflow, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "pu_weights" in reqs:
         return
@@ -158,6 +158,12 @@ def pu_weights_from_columnflow_setup(
     Loads the pileup weights added through the requirements and saves them in the
     py:attr:`pu_weights` attribute for simpler access in the actual callable.
     """
-    super(pu_weights_from_columnflow, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(pu_weights_from_columnflow, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
 
     self.pu_weights = ak.zip(inputs["pu_weights"].load(formatter="json"))

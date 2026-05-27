@@ -193,7 +193,7 @@ def electron_weights_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
-    super(electron_weights, self).requires_func(task, reqs, **kwargs)
+    super(electron_weights, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -211,7 +211,13 @@ def electron_weights_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    super(electron_weights, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(electron_weights, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
 
     self.electron_config = self.get_electron_config()
 

@@ -34,7 +34,7 @@ class TaskArrayFunctionWithProducerRequirements(TaskArrayFunction):
         return ProduceColumns.req_other_producer(task, producer=producer)
 
     def requires_func(self, task: law.Task, reqs: dict, **kwargs) -> None:
-        super().requires_func(task, reqs, **kwargs)
+        super().requires_func(task=task, reqs=reqs, **kwargs)
 
         # no requirements for workflows in pilot mode
         if callable(getattr(task, "is_workflow", None)) and task.is_workflow() and getattr(task, "pilot", False):
@@ -55,7 +55,7 @@ class TaskArrayFunctionWithProducerRequirements(TaskArrayFunction):
         reader_targets: law.util.InsertableDict,
         **kwargs,
     ) -> None:
-        super().setup_func(task, reqs, inputs, reader_targets, **kwargs)
+        super().setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
         if "required_producers" in inputs:
             for prod, inp in inputs["required_producers"].items():

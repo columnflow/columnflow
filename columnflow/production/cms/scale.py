@@ -36,7 +36,7 @@ class _ScaleWeightBase(Producer):
         reader_targets: law.util.InsertableDict,
         **kwargs,
     ) -> None:
-        super().setup_func(task, reqs, inputs, reader_targets, **kwargs)
+        super().setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
         # named weight indices
         self.indices_9 = DotDict(

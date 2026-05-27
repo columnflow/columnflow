@@ -549,7 +549,7 @@ def jec_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
-    super(jec, self).requires_func(task, reqs, **kwargs)
+    super(jec, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -619,7 +619,7 @@ def jec_setup(
     :param inputs: Additional inputs, currently not used
     :param reader_targets: TODO: add documentation
     """
-    super(jec, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(jec, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     # import the correction sets from the external file
     jec_file = self.get_jec_file(reqs["external_files"].files)
@@ -1081,7 +1081,7 @@ def jer_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
-    super(jer, self).requires_func(task, reqs, **kwargs)
+    super(jer, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -1131,7 +1131,7 @@ def jer_setup(
     :param inputs: Additional inputs, currently not used.
     :param reader_targets: TODO: add documentation.
     """
-    super(jer, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(jer, self).jec_setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     # import the correction sets from the external file
     jer_file = self.get_jer_file(reqs["external_files"].files)

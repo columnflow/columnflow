@@ -175,7 +175,7 @@ def jet_veto_map_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
-    super(jet_veto_map, self).requires_func(task, reqs, **kwargs)
+    super(jet_veto_map, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -193,7 +193,7 @@ def jet_veto_map_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    super(jet_veto_map, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(jet_veto_map, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     # create the corrector
     map_file = self.get_veto_map_file(reqs["external_files"].files)

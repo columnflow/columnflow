@@ -158,7 +158,13 @@ def deterministic_event_seeds_setup(
     """
     Setup function that defines conventions methods needed during the producer function.
     """
-    super(deterministic_event_seeds, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(deterministic_event_seeds, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
 
     # store primes in array
     self.primes = np.array(primes, dtype=np.uint64)
@@ -254,7 +260,7 @@ class deterministic_object_seeds(Producer):
         :param inputs: Dictionary for inputs (not used).
         :param reader_targets: Dictionary for additional column to retrieve (not used).
         """
-        super().setup_func(task, reqs, inputs, reader_targets, **kwargs)
+        super().setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
         # store primes in array
         self.primes = np.array(primes, dtype=np.uint64)

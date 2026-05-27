@@ -151,7 +151,7 @@ def muon_weights_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
-    super(muon_weights, self).requires_func(task, reqs, **kwargs)
+    super(muon_weights, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -169,7 +169,7 @@ def muon_weights_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    super(muon_weights, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(muon_weights, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     bundle = reqs["external_files"]
 

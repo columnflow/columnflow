@@ -232,7 +232,7 @@ def dy_weights_requires(self: Producer, task: law.Task, reqs: dict, **kwargs) ->
     """
     Adds the requirements needed the underlying task to derive the Drell-Yan weights into *reqs*.
     """
-    super(dy_weights, self).requires_func(task, reqs, **kwargs)
+    super(dy_weights, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -255,7 +255,7 @@ def dy_weights_setup(
     attribute for simpler access in the actual callable. The number of uncertainties is calculated, per era, by another
     correcter in the external file and is saved in the py:attr:`dy_unc_corrector` attribute.
     """
-    super(dy_weights, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(dy_weights, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     bundle = reqs["external_files"]
 
@@ -468,7 +468,7 @@ def recoil_corrected_met_init(self: Producer, **kwargs) -> None:
 
 @recoil_corrected_met.requires
 def recoil_corrected_met_requires(self: Producer, task: law.Task, reqs: dict, **kwargs) -> None:
-    super(recoil_corrected_met, self).requires_func(task, reqs, **kwargs)
+    super(recoil_corrected_met, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -486,7 +486,13 @@ def recoil_corrected_met_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    super(recoil_corrected_met, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(recoil_corrected_met, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
 
     # load the correction set
     bundle = reqs["external_files"]

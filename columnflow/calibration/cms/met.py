@@ -149,7 +149,7 @@ def met_phi_run2_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    super(met_phi_run2, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(_met_phi_base, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     # create the pt and phi correctors
     met_file = self.get_met_file(reqs["external_files"].files)
@@ -310,7 +310,7 @@ def met_phi_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    super(met_phi, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(met_phi, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     # load the corrector
     met_file = self.get_met_file(reqs["external_files"].files)

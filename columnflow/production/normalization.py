@@ -378,7 +378,7 @@ def normalization_weights_requires(
     """
     Adds the requirements needed by the underlying py:attr:`task` to access selection stats into *reqs*.
     """
-    super(normalization_weights, self).requires_func(task, reqs, **kwargs)
+    super(normalization_weights, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     # check that all datasets are known
     for dataset in self.required_datasets:
@@ -415,7 +415,13 @@ def normalization_weights_setup(
             weights per process.
         - py: attr: `known_process_ids`: A set of all process ids that are known by the lookup table.
     """
-    super(normalization_weights, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(normalization_weights, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
 
     import scipy.sparse
 

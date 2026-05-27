@@ -134,7 +134,7 @@ def jet_id_requires(self: Producer, task: law.Task, reqs: dict, **kwargs) -> Non
     """
     Adds the requirements needed the underlying task to recompute the jet id into *reqs*.
     """
-    super(jet_id, self).requires_func(task, reqs, **kwargs)
+    super(jet_id, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -155,7 +155,7 @@ def jet_id_setup(
     """
     Sets up the correction sets needed for the jet id using the external files.
     """
-    super(jet_id, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(jet_id, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     bundle = reqs["external_files"]
 
@@ -270,7 +270,7 @@ def msoftdrop_init(self: Producer, **kwargs) -> None:
 
 @msoftdrop.setup
 def msoftdrop_setup(self: Producer, task: law.Task, reqs: dict, **kwargs) -> None:
-    super(msoftdrop, self).setup_func(task, reqs, **kwargs)
+    super(msoftdrop, self).setup_func(task=task, reqs=reqs, **kwargs)
 
     import coffea
     self.nano_behavior = coffea.nanoevents.NanoAODSchema.behavior()

@@ -34,7 +34,7 @@ class TaskArrayFunctionWithCalibratorRequirements(TaskArrayFunction):
         return CalibrateEvents.req_other_calibrator(task, calibrator=calibrator)
 
     def requires_func(self, task: law.Task, reqs: dict, **kwargs) -> None:
-        super().requires_func(task, reqs, **kwargs)
+        super().requires_func(task=task, reqs=reqs, **kwargs)
 
         # no requirements for workflows in pilot mode
         if callable(getattr(task, "is_workflow", None)) and task.is_workflow() and getattr(task, "pilot", False):
@@ -55,7 +55,7 @@ class TaskArrayFunctionWithCalibratorRequirements(TaskArrayFunction):
         reader_targets: law.util.InsertableDict,
         **kwargs,
     ) -> None:
-        super().setup_func(task, reqs, inputs, reader_targets, **kwargs)
+        super().setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
         if "required_calibrators" in inputs:
             for calib, inp in inputs["required_calibrators"].items():

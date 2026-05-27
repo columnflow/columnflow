@@ -231,7 +231,7 @@ def tec_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
-    super(tec, self).requires_func(task, reqs, **kwargs)
+    super(tec, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -249,7 +249,7 @@ def tec_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    super(tec, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(tec, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     # create the tec corrector
     tau_file = self.get_tau_file(reqs["external_files"].files)

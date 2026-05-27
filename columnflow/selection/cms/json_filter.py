@@ -98,7 +98,7 @@ def json_filter_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
-    super(json_filter, self).requires_func(task, reqs, **kwargs)
+    super(json_filter, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -124,7 +124,7 @@ def json_filter_setup(
     :param inputs: Additional inputs, currently not used
     :param reader_targets: Additional targets, currently not used
     """
-    super(json_filter, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(json_filter, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     import scipy.sparse
 

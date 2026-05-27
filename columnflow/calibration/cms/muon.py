@@ -190,7 +190,7 @@ def muon_sr_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
-    super(muon_sr, self).requires_func(task, reqs, **kwargs)
+    super(muon_sr, self).requires_func(task=task, reqs=reqs, **kwargs)
 
     if "external_files" in reqs:
         return
@@ -208,7 +208,7 @@ def muon_sr_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
-    super(muon_sr, self).setup_func(task, reqs, inputs, reader_targets, **kwargs)
+    super(muon_sr, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     # load the correction set
     muon_sr_file = self.get_muon_sr_file(reqs["external_files"].files)
