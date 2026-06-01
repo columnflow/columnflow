@@ -220,6 +220,10 @@ class PlotVariablesBase(_PlotVariablesBase):
                             }]
                             h = h[{"process": sum}]
 
+                            # skip empty histograms right away
+                            if h.empty():
+                                continue
+
                             # create expected shift bins and fill them with the nominal histogram
                             expected_shifts = plot_shift_names & process_shift_map[process_inst.name]
                             add_missing_shifts(h, expected_shifts, str_axis="shift", nominal_bin="nominal")

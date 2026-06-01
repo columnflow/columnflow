@@ -48,11 +48,11 @@ def cf_default_create_hist(
     """
     return create_hist_from_variables(
         *variables,
-        categorical_axes=(
+        categorical_axes=[
             ("category", "intcat"),
             ("process", "intcat"),
-            ("shift", "intcat"),
-        ),
+            ("shift", "intcat", [0]),
+        ],
         weight=True,
     )
 
