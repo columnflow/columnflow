@@ -266,19 +266,19 @@ class SerializeInferenceModelBase(
                         # gather all subprocesses for a full query later
                         sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
-                        # if the process axis is empty, there were no events filled in the first place
-                        if not len(h.axes["process"]):
-                            continue
+                        # only perform subprocess selection if there are any on the process axis
+                        if len(h.axes["process"]):
+                            # then, there must be at least one matching sub process
+                            if not any(p.name in h.axes["process"] for p in sub_process_insts):
+                                raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
 
-                        # now, there must be at least one matching sub process
-                        if not any(p.name in h.axes["process"] for p in sub_process_insts):
-                            raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
-
-                        # select and reduce over relevant processes
-                        h_proc = h[{
-                            "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
-                        }]
-                        h_proc = h_proc[{"process": sum}]
+                            # select and reduce over relevant processes
+                            h_proc = h[{
+                                "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
+                            }]
+                            h_proc = h_proc[{"process": sum}]
+                        else:
+                            h_proc = h[{"process": sum}]
 
                         # additional custom reductions
                         h_proc = self.modify_process_hist(

@@ -888,7 +888,7 @@ class DatacardWriter(object):
                     if proc_name in proc_hists:
                         h_data.extend([hd["nominal"] for hd in proc_hists[proc_name].values()])
                     else:
-                        logger.warning(f"process '{proc_name}' not found in histograms for created fake data, skipping")
+                        logger.warning(f"process '{proc_name}' not found in histograms for creating fake data, skipping")
                 if not h_data:
                     proc_str = ",".join(map(str, cat_obj.data_from_processes))
                     raise Exception(f"none of requested processes '{proc_str}' found to create fake data")
