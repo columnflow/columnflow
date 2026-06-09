@@ -86,6 +86,8 @@ def delta_r_matcher_init(self: Producer, **kwargs) -> None:
     """
     Dynamically add `uses` and `produces`
     """
+    super(delta_r_matcher, self).init_func(**kwargs)
+
     # input columns
     self.uses |= {
         f"{collection}.{var}"

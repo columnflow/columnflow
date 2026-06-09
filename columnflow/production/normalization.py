@@ -349,6 +349,8 @@ def normalization_weights_init(self: Producer, **kwargs) -> None:
     """
     Initializes the normalization weights producer by setting up the normalization weight column.
     """
+    super(normalization_weights, self).init_func(**kwargs)
+
     # declare the weight name to be a produced column
     self.produces.add(self.weight_name)
 
@@ -376,6 +378,8 @@ def normalization_weights_requires(
     """
     Adds the requirements needed by the underlying py:attr:`task` to access selection stats into *reqs*.
     """
+    super(normalization_weights, self).requires_func(task=task, reqs=reqs, **kwargs)
+
     # check that all datasets are known
     for dataset in self.required_datasets:
         if not self.config_inst.has_dataset(dataset):
@@ -411,6 +415,14 @@ def normalization_weights_setup(
             weights per process.
         - py: attr: `known_process_ids`: A set of all process ids that are known by the lookup table.
     """
+    super(normalization_weights, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
+
     import scipy.sparse
 
     # load the selection stats

@@ -270,6 +270,7 @@ def btag_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
     #   2. when the nominal shift is requested, the central weight and all variations related to the
     #      method-intrinsic shifts are produced
     #   3. when any other shift is requested, only create the central weight column
+    super(btag_weights, self).post_init_func(task=task, **kwargs)
 
     # NOTE: we currently setup the produced columns only during the post_init. This means
     # that the `produces` of this Producer will be empty during task initialization, meaning
@@ -323,6 +324,8 @@ def btag_weights_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
+    super(btag_weights, self).requires_func(task=task, reqs=reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -339,6 +342,8 @@ def btag_weights_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(btag_weights, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
+
     # load the btag sf corrector
     btag_file = self.get_btag_file(reqs["external_files"].files)
     self.btag_sf_corrector = load_correction_set(btag_file)[self.btag_config.correction_set]
@@ -567,6 +572,8 @@ def btag_wp_weights(
 
 @btag_wp_weights.init
 def btag_wp_weights_init(self: Producer, **kwargs) -> None:
+    super(btag_wp_weights, self).init_func(**kwargs)
+
     self.cfg = self.get_btag_wp_sf_config()
 
     # keep a list of all dataset insts whose tagging counts should be grouped (summed)
@@ -595,6 +602,8 @@ def btag_wp_weights_init(self: Producer, **kwargs) -> None:
 
 @btag_wp_weights.post_init
 def btag_wp_weights_post_init(self: Producer, task: law.Task, **kwargs) -> None:
+    super(btag_wp_weights, self).post_init_func(task=task, **kwargs)
+
     # add used columns
     self.uses.add(f"{self.cfg.jet_name}.{{pt,eta,phi,mass,hadronFlavour,{self.cfg.btag_column}}}")
 
@@ -614,6 +623,8 @@ def btag_wp_weights_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
+    super(btag_wp_weights, self).requires_func(task=task, reqs=reqs, **kwargs)
+
     if "external_files" not in reqs:
         from columnflow.tasks.external import BundleExternalFiles
         reqs["external_files"] = BundleExternalFiles.req(task)
@@ -639,6 +650,14 @@ def btag_wp_weights_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(btag_wp_weights, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
+
     import hist
     import correctionlib as clib
     import correctionlib.convert

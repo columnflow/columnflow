@@ -88,10 +88,12 @@ def met_filters(
 
 @met_filters.init
 def met_filters_init(self: Selector, **kwargs) -> None:
-    met_filters = self.get_met_filters()
-    if isinstance(met_filters, dict):
-        met_filters = met_filters[self.dataset_inst.data_source]
+    super(met_filters, self).init_func(**kwargs)
+
+    filters = self.get_met_filters()
+    if isinstance(filters, dict):
+        filters = filters[self.dataset_inst.data_source]
 
     # store filters as an attribute for faster lookup
-    self.met_filters = set(met_filters)
+    self.met_filters = set(filters)
     self.uses |= self.met_filters

@@ -128,7 +128,11 @@ def fill_hist(
             del arrays
 
     # fill
-    h.fill(**fill_kwargs, **data)
+    try:
+        h.fill(**fill_kwargs, **data)
+    except MemoryError as e:
+        msg = f"error while filling histogram\n{h!r}\nwith data {data}\nand kwargs {fill_kwargs}"
+        raise MemoryError(msg) from e
 
 
 def add_hist_axis(
@@ -252,7 +256,7 @@ def copy_axis(axis: hist.axis.AxesMixin, **kwargs: dict[str, Any]) -> hist.axis.
 
 def create_hist_from_variables(
     *variable_insts,
-    categorical_axes: tuple[tuple[str, str]] | None = None,
+    categorical_axes: Sequence[tuple[str, str] | tuple[str, str, list[str]]] | None = None,
     weight: bool = True,
     storage: str | None = None,
 ) -> hist.Hist:
@@ -262,11 +266,12 @@ def create_hist_from_variables(
 
     # additional category axes
     if categorical_axes:
-        for name, axis_type in categorical_axes:
+        for tpl in categorical_axes:
+            name, axis_type, axis_values = (tpl + ([],))[:3]
             if axis_type in ("intcategory", "intcat"):
-                histogram = histogram.IntCat([], name=name, growth=True)
+                histogram = histogram.IntCat(axis_values, name=name, growth=True)
             elif axis_type in ("strcategory", "strcat"):
-                histogram = histogram.StrCat([], name=name, growth=True)
+                histogram = histogram.StrCat(axis_values, name=name, growth=True)
             else:
                 raise ValueError(f"unknown axis type '{axis_type}' in argument 'categorical_axes'")
 
@@ -546,7 +551,7 @@ def ensure_bin_exists(
     # now zero array
     view = h.view()
     zero_pos = create_slice(-1)
-    if isinstance(h.storage_type, (hist.storage.Weight, hist.storage.WeightedMean)):
+    if isinstance(h.storage_type(), (hist.storage.Weight, hist.storage.WeightedMean)):
         view.value[zero_pos] = 0
         view.variance[zero_pos] = 0
     else:

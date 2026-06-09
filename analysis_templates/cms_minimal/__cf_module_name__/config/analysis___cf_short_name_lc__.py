@@ -308,19 +308,19 @@ add_category(
 cfg.add_variable(
     name="event",
     expression="event",
-    binning=(1, 0.0, 1.0e9),
+    binning=(100, 0.0, 1.0e9),
     x_title="Event number",
 )
 cfg.add_variable(
     name="run",
     expression="run",
-    binning=(1, 100000.0, 500000.0),
+    binning=(100, 100000.0, 500000.0),
     x_title="Run number",
 )
 cfg.add_variable(
     name="lumi",
     expression="luminosityBlock",
-    binning=(1, 0.0, 5000.0),
+    binning=(100, 0.0, 5000.0),
     x_title="Luminosity block",
 )
 cfg.add_variable(

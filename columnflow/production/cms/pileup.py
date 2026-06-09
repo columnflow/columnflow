@@ -9,8 +9,8 @@ import functools
 import law
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, DotDict
 from columnflow.columnar_util import set_ak_column
+from columnflow.util import maybe_import, DotDict, load_correction_set
 from columnflow.types import Any
 
 np = maybe_import("numpy")
@@ -66,6 +66,8 @@ def pu_weight_requires(
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
+    super(pu_weight, self).requires_func(task=task, reqs=reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -86,16 +88,12 @@ def pu_weight_setup(
     Loads the pileup calculator from the external files bundle and saves them in the
     py:attr:`pileup_corrector` attribute for simpler access in the actual callable.
     """
+    super(pu_weight, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
+
     bundle = reqs["external_files"]
 
     # create the corrector
-    import correctionlib
-    correctionlib.highlevel.Correction.__call__ = correctionlib.highlevel.Correction.evaluate
-    correction_set = correctionlib.CorrectionSet.from_string(
-        self.get_pileup_file(bundle.files).load(formatter="gzip").decode("utf-8"),
-    )
-
-    # check
+    correction_set = load_correction_set(self.get_pileup_file(bundle.files))
     if len(correction_set.keys()) != 1:
         raise Exception("Expected exactly one type of pileup correction")
 
@@ -138,6 +136,8 @@ def pu_weights_from_columnflow_requires(
     """
     Adds the requirements needed the underlying task to derive the pileup weights into *reqs*.
     """
+    super(pu_weights_from_columnflow, self).requires_func(task=task, reqs=reqs, **kwargs)
+
     if "pu_weights" in reqs:
         return
 
@@ -158,4 +158,12 @@ def pu_weights_from_columnflow_setup(
     Loads the pileup weights added through the requirements and saves them in the
     py:attr:`pu_weights` attribute for simpler access in the actual callable.
     """
+    super(pu_weights_from_columnflow, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
+
     self.pu_weights = ak.zip(inputs["pu_weights"].load(formatter="json"))

@@ -98,6 +98,8 @@ def empty_init(self: Selector, **kwargs) -> None:
 
     :raises ValueError: If the inclusive category cannot be found.
     """
+    super(empty, self).init_func(**kwargs)
+
     # do nothing when category ids are set
     if self.category_ids is not None:
         return
