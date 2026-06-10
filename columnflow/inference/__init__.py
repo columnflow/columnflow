@@ -257,6 +257,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
                     mc_datasets: [hh_ggf]
                 scale: 1.0
                 is_dynamic: False
+                skip_if_empty: True
                 parameters:
                   - name: lumi
                     type: rate_gauss
@@ -286,6 +287,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
                     mc_datasets: [tt_sl, tt_dl, tt_fh]
                 scale: 1.0
                 is_dynamic: False
+                skip_if_empty: True
                 parameters:
                   - name: lumi
                     type: rate_gauss
@@ -462,6 +464,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         config_data: dict[str, DotDict] | None = None,
         scale: float | int = 1.0,
         is_dynamic: bool = False,
+        skip_if_empty: bool = True,
     ) -> DotDict:
         """
         Returns a dictionary representing a process, forwarding all arguments.
@@ -473,6 +476,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         :param scale: A float value to scale the process, defaulting to 1.0.
         :param is_dynamic: A boolean flag deciding whether this process is dynamic, i.e., whether it is created
             on-the-fly.
+        :param skip_if_empty: A boolean flag deciding whether this process should be skipped if input hists are empty.
         :returns: A dictionary representing the process.
         """
         return DotDict([
@@ -485,6 +489,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
             )),
             ("scale", float(scale)),
             ("is_dynamic", bool(is_dynamic)),
+            ("skip_if_empty", bool(skip_if_empty)),
             ("parameters", []),
         ])
 
@@ -551,7 +556,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         data_datasets: Sequence[str] | None = None,
     ) -> DotDict:
         """
-        Returns a dictionary representing configuration specific data, forwarding all arguments.
+        Returns a dictionary representing configuration specific data for a category, forwarding all arguments.
 
         :param category: The name of the source category in the config to use.
         :param variable: The name of the variable in the config to use.
@@ -571,7 +576,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         mc_datasets: Sequence[str] | None = None,
     ) -> DotDict:
         """
-        Returns a dictionary representing configuration specific data, forwarding all arguments.
+        Returns a dictionary representing configuration specific data for a process, forwarding all arguments.
 
         :param process: The name of the process in the config to use.
         :param mc_datasets: List of names or patterns of datasets in the config to use for mc.
@@ -588,7 +593,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         shift_source: str | None = None,
     ) -> DotDict:
         """
-        Returns a dictionary representing configuration specific data, forwarding all arguments.
+        Returns a dictionary representing configuration specific data for a parameter, forwarding all arguments.
 
         :param shift_source: The name of a systematic shift source in the config.
         :returns: A dictionary representing parameter specific settings.
@@ -700,7 +705,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         only_name: bool = False,
         match_mode: Callable = any,
         silent: bool = False,
-    ) -> DotDict | str:
+    ) -> DotDict | str | None:
         """
         Returns a single category whose name matches *category*. *category* can be a string, a
         pattern, or sequence of them. An exception is raised if no or more than one category is
@@ -871,7 +876,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         match_mode: Callable = any,
         category_match_mode: Callable = any,
         silent: bool = False,
-    ) -> DotDict | str:
+    ) -> DotDict | str | None:
         """
         Returns a single process whose name matches *process*, and optionally, whose category's
         name matches *category*. Both *process* and *category* can be a string, a pattern, or
@@ -1149,7 +1154,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         process_match_mode: Callable = any,
         only_name: bool = False,
         silent: bool = False,
-    ) -> DotDict | str:
+    ) -> DotDict | str | None:
         """
         Returns a single parameter whose name matches *parameter*, and optionally, whose category's
         and process' name matches *category* and *process*. All three, *parameter*, *process* and

@@ -17,6 +17,8 @@ from columnflow.hist_util import sum_hists
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div, maybe_int
 from columnflow.types import TYPE_CHECKING, Sequence, Any, Union, Hashable
 
+np = maybe_import("numpy")
+
 if TYPE_CHECKING:
     hist = maybe_import("hist")
 
@@ -317,8 +319,10 @@ class DatacardWriter(object):
             types = set()
             effects = []
             for cat_name, proc_name in flat_rates:
+                cat_obj = self.inference_model_inst.get_category(category=cat_name)
+                proc_obj = self.inference_model_inst.get_process(category=cat_name, process=proc_name)
                 param_obj = self.inference_model_inst.get_parameter(
-                    param_name,
+                    parameter=param_name,
                     category=cat_name,
                     process=proc_name,
                     silent=True,
@@ -433,7 +437,7 @@ class DatacardWriter(object):
                             effect = 1.0
 
                 # custom hook to modify the effect
-                effect = self.modify_parameter_effect(cat_name, proc_name, param_obj, effect)
+                effect = self.modify_parameter_effect(cat_obj, proc_obj, param_obj, effect)
 
                 # encode the effect
                 if isinstance(effect, (int, float)):
@@ -669,7 +673,8 @@ class DatacardWriter(object):
             _effects = effects[cat_name] = OrderedDict()
             for proc_name, config_hists in proc_hists.items():
                 # skip if process is not known to category
-                if not self.inference_model_inst.has_process(process=proc_name, category=cat_name):
+                proc_obj = self.inference_model_inst.get_process(process=proc_name, category=cat_name, silent=True)
+                if not proc_obj:
                     continue
 
                 # defer the handling of data to the end
@@ -684,7 +689,7 @@ class DatacardWriter(object):
                 if not hists:
                     continue
 
-                # helper to sum over them for a given shift key and an optional fallback
+                # helper to sum over histograms for a given shift key and an optional fallback
                 def get_hist_sum(key: Hashable, fallback_key: Hashable | None = None) -> hist.Hist:
                     def get(hd: dict[Hashable, hist.Hist]) -> hist.Hist:
                         if key in hd:
@@ -695,6 +700,14 @@ class DatacardWriter(object):
                             f"'{key}' shape for process '{proc_name}' in category '{cat_name}' misconfigured: {hd}",
                         )
                     return sum_hists(map(get, hists))
+
+                # optionally skip the process under specific conditions
+                if (skip_reason := self.check_skip_process(cat_obj, proc_obj, get_hist_sum("nominal"))):
+                    skip_msg = f"skipping process '{proc_name}' in category '{cat_name}'"
+                    if not isinstance(skip_reason, bool):
+                        skip_msg += f", reason: {skip_reason}"
+                    skip_msg = logger.info(skip_msg)
+                    continue
 
                 # helper to extract sum of hists, apply scale, handle flow and fill empty bins
                 def load(
@@ -709,7 +722,6 @@ class DatacardWriter(object):
                     return h
 
                 # get the process scale (usually 1)
-                proc_obj = self.inference_model_inst.get_process(proc_name, category=cat_name)
                 scale = proc_obj.scale
 
                 # nominal shape
@@ -755,14 +767,14 @@ class DatacardWriter(object):
                             h_up = h_nom.copy() * f_up
                         else:
                             # just extract the shapes from the inputs
-                            h_down = load(down_name, (param_obj.name, "down"), "nominal", scale=scale)
-                            h_up = load(up_name, (param_obj.name, "up"), "nominal", scale=scale)
+                            h_down = load(down_name, (param_obj.name, "down"), fallback_key="nominal", scale=scale)
+                            h_up = load(up_name, (param_obj.name, "up"), fallback_key="nominal", scale=scale)
 
                     elif param_obj.type.is_rate:
                         if param_obj.transformations.any_from_shape:
                             # just extract the shapes
-                            h_down = load(down_name, (param_obj.name, "down"), "nominal", scale=scale)
-                            h_up = load(up_name, (param_obj.name, "up"), "nominal", scale=scale)
+                            h_down = load(down_name, (param_obj.name, "down"), fallback_key="nominal", scale=scale)
+                            h_up = load(up_name, (param_obj.name, "up"), fallback_key="nominal", scale=scale)
 
                             # in case the transformation is effect_from_shape_if_flat, and any of the two variations
                             # do not qualify as "flat", convert the parameter to shape-type and drop all transformations
@@ -857,8 +869,8 @@ class DatacardWriter(object):
 
                     # custom hook to modify the shapes
                     h_nom, h_down, h_up = self.modify_parameter_shape(
-                        cat_name,
-                        proc_name,
+                        cat_obj,
+                        proc_obj,
                         param_obj,
                         h_nom,
                         h_down,
@@ -924,22 +936,6 @@ class DatacardWriter(object):
 
         return (rates, effects, nom_pattern_comb, syst_pattern_comb)
 
-    def modify_before_write(
-        self,
-        blocks: DotDict[str, list],
-        separators: set[str],
-        empty_lines: set[str],
-    ) -> tuple[DotDict[str, list], set[str], set[str]]:
-        """
-        Hook to modify the datacard blocks, empty lines and separators before they are written to the datacard file.
-
-        :param blocks: Datacard blocks.
-        :param separators: Set of block names after which a separator line should be inserted.
-        :param empty_lines: Set of block names after which an empty line should be inserted.
-        :returns: The modified datacard blocks, separators and empty lines.
-        """
-        return blocks, separators, empty_lines
-
     @classmethod
     def align_lines(
         cls,
@@ -1001,10 +997,26 @@ class DatacardWriter(object):
 
         return lines[:n_rate_lines], lines[n_rate_lines:]
 
+    def modify_before_write(
+        self,
+        blocks: DotDict[str, list],
+        separators: set[str],
+        empty_lines: set[str],
+    ) -> tuple[DotDict[str, list], set[str], set[str]]:
+        """
+        Hook to modify the datacard blocks, empty lines and separators before they are written to the datacard file.
+
+        :param blocks: Datacard blocks.
+        :param separators: Set of block names after which a separator line should be inserted.
+        :param empty_lines: Set of block names after which an empty line should be inserted.
+        :returns: The modified datacard blocks, separators and empty lines.
+        """
+        return blocks, separators, empty_lines
+
     def modify_parameter_effect(
         self,
-        category: str,
-        process: str,
+        cat_obj: DotDict,
+        proc_obj: DotDict,
         param_obj: DotDict,
         effect: float | tuple[float, float],
     ) -> float | tuple[float, float]:
@@ -1012,8 +1024,8 @@ class DatacardWriter(object):
         Custom hook to modify the effect of a parameter on a given category and process before it is encoded into the
         datacard. By default, this does nothing and simply returns the given effect.
 
-        :param category: The category name.
-        :param process: The process name.
+        :param cat_obj: The category object, following :py:meth:`columnflow.inference.InferenceModel.category_spec`.
+        :param proc_obj: The process object, following :py:meth:`columnflow.inference.InferenceModel.process_spec`.
         :param param_obj: The parameter object, following :py:meth:`columnflow.inference.InferenceModel.parameter_spec`.
         :param effect: The effect value(s) to be modified.
         :returns: The modified effect value(s).
@@ -1022,8 +1034,8 @@ class DatacardWriter(object):
 
     def modify_parameter_shape(
         self,
-        category: str,
-        process: str,
+        cat_obj: DotDict,
+        proc_obj: DotDict,
         param_obj: DotDict,
         h_nom: hist.Hist,
         h_down: hist.Hist,
@@ -1033,8 +1045,8 @@ class DatacardWriter(object):
         Custom hook to modify the nominal and varied (down, up) shapes of a parameter on a given category and process
         before they are saved to the shapes file. By default, this does nothing and simply returns the given histograms.
 
-        :param category: The category name.
-        :param process: The process name.
+        :param cat_obj: The category object, following :py:meth:`columnflow.inference.InferenceModel.category_spec`.
+        :param proc_obj: The process object, following :py:meth:`columnflow.inference.InferenceModel.process_spec`.
         :param param_obj: The parameter object, following :py:meth:`columnflow.inference.InferenceModel.parameter_spec`.
         :param h_nom: The nominal histogram.
         :param h_down: The down-varied histogram.
@@ -1042,3 +1054,23 @@ class DatacardWriter(object):
         :returns: The modified nominal and varied (down, up) histograms.
         """
         return h_nom, h_down, h_up
+
+    def check_skip_process(
+        self,
+        cat_obj: DotDict,
+        proc_obj: DotDict,
+        h: hist.Hist,
+    ) -> bool | str:
+        """
+        Custom hook to check if a process in a given category should be skipped entirely based on the nominal histogram
+        and the process and category objects. If a string is returned, it is added to the log message as a reason for
+        skipping the process.
+
+        :param cat_obj: The category object, following :py:meth:`columnflow.inference.InferenceModel.category_spec`.
+        :param proc_obj: The process object, following :py:meth:`columnflow.inference.InferenceModel.process_spec`.
+        :param h: The nominal histogram for the process in the category.
+        :returns: Whether to skip the process, and optionally a reason for skipping.
+        """
+        if proc_obj.skip_if_empty and np.all(h.view().value == 0):
+            return "nominal histogram is empty"
+        return False
