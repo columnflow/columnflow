@@ -1131,7 +1131,7 @@ def jer_setup(
     :param inputs: Additional inputs, currently not used.
     :param reader_targets: TODO: add documentation.
     """
-    super(jer, self).jec_setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
+    super(jer, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
     # import the correction sets from the external file
     jer_file = self.get_jer_file(reqs["external_files"].files)
