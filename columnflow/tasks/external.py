@@ -17,11 +17,11 @@ import luigi
 import law
 import order as od
 
-from columnflow import env_is_local
+from columnflow import env_is_local, flavor as cf_flavor
 from columnflow.tasks.framework.base import AnalysisTask, ConfigTask, DatasetTask, wrapper_factory
 from columnflow.tasks.framework.parameters import user_parameter_inst
 from columnflow.tasks.framework.decorators import only_local_env
-from columnflow.util import wget, DotDict
+from columnflow.util import wget, DotDict, UNSET
 from columnflow.types import Sequence, ClassVar
 
 
@@ -281,6 +281,32 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
             # log the file size
             input_size = law.util.human_bytes(input_stat.st_size, fmt=True)
             task.publish_message(f"lfn {lfn} (lfn {lfn_index}), size is {input_size}")
+
+            # when cf is run in cms flavor, access to central files must be reported to a database for bookkeeping
+            if cf_flavor == "cms":
+                # the selected fs must have an option "rucio_report_access" in the config, which should be either a bool
+                # or the site name (rse) to report the access for
+                report_key = "rucio_report_access"
+                report_val = law.config.get_expanded(selected_fs, report_key, default=UNSET)
+                if report_val is UNSET:
+                    raise Exception(
+                        f"configuration section for selected fs '{selected_fs}' is missing an entry '{report_key}' "
+                        "which should be either a boolean flag or the name of a site (rse) to report the access for; "
+                        "this is required for reporting access to central files which is necessary for CMS bookkeeping",
+                    )
+                # check if the value is a bool, and otherwise assume a valid rse name
+                rse = None
+                try:
+                    report_val = law.config.Config.instance()._convert_to_boolean(report_val)
+                except ValueError:
+                    rse = report_val
+                    if not law.cms.Site.validate(rse):
+                        raise ValueError(
+                            f"entry '{report_key}' for selected fs '{selected_fs}' does not refer to a valid site ",
+                            f"name: {rse}",
+                        )
+                if report_val:
+                    law.cms.rucio_report_access(lfn, rse=rse)
 
             yield (lfn_index, input_file)
 
