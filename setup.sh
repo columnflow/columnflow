@@ -277,8 +277,22 @@ cf_setup_common_variables() {
         export LC_ALL="${LC_ALL:-en_US.UTF-8}"
     fi
 
-    # proxy
+    # variables for external tools and libraries
+    export PYTHONWARNINGS="${PYTHONWARNINGS:-ignore}"
+    export PYTHONNOUSERSITE="${PYTHONNOUSERSITE:-1}"
+    export GLOBUS_THREAD_MODEL="${GLOBUS_THREAD_MODEL:-none}"
+    export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
+    export MYPROXY_SERVER="${MYPROXY_SERVER:-myproxy.cern.ch}"
     export X509_USER_PROXY="${X509_USER_PROXY:-/tmp/x509up_u$( id -u )}"
+    export X509_CERT_DIR="${X509_CERT_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/certificates}"
+    export X509_VOMS_DIR="${X509_VOMS_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/vomsdir}"
+    export X509_VOMSES="${X509_VOMSES:-/cvmfs/grid.cern.ch/etc/grid-security/vomses}"
+    export VOMS_USERCONF="${VOMS_USERCONF:-${X509_VOMSES}}"
+    ulimit -s unlimited
+    if [ "${CF_FLAVOR}" = "cms" ]; then
+        export RUCIO_ACCOUNT="${RUCIO_ACCOUNT:-${CF_CERN_USER}}"
+        export RUCIO_HOME="${RUCIO_HOME:-"/cvmfs/cms.cern.ch/rucio/x86_64/rhel9/py3/current"}"
+    fi
 
     # overwrite some variables in remote and ci jobs
     if ${CF_REMOTE_ENV}; then
@@ -312,15 +326,17 @@ cf_setup_common_variables() {
     export CF_SLURM_FLAVOR="${CF_SLURM_FLAVOR:-${cf_slurm_flavor_default}}"
     export CF_SLURM_PARTITION="${CF_SLURM_PARTITION:-${cf_slurm_partition_default}}"
 
+    # notification variables
+    export CF_MATTERMOST_HOOK_URL="${CF_MATTERMOST_HOOK_URL:-}"
+    export CF_MATTERMOST_CHANNEL="${CF_MATTERMOST_CHANNEL:-}"
+
     # show a warning in case no CF_REPO_BASE_ALIAS is set
     if [ -z "${CF_REPO_BASE_ALIAS}" ]; then
         cf_color yellow "the variable CF_REPO_BASE_ALIAS is unset"
         cf_color yellow "please consider setting it to the name of the variable that refers to your analysis base directory"
     fi
 
-    # notification variables
-    export CF_MATTERMOST_HOOK_URL="${CF_MATTERMOST_HOOK_URL:-}"
-    export CF_MATTERMOST_CHANNEL="${CF_MATTERMOST_CHANNEL:-}"
+    return "0"
 }
 
 cf_show_banner() {
@@ -599,19 +615,9 @@ cf_setup_software_stack() {
     export CF_CONDA_PYTHONPATH="${CF_CONDA_BASE}/lib/python${CF_PYTHON_VERSION}/site-packages"
     export PYTHONPATH="${PYTHONPATH}:${CF_CONDA_PYTHONPATH}"
 
-    # update paths and flags
+    # update mamba variables
     export MAMBA_ROOT_PREFIX="${CF_CONDA_BASE}"
     export MAMBA_EXE="${MAMBA_ROOT_PREFIX}/bin/micromamba"
-    export PYTHONWARNINGS="${PYTHONWARNINGS:-ignore}"
-    export PYTHONNOUSERSITE="${PYTHONNOUSERSITE:-1}"
-    export GLOBUS_THREAD_MODEL="${GLOBUS_THREAD_MODEL:-none}"
-    export VIRTUAL_ENV_DISABLE_PROMPT="${VIRTUAL_ENV_DISABLE_PROMPT:-1}"
-    export MYPROXY_SERVER="${MYPROXY_SERVER:-myproxy.cern.ch}"
-    export X509_CERT_DIR="${X509_CERT_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/certificates}"
-    export X509_VOMS_DIR="${X509_VOMS_DIR:-/cvmfs/grid.cern.ch/etc/grid-security/vomsdir}"
-    export X509_VOMSES="${X509_VOMSES:-/cvmfs/grid.cern.ch/etc/grid-security/vomses}"
-    export VOMS_USERCONF="${VOMS_USERCONF:-${X509_VOMSES}}"
-    ulimit -s unlimited
 
     #
     # setup in local envs (not remote)
