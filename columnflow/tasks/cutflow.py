@@ -26,7 +26,7 @@ from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.parameters import last_edge_inclusive_inst
 from columnflow.tasks.selection import MergeSelectionMasks
-from columnflow.hist_util import create_columnflow_hist, translate_hist_intcat_to_strcat, select_category_bins
+from columnflow.hist_util import create_hist_from_variables, translate_hist_intcat_to_strcat, select_category_bins
 from columnflow.util import DotDict, dev_sandbox
 
 
@@ -168,9 +168,14 @@ class CreateCutflowHistograms(_CreateCutflowHistograms):
 
                 # create histogram of not already existing
                 if var_key not in histograms:
-                    histograms[var_key] = create_columnflow_hist(
+                    histograms[var_key] = create_hist_from_variables(
                         self.steps_variable,
                         *variable_insts,
+                        categorical_axes=[
+                            ("category", "intcat"),
+                            ("process", "intcat"),
+                            ("shift", "strcat"),
+                        ],
                     )
 
         for arr, pos in self.iter_chunked_io(

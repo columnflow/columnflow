@@ -297,15 +297,6 @@ def create_hist_from_variables(
     return h
 
 
-create_columnflow_hist = functools.partial(create_hist_from_variables, categorical_axes=(
-    # axes that are used in columnflow tasks per default
-    # (NOTE: "category" axis is filled as int, but transformed to str afterwards)
-    ("category", "intcat"),
-    ("process", "intcat"),
-    ("shift", "strcat"),
-))
-
-
 def translate_hist_intcat_to_strcat(
     h: hist.Hist,
     axis_name: str,

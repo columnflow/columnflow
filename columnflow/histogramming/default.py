@@ -102,11 +102,15 @@ def cf_default_post_process_hist(self: HistProducer, h: hist.Hist, task: law.Tas
             return self.config_inst.get_category(cat_id).name
         h = translate_hist_intcat_to_strcat(h, "category", get_category_name)
     if "process" in axis_names:
-        process_map = {proc_id: self.config_inst.get_process(proc_id).name for proc_id in h.axes["process"]}
-        h = translate_hist_intcat_to_strcat(h, "process", process_map)
+        @functools.cache
+        def get_process_name(process_id: int) -> str:
+            return self.config_inst.get_process(process_id).name
+        h = translate_hist_intcat_to_strcat(h, "process", get_process_name)
     if "shift" in axis_names:
-        shift_map = {task.global_shift_inst.id: task.global_shift_inst.name}
-        h = translate_hist_intcat_to_strcat(h, "shift", shift_map)
+        @functools.cache
+        def get_shift_name(shift_id: int) -> str:
+            return self.config_inst.get_shift(shift_id).name
+        h = translate_hist_intcat_to_strcat(h, "shift", get_shift_name)
 
     return h
 
