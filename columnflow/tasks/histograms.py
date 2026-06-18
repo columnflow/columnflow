@@ -312,7 +312,12 @@ class CreateHistograms(_CreateHistograms):
                     self.hist_producer_inst.run_fill_hist(histograms[var_key], fill_data, task=self)
 
         # post-process the histograms
-        for var_key in self.variable_tuples.keys():
+        for var_key, var_names in self.variable_tuples.items():
+            if var_key not in histograms:
+                # if completely empty, create empty dummy histograms with the correct axes
+                variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
+                histograms[var_key] = self.hist_producer_inst.run_create_hist(variable_insts, task=self)
+
             histograms[var_key] = self.hist_producer_inst.run_post_process_hist(histograms[var_key], task=self)
 
             # check the format after post-processing if no merged preprocessing will take place
