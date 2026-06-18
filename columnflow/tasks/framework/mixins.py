@@ -1448,6 +1448,7 @@ class MLModelTrainingMixin(
             ml_model_inst.training_calibrators(analysis_inst, params["calibrators"]),
         )
         params["selector"] = ml_model_inst.training_selector(analysis_inst, params["selector"])
+        params["reducer"] = ml_model_inst.training_reducer(analysis_inst, params["reducer"])
         params["producers"] = law.util.make_tuple(
             ml_model_inst.training_producers(analysis_inst, params["producers"]),
         )

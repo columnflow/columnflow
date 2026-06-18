@@ -391,6 +391,28 @@ class MLModel(Derivable):
         """
         return requested_selector
 
+    def training_reducer(
+        self: MLModel,
+        analysis_inst: od.Analysis,
+        requested_reducer: str,
+    ) -> str:
+        """
+        Given a *requested_reducer* for a *analysis_inst*, this method can change it to define a
+        different reducer for the preprocessing and training pipeline. This can be helpful in cases
+        where training and evaluation phase spaces, as well as the required input columns are
+        intended to diverge.
+
+        Example usage:
+
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.training_reducer
+
+        :param analysis_inst: Analysis instance to extract the *requested_reducer* from
+        :returns: Set with str of the *requested_reducer*
+        """
+        return requested_reducer
+
     def training_producers(
         self: MLModel,
         analysis_inst: od.Analysis,
