@@ -1834,7 +1834,7 @@ class ArrayFunction(Derivable):
     check_used_columns = True
     check_produced_columns = True
     _dependency_sets = {"uses", "produces"}
-    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime", False)
+    log_runtime = law.config.get_expanded_bool("analysis", "log_array_function_runtime", False)
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):
@@ -3500,7 +3500,7 @@ class ChunkedIOHandler(object):
         read_options: dict | Sequence[dict] | None = None,
         read_columns: set | Sequence[set] | None = None,
         iter_message: str = "handling chunk {pos.index}",
-        debug: bool = law.config.get_expanded_boolean("analysis", "chunked_io_debug", False),
+        debug: bool = law.config.get_expanded_bool("analysis", "chunked_io_debug", False),
     ):
         super().__init__()
 

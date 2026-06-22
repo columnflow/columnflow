@@ -573,7 +573,7 @@ class RemoteWorkflowMixin(AnalysisTask):
         # forward voms proxy
         if voms:
             # when skipping the check, still send it if the proxy exists and is valid, otherwise enforce it
-            skip_check = law.config.get_expanded_boolean("analysis", "skip_ensure_proxy", False)
+            skip_check = law.config.get_expanded_bool("analysis", "skip_ensure_proxy", False)
             vomsproxy_file = law.wlcg.get_vomsproxy_file()
             vomsproxy_exists = os.path.isfile(vomsproxy_file)
             vomsproxy_valid = vomsproxy_exists and law.wlcg.check_vomsproxy_validity(proxy_file=vomsproxy_file)
@@ -673,7 +673,7 @@ class RemoteWorkflowMixin(AnalysisTask):
 
 
 _default_htcondor_flavor = law.config.get_expanded("analysis", "htcondor_flavor", law.NO_STR)
-_default_htcondor_share_software = law.config.get_expanded_boolean("analysis", "htcondor_share_software", False)
+_default_htcondor_share_software = law.config.get_expanded_bool("analysis", "htcondor_share_software", False)
 _default_htcondor_memory = law.util.parse_bytes(
     law.config.get_expanded("analysis", "htcondor_memory", law.NO_FLOAT),
     input_unit="GB",
