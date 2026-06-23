@@ -600,7 +600,7 @@ cf_setup_software_stack() {
     # persistent PATH and PYTHONPATH parts that should be
     # priotized over any additions made in sandboxes
     export CF_PERSISTENT_PATH="${CF_BASE}/bin:${CF_BASE}/modules/law/bin"
-    export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/bin:${CF_BASE}/modules/law:${CF_BASE}/modules/order"
+    export CF_PERSISTENT_PYTHONPATH="${CF_BASE}:${CF_BASE}/bin:${CF_BASE}/modules/law:${CF_BASE}/modules/law/src:${CF_BASE}/modules/order"
 
     # flavor specific paths
     if [ ! -z "${CF_FLAVOR}" ]; then
