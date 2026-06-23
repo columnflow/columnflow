@@ -40,9 +40,8 @@ def get_evaluators(
 ) -> list[Any]:
     """
     Helper function to get a list of correction evaluators from a
-    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` object given
-    a list of *names*. The *names* can refer to either simple or compound
-    corrections.
+    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` object given a list of *names*. The *names*
+    can refer to either simple or compound corrections.
 
     :param correction_set: evaluator provided by :external+correctionlib:doc:`index`
     :param names: List of names of corrections to be applied
@@ -86,8 +85,8 @@ def get_evaluators(
 
 def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
     """
-    Evaluate a :external+correctionlib:py:class:`correctionlib.highlevel.Correction`
-    using one or more :external+ak:py:class:`awkward arrays <ak.Array>` as inputs.
+    Evaluate a :external+correctionlib:py:class:`correctionlib.highlevel.Correction` using one or more
+    :external+ak:py:class:`awkward arrays <ak.Array>` as inputs.
 
     :param evaluator: Evaluator instance
     :raises ValueError: If no :external+ak:py:class:`awkward arrays <ak.Array>` are provided
@@ -139,11 +138,9 @@ def get_jerc_file_default(self: Calibrator, external_files: DotDict) -> str:
     """
     Function to obtain external correction files for JEC and/or JER.
 
-    By default, this function extracts the location of the jec correction
-    files from the current config instance *config_inst*. The key of the
-    external file depends on the jet collection. For ``Jet`` (AK4 jets), this
-    resolves to ``jet_jerc``, and for ``FatJet`` it is resolved to
-    ``fat_jet_jerc``.
+    By default, this function extracts the location of the jec correction files from the current config instance
+    *config_inst*. The key of the external file depends on the jet collection. For ``Jet`` (AK4 jets), this resolves to
+    ``jet_jerc``, and for ``FatJet`` it is resolved to ``fat_jet_jerc``.
 
     .. code-block:: python
 
@@ -169,10 +166,7 @@ def get_jerc_file_default(self: Calibrator, external_files: DotDict) -> str:
 
     # fail if not found
     if jerc_config is None:
-        raise ValueError(
-            "could not retrieve jer/jec config, none of the following methods "
-            f"were found: {try_attrs}",
-        )
+        raise ValueError(f"could not retrieve jer/jec config, none of the following methods were found: {try_attrs}")
 
     # first check config for user-supplied `external_file_key`
     ext_file_key = jerc_config.get("external_file_key", None)
@@ -183,8 +177,8 @@ def get_jerc_file_default(self: Calibrator, external_files: DotDict) -> str:
     if self.jet_name not in get_jerc_file_default.map_jet_name_file_key:
         available_keys = ", ".join(sorted(get_jerc_file_default.map_jet_name_file_key))
         raise ValueError(
-            f"could not determine external file key for jet collection '{self.jet_name}', "
-            f"name is not one of standard NanoAOD jet collections: {available_keys}",
+            f"could not determine external file key for jet collection '{self.jet_name}', name is not one of standard "
+            f"NanoAOD jet collections: {available_keys}",
         )
 
     # return external file
@@ -203,12 +197,10 @@ def get_jec_config_default(self: Calibrator) -> DotDict:
     """
     Load config relevant to the jet energy corrections (JEC).
 
-    By default, this is extracted from the current *config_inst*,
-    assuming the JEC configurations are stored under the 'jec'
-    aux key. Separate configurations should be specified for each
-    jet collection, using the collection name as a key. For example,
-    the configuration for the default jet collection ``Jet`` will
-    be retrieved from the following config entry:
+    By default, this is extracted from the current *config_inst*, assuming the JEC configurations are stored under the
+    'jec' aux key. Separate configurations should be specified for each jet collection, using the collection name as a
+    key. For example, the configuration for the default jet collection ``Jet`` will be retrieved from the following
+    config entry:
 
     .. code-block:: python
 
@@ -227,21 +219,15 @@ def get_jec_config_default(self: Calibrator) -> DotDict:
             logger.warning_once(
                 f"{id(self)}_depr_jec_config",
                 "config aux 'jec' does not contain key for input jet "
-                f"collection '{self.jet_name}'. This may be due to "
-                "an outdated config. Continuing under the assumption that "
-                "the entire 'jec' entry refers to this jet collection. "
-                "This assumption will be removed in future versions of "
-                "columnflow, so please adapt the config according to the "
-                "documentation to remove this warning and ensure future "
-                "compatibility of the code.",
+                f"collection '{self.jet_name}'. This may be due to an outdated config. Continuing under the assumption "
+                "that the entire 'jec' entry refers to this jet collection. This assumption will be removed in future "
+                "versions of columnflow, so please adapt the config according to the documentation to remove this "
+                "warning and ensure future compatibility of the code.",
             )
             return jec_cfg
 
         # otherwise raise exception
-        raise ValueError(
-            "config aux 'jec' does not contain key for input jet "
-            f"collection '{self.jet_name}'.",
-        )
+        raise ValueError(f"config aux 'jec' does not contain key for input jet collection '{self.jet_name}'")
 
     return jec_cfg[self.jet_name]
 
@@ -277,18 +263,17 @@ def jec(
     max_eta_met_prop: float = 5.2,
     **kwargs,
 ) -> ak.Array:
-    """Performs the jet energy corrections (JECs) and uncertainty shifts using the
-    :external+correctionlib:doc:`index`, optionally
-    propagating the changes to the MET.
+    """
+    Performs the jet energy corrections (JECs) and uncertainty shifts using the :external+correctionlib:doc:`index`,
+    optionally propagating the changes to the MET.
 
-    The *jet_name* should be set to the name of the NanoAOD jet collection to calibrate
-    (default: ``Jet``, i.e. AK4 jets).
+    The *jet_name* should be set to the name of the NanoAOD jet collection to calibrate (default: ``Jet``, i.e. AK4
+    jets).
 
-    Requires an external file in the config pointing to the JSON files containing the JECs.
-    The file key can be specified via an optional ``external_file_key`` in the ``jec`` config entry.
-    If not given, the file key will be determined automatically based on the jet collection name:
-    ``jet_jerc`` for ``Jet`` (AK4 jets), ``fat_jet_jerc`` for``FatJet`` (AK8 jets). A full set of JSON files
-    can be specified as:
+    Requires an external file in the config pointing to the JSON files containing the JECs. The file key can be
+    specified via an optional ``external_file_key`` in the ``jec`` config entry. If not given, the file key will be
+    determined automatically based on the jet collection name: ``jet_jerc`` for ``Jet`` (AK4 jets), ``fat_jet_jerc``
+    for``FatJet`` (AK8 jets). A full set of JSON files can be specified as:
 
     .. code-block:: python
 
@@ -297,13 +282,12 @@ def jec(
             "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
-    For more file-grained control, the *get_jec_file* can be adapted in a subclass in case it is stored
-    differently in the external files
+    For more file-grained control, the *get_jec_file* can be adapted in a subclass in case it is stored differently in
+    the external files
 
-    The JEC configuration should be an auxiliary entry in the config, specifying the correction
-    details under "jec". Separate configs should be given for each jet collection to calibrate,
-    using the jet collection name as a subkey. An example of a valid configuration for correction
-    AK4 jets with JEC is:
+    The JEC configuration should be an auxiliary entry in the config, specifying the correction details under "jec".
+    Separate configs should be given for each jet collection to calibrate, using the jet collection name as a subkey. An
+    example of a valid configuration for correction AK4 jets with JEC is:
 
     .. code-block:: python
 
@@ -327,22 +311,20 @@ def jec(
 
     *get_jec_config* can be adapted in a subclass in case it is stored differently in the config.
 
-    If running on data, the datasets must have an auxiliary field *jec_era* defined, e.g. "RunF",
-    or an auxiliary field *era*, e.g. "F".
+    If running on data, the datasets must have an auxiliary field *jec_era* defined, e.g. "RunF", or an auxiliary field
+    *era*, e.g. "F".
 
-    This instance of :py:class:`~columnflow.calibration.Calibrator` is
-    initialized with the following parameters by default:
+    This instance of :py:class:`~columnflow.calibration.Calibrator` is initialized with the following parameters by
+    default:
 
     :param events: awkward array containing events to process
 
-    :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet values
-        to the missing transverse energy (MET) using
-        :py:func:`~columnflow.calibration.util.propagate_met` for events where
-        ``met.pt > *min_pt_met_prop*``.
-    :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet
-        values to the missing transverse energy (MET) using
-        :py:func:`~columnflow.calibration.util.propagate_met` for events where
-        ``met.eta > *min_eta_met_prop*``.
+    :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet values to the missing
+        transverse energy (MET) using :py:func:`~columnflow.calibration.util.propagate_met` for events where ``met.pt >
+        *min_pt_met_prop*``.
+    :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet values to the missing
+        transverse energy (MET) using :py:func:`~columnflow.calibration.util.propagate_met` for events where ``met.eta >
+        *min_eta_met_prop*``.
     """  # noqa
     # use local variable for convenience
     jet_name = self.jet_name
@@ -569,22 +551,21 @@ def jec_setup(
 ) -> None:
     """
     Load the correct jec files using the :py:func:`from_string` method of the
-    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
-    function and apply the corrections as needed.
+    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` function and apply the corrections as
+    needed.
 
-    The source files for the :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
-    instance are extracted with the :py:meth:`~.jec.get_jec_file`.
+    The source files for the :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` instance are
+    extracted with the :py:meth:`~.jec.get_jec_file`.
 
-    Uses the member function :py:meth:`~.jec.get_jec_config` to construct the
-    required keys, which are based on the following information about the JEC:
+    Uses the member function :py:meth:`~.jec.get_jec_config` to construct the required keys, which are based on the
+    following information about the JEC:
 
         - levels
         - campaign
         - version
         - jet_type
 
-    A corresponding example snippet wihtin the *config_inst* could like something
-    like this:
+    A corresponding example snippet wihtin the *config_inst* could like something like this:
 
     .. code-block:: python
 
@@ -614,8 +595,7 @@ def jec_setup(
             },
         })
 
-    :param reqs: Requirement dictionary for this
-        :py:class:`~columnflow.calibration.Calibrator` instance
+    :param reqs: Requirement dictionary for this :py:class:`~columnflow.calibration.Calibrator` instance
     :param inputs: Additional inputs, currently not used
     :param reader_targets: TODO: add documentation
     """
@@ -633,13 +613,10 @@ def jec_setup(
             if "data_per_era" not in jec:
                 logger.warning_once(
                     f"{id(self)}_depr_jec_config_data_per_era",
-                    "config aux 'jec' does not contain key 'data_per_era'. "
-                    "This may be due to an outdated config. Continuing under the assumption that "
-                    "JEC keys for data are era-specific. "
-                    "This assumption will be removed in future versions of "
-                    "columnflow, so please adapt the config according to the "
-                    "documentation to remove this warning and ensure future "
-                    "compatibility of the code.",
+                    "config aux 'jec' does not contain key 'data_per_era'. This may be due to an outdated config. "
+                    "Continuing under the assumption that JEC keys for data are era-specific. This assumption will be "
+                    "removed in future versions of columnflow, so please adapt the config according to the "
+                    "documentation to remove this warning and ensure future compatibility of the code.",
                 )
             jec_era = self.dataset_inst.get_aux("jec_era", None)
             # if no special JEC era is specified, infer based on 'era'
@@ -647,8 +624,8 @@ def jec_setup(
                 era = self.dataset_inst.get_aux("era", None)
                 if era is None:
                     raise ValueError(
-                        "JEC data key is requested to be era dependent, but neither jec_era or era "
-                        f"auxiliary is set for dataset {self.dataset_inst.name}.",
+                        "JEC data key is requested to be era dependent, but neither jec_era or era auxiliary is set "
+                        f"for dataset {self.dataset_inst.name}",
                     )
                 jec_era = "Run" + era
 
@@ -694,12 +671,10 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     """
     Load config relevant to the jet energy resolution (JER) smearing.
 
-    By default, this is extracted from the current *config_inst*,
-    assuming the JER configurations are stored under the 'jer'
-    aux key. Separate configurations should be specified for each
-    jet collection, using the collection name as a key. For example,
-    the configuration for the default jet collection ``Jet`` will
-    be retrieved from the following config entry:
+    By default, this is extracted from the current *config_inst*, assuming the JER configurations are stored under the
+    'jer' aux key. Separate configurations should be specified for each jet collection, using the collection name as a
+    key. For example, the configuration for the default jet collection ``Jet`` will be retrieved from the following
+    config entry:
 
     .. code-block:: python
 
@@ -717,22 +692,16 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
         if self.jet_name == "Jet":
             logger.warning_once(
                 f"{id(self)}_depr_jer_config",
-                "config aux 'jer' does not contain key for input jet "
-                f"collection '{self.jet_name}'. This may be due to "
-                "an outdated config. Continuing under the assumption that "
-                "the entire 'jer' entry refers to this jet collection. "
-                "This assumption will be removed in future versions of "
-                "columnflow, so please adapt the config according to the "
-                "documentation to remove this warning and ensure future "
-                "compatibility of the code.",
+                f"config aux 'jer' does not contain key for input jet collection '{self.jet_name}'. This may be due to "
+                "an outdated config. Continuing under the assumption that the entire 'jer' entry refers to this jet "
+                "collection. This assumption will be removed in future versions of columnflow, so please adapt the "
+                "config according to the documentation to remove this warning and ensure future compatibility of the "
+                "code.",
             )
             return jer_cfg
 
         # otherwise raise exception
-        raise ValueError(
-            "config aux 'jer' does not contain key for input jet "
-            f"collection '{self.jet_name}'.",
-        )
+        raise ValueError(f"config aux 'jer' does not contain key for input jet collection '{self.jet_name}'")
 
     return jer_cfg[self.jet_name]
 
@@ -775,19 +744,17 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
 )
 def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Applies the jet energy resolution smearing in MC and calculates the associated uncertainty
-    shifts using the :external+correctionlib:doc:`index`, following the recommendations given in
+    Applies the jet energy resolution smearing in MC and calculates the associated uncertainty shifts using the
+    :external+correctionlib:doc:`index`, following the recommendations given in
     https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution.
 
-    The *jet_name* and *gen_jet_name* should be set to the name of the NanoAOD jet and gen jet
-    collections to use as an input for JER smearing (default: ``Jet`` and ``GenJet``, respectively,
-    i.e. AK4 jets).
+    The *jet_name* and *gen_jet_name* should be set to the name of the NanoAOD jet and gen jet collections to use as an
+    input for JER smearing (default: ``Jet`` and ``GenJet``, respectively, i.e. AK4 jets).
 
-    Requires an external file in the config pointing to the JSON files containing the JER information.
-    The file key can be specified via an optional ``external_file_key`` in the ``jer`` config entry.
-    If not given, the file key will be determined automatically based on the jet collection name:
-    ``jet_jerc`` for ``Jet`` (AK4 jets), ``fat_jet_jerc`` for``FatJet`` (AK8 jets). A full set of JSON files
-    can be specified as:
+    Requires an external file in the config pointing to the JSON files containing the JER information. The file key can
+    be specified via an optional ``external_file_key`` in the ``jer`` config entry. If not given, the file key will be
+    determined automatically based on the jet collection name: ``jet_jerc`` for ``Jet`` (AK4 jets), ``fat_jet_jerc``
+    for``FatJet`` (AK8 jets). A full set of JSON files can be specified as:
 
     .. code-block:: python
 
@@ -796,13 +763,12 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
-    For more fine-grained control, the *get_jer_file* can be adapted in a subclass in case it is stored
-    differently in the external files.
+    For more fine-grained control, the *get_jer_file* can be adapted in a subclass in case it is stored differently in
+    the external files.
 
-    The JER smearing configuration should be an auxiliary entry in the config, specifying the input
-    JER to use under "jer". Separate configs should be given for each jet collection to smear, using
-    the jet collection name as a subkey. An example of a valid configuration for smearing
-    AK4 jets with JER is:
+    The JER smearing configuration should be an auxiliary entry in the config, specifying the input JER to use under
+    "jer". Separate configs should be given for each jet collection to smear, using the jet collection name as a subkey.
+    An example of a valid configuration for smearing AK4 jets with JER is:
 
     .. code-block:: python
 
@@ -1101,14 +1067,14 @@ def jer_setup(
 ) -> None:
     """
     Load the correct jer files using the :py:func:`from_string` method of the
-    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` function and apply the
-    corrections as needed.
+    :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` function and apply the corrections as
+    needed.
 
-    The source files for the :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
-    instance are extracted with the :py:meth:`~.jer.get_jer_file`.
+    The source files for the :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` instance are
+    extracted with the :py:meth:`~.jer.get_jer_file`.
 
-    Uses the member function :py:meth:`~.jer.get_jer_config` to construct the required keys, which
-    are based on the following information about the JER:
+    Uses the member function :py:meth:`~.jer.get_jer_config` to construct the required keys, which are based on the
+    following information about the JER:
 
     - campaign
     - version
@@ -1126,8 +1092,7 @@ def jer_setup(
             },
         })
 
-    :param reqs: Requirement dictionary for this :py:class:`~columnflow.calibration.Calibrator`
-        instance.
+    :param reqs: Requirement dictionary for this :py:class:`~columnflow.calibration.Calibrator` instance.
     :param inputs: Additional inputs, currently not used.
     :param reader_targets: TODO: add documentation.
     """
@@ -1187,8 +1152,8 @@ jer_ak8 = jer.derive("jer_ak8", cls_dict={"jet_name": "FatJet", "gen_jet_name": 
 )
 def jets(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     """
-    Instance of :py:class:`~columnflow.calibration.Calibrator` that does all relevant calibrations
-    for jets, i.e. JEC and JER. For more information, see :py:func:`~.jec` and :py:func:`~.jer`.
+    Instance of :py:class:`~columnflow.calibration.Calibrator` that does all relevant calibrations for jets, i.e. JEC
+    and JER. For more information, see :py:func:`~.jec` and :py:func:`~.jer`.
 
     :param events: awkward array containing events to process
     """
