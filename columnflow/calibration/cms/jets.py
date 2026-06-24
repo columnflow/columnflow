@@ -423,13 +423,13 @@ def jec(
 
                 correction_tagged = ak_evaluate(corrector_tagged, *inputs)
                 correction_untagged = ak_evaluate(corrector_untagged, *inputs)
-                
+
                 # Combine corrections using bjet mask
                 correction = ak.where(self.bjet_mask, correction_tagged, correction_untagged)
 
                 # update pt in original variable map for subsequent correctors
                 variable_map["JetPt"] = variable_map["JetPt"] * correction
-                full_correction = full_correction * correction   
+                full_correction = full_correction * correction
         else:
             for corrector in self.evaluators[evaluator_key]:
                 # optionally update variables for this corrector call
@@ -600,10 +600,10 @@ def jec_init(self: Calibrator, **kwargs) -> None:
         logger.info("BJEC config found, running with bjet regression")
 
         self.bjec_cfg = self.jec_cfg.bjec_config
-        
+
         if len(self.bjec_cfg.jet_types) != 2:
             raise ValueError(f"Number of jet_types ({len(self.bjec_cfg.jet_types)}) must be 2 for bjet regression")
-        
+
         self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.regr_factors)}}}")
         self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.bjet_selection_columns)}}}")
 
@@ -753,13 +753,13 @@ def jec_setup(
             correction_set,
             jec_keys,
             attrs=[{"level": level} for level in self.jec_cfg.levels],
-            doubled=self.jec_cfg.bjec_config is not None
+            doubled=self.jec_cfg.bjec_config is not None,
         ),
         "jec_subset_type1_met": get_evaluators(
             correction_set,
             jec_keys_subset_type1_met,
             attrs=[{"level": level} for level in self.jec_cfg.levels_for_type1_met],
-            doubled=self.jec_cfg.bjec_config is not None
+            doubled=self.jec_cfg.bjec_config is not None,
         ),
     }
     if self.jec_cfg.bjec_config is not None:
@@ -771,7 +771,6 @@ def jec_setup(
         }
     else:
         self.evaluators["junc"] = dict(zip(self.uncertainty_sources, get_evaluators(correction_set, junc_keys)))
-        
 
 
 # custom jec calibrator that only runs nominal correction
