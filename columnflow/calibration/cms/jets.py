@@ -975,8 +975,19 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     }
 
     # extract nominal pt resolution
-    inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
-    jer = {jer_nom: ak_evaluate(self.evaluators["jer"], *inputs)}
+    if self.bjec_cfg:
+        bjet_mask = self.bjec_cfg.bjet_selection(events)
+        inputs = [variable_map[inp.name] for inp in self.evaluators["jer"][0].inputs]
+        jer = {
+            jer_nom: ak.where(
+                bjet_mask,
+                ak_evaluate(self.evaluators["jer"][0], *inputs),
+                ak_evaluate(self.evaluators["jer"][1], *inputs),
+            )
+        }
+    else:
+        inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
+        jer = {jer_nom: ak_evaluate(self.evaluators["jer"], *inputs)}
 
     # for simplifications below, use the same values for jer variations
     jer[jer_up] = jer[jer_nom]
@@ -985,21 +996,45 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # extract pt resolutions evaluted for jec uncertainties
     for jec_var in self.jec_variations:
         _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
-        inputs = [_variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
-        jer[jec_var] = ak_evaluate(self.evaluators["jer"], *inputs)
+        if self.bjec_cfg:
+            inputs = [_variable_map[inp.name] for inp in self.evaluators["jer"][0].inputs]
+            jer[jec_var] = ak.where(
+                bjet_mask,
+                ak_evaluate(self.evaluators["jer"][0], *inputs),
+                ak_evaluate(self.evaluators["jer"][1], *inputs),
+            )
+        else:
+            inputs = [_variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
+            jer[jec_var] = ak_evaluate(self.evaluators["jer"], *inputs)
 
     # extract scale factors
     jersf = {}
     for jer_var in self.jer_variations:
         _variable_map = variable_map | {"systematic": jer_var}
-        inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
-        jersf[jer_var] = ak_evaluate(self.evaluators["sf"], *inputs)
+        if self.bjec_cfg:
+            inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"][0].inputs]
+            jersf[jer_var] = ak.where(
+                bjet_mask,
+                ak_evaluate(self.evaluators["sf"][0], *inputs),
+                ak_evaluate(self.evaluators["sf"][1], *inputs),
+            )
+        else:
+            inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
+            jersf[jer_var] = ak_evaluate(self.evaluators["sf"], *inputs)
 
     # extract scale factors for jec uncertainties
     for jec_var in self.jec_variations:
         _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
-        inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
-        jersf[jec_var] = ak_evaluate(self.evaluators["sf"], *inputs)
+        if self.bjec_cfg:
+            inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"][0].inputs]
+            jersf[jec_var] = ak.where(
+                bjet_mask,
+                ak_evaluate(self.evaluators["sf"][0], *inputs),
+                ak_evaluate(self.evaluators["sf"][1], *inputs),
+            )
+        else:
+            inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
+            jersf[jec_var] = ak_evaluate(self.evaluators["sf"], *inputs)
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)
@@ -1167,6 +1202,11 @@ def jer_init(self: Calibrator, **kwargs) -> None:
     if jec_sources:
         self.uses |= jet_jec_columns
 
+    # register used jet columns needed for bjet regression if needed
+    if self.jec_cfg.bjec_config is not None:
+        self.bjec_cfg = self.jec_cfg.bjec_config
+        self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.bjet_selection_columns)}}}")
+
     # register produced jet columns
     self.produces.add(f"{self.jet_name}.{{pt,mass}}{{,_unsmeared,_jer_up,_jer_down}}")
     if jec_sources:
@@ -1248,16 +1288,33 @@ def jer_setup(
     correction_set = load_correction_set(jer_file)
 
     # compute JER keys from config information
-    jer_keys = {
-        "jer": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.jer_cfg.jet_type}",
-        "sf": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.jer_cfg.jet_type}",
-    }
-
-    # store the evaluators
-    self.evaluators = {
-        name: get_evaluators(correction_set, [key])[0]
-        for name, key in jer_keys.items()
-    }
+    if self.jec_cfg.bjec_config is not None:
+        # For bjet regression: group evaluators in pairs (tagged, untagged)
+        jer_keys = {
+            "jer": (
+                f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.bjec_cfg.jet_types[0]}",
+                f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.bjec_cfg.jet_types[1]}",
+            ),
+            "sf": (
+                f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.bjec_cfg.jet_types[0]}",
+                f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.bjec_cfg.jet_types[1]}",
+            ),
+        }
+        # store the evaluators
+        self.evaluators = {
+            name: (get_evaluators(correction_set, [keys[0]])[0], get_evaluators(correction_set, [keys[1]])[0])
+            for name, keys in jer_keys.items()
+        }
+    else:
+        jer_keys = {
+            "jer": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.jer_cfg.jet_type}",
+            "sf": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.jer_cfg.jet_type}",
+        }
+        # store the evaluators
+        self.evaluators = {
+            name: get_evaluators(correction_set, [key])[0]
+            for name, key in jer_keys.items()
+        }
 
     # use deterministic seeds for random smearing if requested
     if self.deterministic_seed_index >= 0:
