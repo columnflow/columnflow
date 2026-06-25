@@ -983,7 +983,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
                 bjet_mask,
                 ak_evaluate(self.evaluators["jer"][0], *inputs),
                 ak_evaluate(self.evaluators["jer"][1], *inputs),
-            )
+            ),
         }
     else:
         inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
