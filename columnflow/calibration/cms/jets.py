@@ -597,7 +597,6 @@ def jec_init(self: Calibrator, **kwargs) -> None:
 
     # add columns needed for bjet regression if needed
     if self.jec_cfg.bjec_config is not None:
-        logger.info("BJEC config found, running with bjet regression")
 
         self.bjec_cfg = self.jec_cfg.bjec_config
 
@@ -975,7 +974,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     }
 
     # extract nominal pt resolution
-    if self.bjec_cfg:
+    if self.jec_cfg.bjec_config is not None:
         bjet_mask = self.bjec_cfg.bjet_selection(events)
         inputs = [variable_map[inp.name] for inp in self.evaluators["jer"][0].inputs]
         jer = {
@@ -996,7 +995,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # extract pt resolutions evaluted for jec uncertainties
     for jec_var in self.jec_variations:
         _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
-        if self.bjec_cfg:
+        if self.jec_cfg.bjec_config is not None:
             inputs = [_variable_map[inp.name] for inp in self.evaluators["jer"][0].inputs]
             jer[jec_var] = ak.where(
                 bjet_mask,
@@ -1011,7 +1010,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     jersf = {}
     for jer_var in self.jer_variations:
         _variable_map = variable_map | {"systematic": jer_var}
-        if self.bjec_cfg:
+        if self.jec_cfg.bjec_config is not None:
             inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"][0].inputs]
             jersf[jer_var] = ak.where(
                 bjet_mask,
@@ -1025,7 +1024,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # extract scale factors for jec uncertainties
     for jec_var in self.jec_variations:
         _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
-        if self.bjec_cfg:
+        if self.jec_cfg.bjec_config is not None:
             inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"][0].inputs]
             jersf[jec_var] = ak.where(
                 bjet_mask,
