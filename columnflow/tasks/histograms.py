@@ -471,8 +471,11 @@ class MergeHistograms(_MergeHistograms):
             if not self.hist_producer_inst.skip_compatibility_check:
                 CreateHistograms.check_histogram_compatibility(merged)
 
+            # do not overwrite permissions when the file was already existing
+            perm = 0 if outputs["hists"][variable_name].exists() else None
+
             # write the output
-            outputs["hists"][variable_name].dump(merged, formatter="pickle")
+            outputs["hists"][variable_name].dump(merged, perm=perm, formatter="pickle")
 
         # optionally remove inputs
         if self.remove_previous:
