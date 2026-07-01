@@ -38,57 +38,53 @@ set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 def get_evaluators(
     correction_set: correctionlib.highlevel.CorrectionSet,
-    names: list[str],
+    names: list[str | tuple[str, ...]],
     attrs: list[dict[str, Any]] | None = None,
-    doubled: bool = False,
-) -> list[Any]:
+) -> list[correctionlib.highlevel.Correction | tuple[correctionlib.highlevel.Correction, ...]]:
     """
-    Helper function to get a list of correction evaluators from a
+    Helper function to get a list of correction evaluators from
     :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet` object given a list of *names*. The *names*
     can refer to either simple or compound corrections.
 
     :param correction_set: evaluator provided by :external+correctionlib:doc:`index`
     :param names: List of names of corrections to be applied
     :param: attrs: List of dictionaries containing attributes to be added to each evaluator.
-    :param: doubled: "True" if the for each attribute there are two evaluators (needed for BJet regression)
     :raises RuntimeError: If a requested correction in *names* is not available
     :return: List of compounded corrections, see
         :external+correctionlib:py:class:`correctionlib.highlevel.CorrectionSet`
     """
     # raise nice error if keys not found
+    flat_names = law.util.flatten(names)
     available_keys = set(correction_set.keys()).union(correction_set.compound.keys())
-    missing_keys = set(names) - available_keys
+    missing_keys = set(flat_names) - available_keys
     if missing_keys:
         raise RuntimeError("corrections not found:" + "".join(
-            f"\n  - {name}" for name in names if name in missing_keys
+            f"\n  - {name}" for name in flat_names if name in missing_keys
         ) + "\navailable:" + "".join(
             f"\n  - {name}" for name in sorted(available_keys)
         ))
 
     if attrs and len(attrs) != len(names):
-        if doubled and 2 * len(attrs) != len(names):
-            raise ValueError(
-                f"number of attribute dictionaries ({len(attrs)})"
-                f" does not match number of evaluator names ({'0.5 times ' if doubled else ''}{len(names)})",
-            )
+        raise ValueError(
+            f"number of attribute dictionaries ({len(attrs)}) does not match number of evaluator names ({len(names)})",
+        )
 
     # retrieve the evaluators
     evaluators = []
     for i, name in enumerate(names):
-        e = (
-            correction_set.compound[name]
-            if name in correction_set.compound
-            else correction_set[name]
-        )
+        single = isinstance(name, str)
+        name = law.util.make_tuple(name)
+        evals = [(correction_set.compound[n] if n in correction_set.compound else correction_set[n]) for n in name]
         # attach attributes if given
         if attrs:
-            n = i // 2 if doubled else i
-            for attr, value in attrs[n].items():
-                if value not in name:
-                    raise ValueError(f"attribute value '{value}' not found in evaluator name '{name}'")
-                setattr(e, attr, value)
+            for attr, value in attrs[i].items():
+                for _name in name:
+                    if value not in _name:
+                        raise ValueError(f"attribute value '{value}' not found in evaluator name '{_name}'")
+                for e in evals:
+                    setattr(e, attr, value)
         # save
-        evaluators.append(e)
+        evaluators.append(evals[0] if single else evals)
 
     return evaluators
 
@@ -104,7 +100,7 @@ def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
     """
     # fail if no arguments
     if not args:
-        raise ValueError("Expected at least one argument.")
+        raise ValueError("expected at least one argument")
 
     # collect arguments that are awkward arrays
     ak_args = [
@@ -145,18 +141,64 @@ def ak_evaluate(evaluator: correctionlib.highlevel.Correction, *args) -> float:
 
 @dataclasses.dataclass
 class BJECConfig(TAFConfig):
+    """
+    Container object to hold configuration for b-jet energy corrections (BJECs). Example:
+
+    .. code-block:: python
+
+        # for PNet regressed jets
+        BJECConfig(
+            jet_types=("AK4PFPuppiPNetRegressionPlusNeutrino", "AK4PFPuppiPNetRegression"),
+            regr_factors=("PNetRegPtRawCorrNeutrino", "PNetRegPtRawCorr"),
+            bjet_selection=(lambda events: events.Jet.btagPNetB > 0.245),
+            bjet_selection_columns={"btagPNetB"},
+        )
+
+    Resources:
+        - https://cms-jerc.web.cern.ch/ExpJEC/#jec-for-pnet-and-upart-regressed-jets
+        - https://cms-jerc.web.cern.ch/JES/#remarks-on-getting-rawpt-and-mass-for-regular-pnet-and-upart-jets
+    """
+
     # tagged and untagged jet types in correction set names
     jet_types: tuple[str, str]
     # regression factors to be applied to tagged and untagged jets
     regr_factors: tuple[str, str]
     # function to create a mask to select bjets among all jets
     bjet_selection: Callable[[ak.Array], ak.array | np.ndarray]
-    # columns needed by bjet_selection
+    # jet columns needed by bjet_selection
     bjet_selection_columns: Sequence[str | Route] | set[str, Route] = dataclasses.field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        if len(self.jet_types) != 2:
+            raise ValueError(f"number of jet_types must be 2, found '{self.jet_types}'")
 
 
 @dataclasses.dataclass
 class JECConfig(TAFConfig):
+    """
+    Container object to hold configuration for jet energy corrections. Example:
+
+    .. code-block:: python
+
+        JECConfig(
+            jet_name="Jet",
+            jet_type="AK4PFchs",
+            campaign="Summer19UL17",
+            version="V5",
+            levels=["L1L2L3Res"],  # or individual correction levels
+            levels_for_type1_met=["L1FastJet"],
+            uncertainty_sources=[
+                "Total",
+                "CorrelationGroupMPFInSitu",
+                "CorrelationGroupIntercalibration",
+                "CorrelationGroupbJES",
+                "CorrelationGroupFlavor",
+                "CorrelationGroupUncorrelated",
+            ],
+            bjec_config=...  # see :py:class:`~.BJECConfig`
+        )
+    """
+
     jet_name: str
     jet_type: str
     campaign: str
@@ -171,10 +213,7 @@ class JECConfig(TAFConfig):
     bjec_config: BJECConfig | None = None
 
     @classmethod
-    def new(
-        cls,
-        obj: JECConfig | dict[str, Any],
-    ) -> JECConfig:
+    def new(cls, obj: JECConfig | dict[str, Any]) -> JECConfig:
         # purely for backwards compatibility with the old dict format
         if isinstance(obj, cls):
             return obj
@@ -360,28 +399,31 @@ def jec(
     default:
 
     :param events: awkward array containing events to process
-
     :param min_pt_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet values to the missing
         transverse energy (MET) using :py:func:`~columnflow.calibration.util.propagate_met` for events where ``met.pt >
         *min_pt_met_prop*``.
     :param max_eta_met_prop: If *propagate_met* variable is ``True`` propagate the updated jet values to the missing
         transverse energy (MET) using :py:func:`~columnflow.calibration.util.propagate_met` for events where ``met.eta >
         *min_eta_met_prop*``.
+
+    Resources:
+        - https://cms-jerc.web.cern.ch/Recommendations/#jet-energy-scale
+        - https://cms-jerc.web.cern.ch/ExpJEC/#jec-for-pnet-and-upart-regressed-jets
+        - https://cms-jerc.web.cern.ch/JES/#remarks-on-getting-rawpt-and-mass-for-regular-pnet-and-upart-jets
     """  # noqa
     # use local variable for convenience
     jet_name = self.jet_name
 
     # build bjet selection and regression factor
-    if self.jec_cfg.bjec_config is not None:
-        self.bjet_mask = self.bjec_cfg.bjet_selection(events)
-
+    if self.bjec_cfg is None:
+        regr_factor = ak.ones_like(events[jet_name].pt, dtype=np.float32)
+    else:
+        bjet_mask = self.bjec_cfg.bjet_selection(events)
         regr_factor = ak.where(
-            self.bjet_mask,
+            bjet_mask,
             events[jet_name][self.bjec_cfg.regr_factors[0]],
             events[jet_name][self.bjec_cfg.regr_factors[1]],
         )
-    else:
-        regr_factor = ak.ones_like(events[jet_name].pt, dtype=np.float32)
 
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(
@@ -406,43 +448,28 @@ def jec(
             "run": run,
         }
 
-        # apply all correctors sequentially, updating the pt each time
+        # apply all evaluators sequentially, updating the pt each time
         full_correction = ak.ones_like(pt, dtype=np.float32)
-        if self.jec_cfg.bjec_config is not None:
-            for i in range(0, len(self.evaluators[evaluator_key]), 2):
-                corrector_tagged = self.evaluators[evaluator_key][i]
-                corrector_untagged = self.evaluators[evaluator_key][i + 1]
-
-                # optionally update variables for this corrector call
-                _variable_map = variable_map
-                if callable(self.update_corrector_variables):
-                    _variable_map = variable_map.copy()
-                    _variable_map = self.update_corrector_variables(corrector_tagged, _variable_map)
-                # determine correct inputs (change depending on corrector), should be the same for both correctors
-                inputs = [_variable_map[inp.name] for inp in corrector_tagged.inputs]
-
-                correction_tagged = ak_evaluate(corrector_tagged, *inputs)
-                correction_untagged = ak_evaluate(corrector_untagged, *inputs)
-
-                # Combine corrections using bjet mask
-                correction = ak.where(self.bjet_mask, correction_tagged, correction_untagged)
-
-                # update pt in original variable map for subsequent correctors
-                variable_map["JetPt"] = variable_map["JetPt"] * correction
-                full_correction = full_correction * correction
-        else:
-            for corrector in self.evaluators[evaluator_key]:
-                # optionally update variables for this corrector call
-                _variable_map = variable_map
-                if callable(self.update_corrector_variables):
-                    _variable_map = variable_map.copy()
-                    _variable_map = self.update_corrector_variables(corrector, _variable_map)
-                # determine correct inputs (change depending on corrector)
-                inputs = [_variable_map[inp.name] for inp in corrector.inputs]
-                correction = ak_evaluate(corrector, *inputs)
-                # update pt in original variable map for subsequent correctors
-                variable_map["JetPt"] = variable_map["JetPt"] * correction
-                full_correction = full_correction * correction
+        for evaluator in self.evaluators[evaluator_key]:
+            _evaluator = evaluator if self.bjec_cfg is None else evaluator[0]
+            # optionally update variables for this evaluator call
+            _variable_map = variable_map
+            if callable(self.update_corrector_variables):
+                _variable_map = variable_map.copy()
+                _variable_map = self.update_corrector_variables(_evaluator, _variable_map)
+            # determine correct inputs (change depending on evaluator)
+            inputs = [_variable_map[inp.name] for inp in _evaluator.inputs]
+            if self.bjec_cfg is None:
+                correction = ak_evaluate(evaluator, *inputs)
+            else:
+                correction = ak.where(
+                    bjet_mask,
+                    ak_evaluate(evaluator[0], *inputs),
+                    ak_evaluate(evaluator[1], *inputs),
+                )
+            # update pt in original variable map for subsequent evaluators
+            variable_map["JetPt"] = variable_map["JetPt"] * correction
+            full_correction = full_correction * correction
 
         return full_correction
 
@@ -525,19 +552,16 @@ def jec(
     # jet energy uncertainty components
     for name, evaluator in self.evaluators["junc"].items():
         # get uncertainty
-        if self.jec_cfg.bjec_config is not None and isinstance(evaluator, tuple):
-            # if bjec is used, the evaluator is a tuple of (tagged, untagged) evaluators
-            evaluator_tagged, evaluator_untagged = evaluator
-
-            # inputs should be the same
-            inputs = [variable_map[inp.name] for inp in evaluator_tagged.inputs]
-            jec_uncertainty_tagged = ak_evaluate(evaluator_tagged, *inputs)
-            jec_uncertainty_untagged = ak_evaluate(evaluator_untagged, *inputs)
-
-            jec_uncertainty = ak.where(self.bjet_mask, jec_uncertainty_tagged, jec_uncertainty_untagged)
-        else:
-            inputs = [variable_map[inp.name] for inp in evaluator.inputs]
+        _evaluator = evaluator if self.bjec_cfg is None else evaluator[0]
+        inputs = [variable_map[inp.name] for inp in _evaluator.inputs]
+        if self.bjec_cfg is None:
             jec_uncertainty = ak_evaluate(evaluator, *inputs)
+        else:
+            jec_uncertainty = ak.where(
+                bjet_mask,
+                ak_evaluate(evaluator[0], *inputs),
+                ak_evaluate(evaluator[1], *inputs),
+            )
 
         # apply jet uncertainty shifts
         events = set_ak_column_f32(
@@ -585,7 +609,9 @@ def jec(
 def jec_init(self: Calibrator, **kwargs) -> None:
     super(jec, self).init_func(**kwargs)
 
+    # load configs
     self.jec_cfg = self.get_jec_config()
+    self.bjec_cfg = self.jec_cfg.bjec_config
 
     sources = self.uncertainty_sources
     if sources is None:
@@ -596,13 +622,7 @@ def jec_init(self: Calibrator, **kwargs) -> None:
     self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,area,rawFactor}}")
 
     # add columns needed for bjet regression if needed
-    if self.jec_cfg.bjec_config is not None:
-
-        self.bjec_cfg = self.jec_cfg.bjec_config
-
-        if len(self.bjec_cfg.jet_types) != 2:
-            raise ValueError(f"Number of jet_types ({len(self.bjec_cfg.jet_types)}) must be 2 for bjet regression")
-
+    if self.bjec_cfg is not None:
         self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.regr_factors)}}}")
         self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.bjet_selection_columns)}}}")
 
@@ -731,19 +751,28 @@ def jec_setup(
         else:  # MC
             jme_key = f"{jec_cfg.campaign}_{jec_cfg.version}_MC_{{name}}_{{jet_type}}"
 
-        return [jme_key.format(name=name, jet_type=jet_type) for name in names for jet_type in jet_types]
+        keys = []
+        for name in names:
+            for jet_type in jet_types:
+                assert isinstance(jet_type, (str, tuple))
+                keys.append(
+                    jme_key.format(name=name, jet_type=jet_type)
+                    if isinstance(jet_type, str)
+                    else tuple(jme_key.format(name=name, jet_type=_jet_type) for _jet_type in jet_type),
+                )
+        return keys
 
     jec_keys = make_jme_keys(
         self.jec_cfg.levels,
-        self.bjec_cfg.jet_types if self.jec_cfg.bjec_config is not None else [self.jec_cfg.jet_type],
+        [self.jec_cfg.jet_type] if self.bjec_cfg is None else [self.bjec_cfg.jet_types],
     )
     jec_keys_subset_type1_met = make_jme_keys(
         self.jec_cfg.levels_for_type1_met,
-        self.bjec_cfg.jet_types if self.jec_cfg.bjec_config is not None else [self.jec_cfg.jet_type],
+        [self.jec_cfg.jet_type] if self.bjec_cfg is None else [self.bjec_cfg.jet_types],
     )
     junc_keys = make_jme_keys(
         self.uncertainty_sources,
-        self.bjec_cfg.jet_types if self.jec_cfg.bjec_config is not None else [self.jec_cfg.jet_type],
+        [self.jec_cfg.jet_type] if self.bjec_cfg is None else [self.bjec_cfg.jet_types],
         is_data=False,  # uncertainties only stored as MC keys
     )
     # store the evaluators
@@ -752,24 +781,14 @@ def jec_setup(
             correction_set,
             jec_keys,
             attrs=[{"level": level} for level in self.jec_cfg.levels],
-            doubled=self.jec_cfg.bjec_config is not None,
         ),
         "jec_subset_type1_met": get_evaluators(
             correction_set,
             jec_keys_subset_type1_met,
             attrs=[{"level": level} for level in self.jec_cfg.levels_for_type1_met],
-            doubled=self.jec_cfg.bjec_config is not None,
         ),
+        "junc": dict(zip(self.uncertainty_sources, get_evaluators(correction_set, junc_keys))),
     }
-    if self.jec_cfg.bjec_config is not None:
-        # For bjet regression: group evaluators in pairs (tagged, non-tagged) per uncertainty source
-        junc_evals = get_evaluators(correction_set, junc_keys)
-        self.evaluators["junc"] = {
-            name: (junc_evals[2 * i], junc_evals[2 * i + 1])
-            for i, name in enumerate(self.uncertainty_sources)
-        }
-    else:
-        self.evaluators["junc"] = dict(zip(self.uncertainty_sources, get_evaluators(correction_set, junc_keys)))
 
 
 # custom jec calibrator that only runs nominal correction
@@ -786,19 +805,16 @@ jec_ak8_nominal = jec_ak8.derive("jec_ak8", cls_dict={"uncertainty_sources": []}
 # jet energy resolution smearing
 #
 
-
 @dataclasses.dataclass
 class JERConfig(TAFConfig):
     jet_name: str
     jet_type: str
     campaign: str
     version: str
+    external_file_key: str | None = None
 
     @classmethod
-    def new(
-        cls,
-        obj: JERConfig | dict[str, Any],
-    ) -> JERConfig:
+    def new(cls, obj: JERConfig | dict[str, Any]) -> JERConfig:
         # purely for backwards compatibility with the old dict format
         if isinstance(obj, cls):
             return obj
@@ -827,7 +843,7 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     def cast(jet_name: str, obj: Any) -> JECConfig:
         if isinstance(obj, dict):
             obj = {"jet_name": jet_name, **obj}
-        return JECConfig.new(obj)
+        return JERConfig.new(obj)
 
     jer_cfg = self.config_inst.x.jer
 
@@ -932,6 +948,9 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     Throws an error if running on data.
 
     :param events: awkward array containing events to process
+
+    Resources:
+        - https://cms-jerc.web.cern.ch/Recommendations/#jet-energy-resolution
     """  # noqa
     # use local variables for convenience
     jet_name = self.jet_name
@@ -973,20 +992,24 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         "systematic": jer_nom,
     }
 
-    # extract nominal pt resolution
-    if self.jec_cfg.bjec_config is not None:
-        bjet_mask = self.bjec_cfg.bjet_selection(events)
-        inputs = [variable_map[inp.name] for inp in self.evaluators["jer"][0].inputs]
-        jer = {
-            jer_nom: ak.where(
-                bjet_mask,
-                ak_evaluate(self.evaluators["jer"][0], *inputs),
-                ak_evaluate(self.evaluators["jer"][1], *inputs),
-            ),
-        }
+    # helper to run the jer evaluators in normal or b-regression style
+    if self.bjec_cfg is None:
+        def run_evaluator(evaluator_name, variable_map):
+            inputs = [variable_map[inp.name] for inp in self.evaluators[evaluator_name].inputs]
+            return ak_evaluate(self.evaluators[evaluator_name], *inputs)
     else:
-        inputs = [variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
-        jer = {jer_nom: ak_evaluate(self.evaluators["jer"], *inputs)}
+        bjet_mask = self.bjec_cfg.bjet_selection(events)
+        def run_evaluator(evaluator_name, variable_map):
+            # assume same inputs
+            inputs = [variable_map[inp.name] for inp in self.evaluators[evaluator_name][0].inputs]
+            return ak.where(
+                bjet_mask,
+                ak_evaluate(self.evaluators[evaluator_name][0], *inputs),
+                ak_evaluate(self.evaluators[evaluator_name][1], *inputs),
+            )
+
+    # extract nominal pt resolution
+    jer = {jer_nom: run_evaluator("jer", variable_map)}
 
     # for simplifications below, use the same values for jer variations
     jer[jer_up] = jer[jer_nom]
@@ -995,45 +1018,18 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # extract pt resolutions evaluted for jec uncertainties
     for jec_var in self.jec_variations:
         _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
-        if self.jec_cfg.bjec_config is not None:
-            inputs = [_variable_map[inp.name] for inp in self.evaluators["jer"][0].inputs]
-            jer[jec_var] = ak.where(
-                bjet_mask,
-                ak_evaluate(self.evaluators["jer"][0], *inputs),
-                ak_evaluate(self.evaluators["jer"][1], *inputs),
-            )
-        else:
-            inputs = [_variable_map[inp.name] for inp in self.evaluators["jer"].inputs]
-            jer[jec_var] = ak_evaluate(self.evaluators["jer"], *inputs)
+        jer[jec_var] = run_evaluator("jer", _variable_map)
 
     # extract scale factors
     jersf = {}
     for jer_var in self.jer_variations:
         _variable_map = variable_map | {"systematic": jer_var}
-        if self.jec_cfg.bjec_config is not None:
-            inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"][0].inputs]
-            jersf[jer_var] = ak.where(
-                bjet_mask,
-                ak_evaluate(self.evaluators["sf"][0], *inputs),
-                ak_evaluate(self.evaluators["sf"][1], *inputs),
-            )
-        else:
-            inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
-            jersf[jer_var] = ak_evaluate(self.evaluators["sf"], *inputs)
+        jersf[jer_var] = run_evaluator("sf", _variable_map)
 
     # extract scale factors for jec uncertainties
     for jec_var in self.jec_variations:
         _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
-        if self.jec_cfg.bjec_config is not None:
-            inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"][0].inputs]
-            jersf[jec_var] = ak.where(
-                bjet_mask,
-                ak_evaluate(self.evaluators["sf"][0], *inputs),
-                ak_evaluate(self.evaluators["sf"][1], *inputs),
-            )
-        else:
-            inputs = [_variable_map[inp.name] for inp in self.evaluators["sf"].inputs]
-            jersf[jec_var] = ak_evaluate(self.evaluators["sf"], *inputs)
+        jersf[jec_var] = run_evaluator("sf", _variable_map)
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)
@@ -1172,8 +1168,9 @@ def jer_init(self: Calibrator, **kwargs) -> None:
     super(jer, self).init_func(**kwargs)
 
     # load configs
-    self.jec_cfg = self.get_jec_config()
     self.jer_cfg = self.get_jer_config()
+    self.jec_cfg = self.get_jec_config()
+    self.bjec_cfg = self.jec_cfg.bjec_config
 
     # add jec_cfg for applying nominal smearing to jec variations
     jec_sources = self.jec_uncertainty_sources
@@ -1202,8 +1199,7 @@ def jer_init(self: Calibrator, **kwargs) -> None:
         self.uses |= jet_jec_columns
 
     # register used jet columns needed for bjet regression if needed
-    if self.jec_cfg.bjec_config is not None:
-        self.bjec_cfg = self.jec_cfg.bjec_config
+    if self.bjec_cfg is not None:
         self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.bjet_selection_columns)}}}")
 
     # register produced jet columns
@@ -1287,8 +1283,18 @@ def jer_setup(
     correction_set = load_correction_set(jer_file)
 
     # compute JER keys from config information
-    if self.jec_cfg.bjec_config is not None:
-        # For bjet regression: group evaluators in pairs (tagged, untagged)
+    if self.bjec_cfg is None:
+        jer_keys = {
+            "jer": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.jer_cfg.jet_type}",
+            "sf": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.jer_cfg.jet_type}",
+        }
+        # store the evaluators
+        self.evaluators = {
+            name: get_evaluators(correction_set, [key])[0]
+            for name, key in jer_keys.items()
+        }
+    else:
+        # group evaluators in pairs (tagged, untagged)
         jer_keys = {
             "jer": (
                 f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.bjec_cfg.jet_types[0]}",
@@ -1303,16 +1309,6 @@ def jer_setup(
         self.evaluators = {
             name: (get_evaluators(correction_set, [keys[0]])[0], get_evaluators(correction_set, [keys[1]])[0])
             for name, keys in jer_keys.items()
-        }
-    else:
-        jer_keys = {
-            "jer": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.jer_cfg.jet_type}",
-            "sf": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.jer_cfg.jet_type}",
-        }
-        # store the evaluators
-        self.evaluators = {
-            name: get_evaluators(correction_set, [key])[0]
-            for name, key in jer_keys.items()
         }
 
     # use deterministic seeds for random smearing if requested
