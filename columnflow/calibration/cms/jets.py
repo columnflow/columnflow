@@ -171,6 +171,8 @@ class BJECConfig(TAFConfig):
     def __post_init__(self) -> None:
         if len(self.jet_types) != 2:
             raise ValueError(f"number of jet_types must be 2, found '{self.jet_types}'")
+        if len(self.regr_factors) != 2:
+            raise ValueError(f"number of regr_factors must be 2, found '{self.regr_factors}'")
 
 
 @dataclasses.dataclass
