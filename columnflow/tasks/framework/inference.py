@@ -204,13 +204,12 @@ class SerializeInferenceModelBase(
         for config_inst, data in self.combined_config_data.items():
             reqs[config_inst.name] = {}
             # ensure that all variables exist
-            for var_name in data["variables"]:
-                for _var_name in VariablesMixin.split_multi_variable(var_name):
-                    if not config_inst.has_variable(_var_name):
-                        raise ValueError(
-                            f"config '{config_inst.name}' does not have variable '{_var_name}' defined as required by "
-                            f"inference model '{self.inference_model}'",
-                        )
+            for var_name in set.union(*map(set, map(VariablesMixin.split_multi_variable, data["variables"]))):
+                if not config_inst.has_variable(var_name):
+                    raise ValueError(
+                        f"config '{config_inst.name}' does not have variable '{var_name}' defined as required by "
+                        f"inference model '{self.inference_model}'",
+                    )
             # mc datasets
             for dataset_name in sorted(data["mc_datasets"]):
                 reqs[config_inst.name][dataset_name] = self._hist_requirement(
