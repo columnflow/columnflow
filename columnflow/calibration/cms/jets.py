@@ -1288,11 +1288,6 @@ def jer_setup(
             "jer": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.jer_cfg.jet_type}",
             "sf": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.jer_cfg.jet_type}",
         }
-        # store the evaluators
-        self.evaluators = {
-            name: get_evaluators(correction_set, [key])[0]
-            for name, key in jer_keys.items()
-        }
     else:
         # group evaluators in pairs (tagged, untagged)
         jer_keys = {
@@ -1305,11 +1300,12 @@ def jer_setup(
                 f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.bjec_cfg.jet_types[1]}",
             ),
         }
-        # store the evaluators
-        self.evaluators = {
-            name: (get_evaluators(correction_set, [keys[0]])[0], get_evaluators(correction_set, [keys[1]])[0])
-            for name, keys in jer_keys.items()
-        }
+
+    # store the evaluators
+    self.evaluators = {
+        name: get_evaluators(correction_set, [key])[0]
+        for name, key in jer_keys.items()
+    }
 
     # use deterministic seeds for random smearing if requested
     if self.deterministic_seed_index >= 0:
