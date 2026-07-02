@@ -46,7 +46,7 @@ class PDFWeightOutput(StrEnum):
 @producer(
     uses={"LHEPdfWeight"},
     # which types of weights to produce (influences produced columns, defined in init)
-    pdf_weight_output=PDFWeightOutput.raw,
+    pdf_weight_output=PDFWeightOutput.combined,
     # only run on mc
     mc_only=True,
 )
