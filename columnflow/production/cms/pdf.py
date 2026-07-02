@@ -32,6 +32,7 @@ fill_at_f32 = functools.partial(fill_at, value_type=np.float32)
     store_all_weights=False,
     # only run on mc
     mc_only=True,
+    store_split_sets=False,
 )
 def pdf_weights(
     self: Producer,
@@ -141,7 +142,37 @@ def pdf_weights(
 
     # store all weights if requested, then finish
     if self.store_all_weights:
-        return set_ak_column_f32(events, "pdf_weights", pdf_weights)
+        if self.store_split_sets:
+            # mask: valid events with alpha_s weights
+            has_alphas = (n_weights == 103) & (~invalid_mask)
+
+            # log if mixed content (valid events missing alpha_s)
+            if not ak.all(has_alphas | invalid_mask):
+                frac = ak.sum(has_alphas) / len(events) * 100
+                logger.warning(
+                    f"in dataset {self.dataset_inst.name}, only {frac:.2f}% of the events have valid "
+                    f"alpha_s weights; missing ones will be filled with 1",
+                )
+
+            # store hessian weights
+            events = set_ak_column_f32(events, "pdf_weights_hessian", pdf_weights)
+
+            # prepare default alpha_s weights (2 variations), filled with 1 when missing
+            ones_alphas = ak.ones_like(events.LHEPdfWeight[:, :2], dtype=np.float32)
+
+            # extract alpha_s weights where available, otherwise fill with ones
+            alphas_weights = ak.where(
+                has_alphas,
+                ak.without_parameters(events.LHEPdfWeight[:, 101:103]) / pdf_weight_nominal,
+                ones_alphas,
+            )
+
+            events = set_ak_column_f32(events, "pdf_weights_alphas", alphas_weights)
+
+        else:
+            events = set_ak_column_f32(events, "pdf_weights", pdf_weights)
+
+        return events
 
     # below this point, the weights are combined per-event into single up/down variations
 
@@ -201,8 +232,21 @@ def pdf_weights(
 
 @pdf_weights.init
 def pdf_weight_init(self: Producer, **kwargs) -> None:
-    # add produced columns: nominal+all, or nominal+up+down
-    self.produces.add("pdf_weight{,s}" if self.store_all_weights else "pdf_weight{,_up,_down}")
+    # add produced columns: nominal+all, nominal+up+down or nominal + hessian/alpha_s
+    self.produces.add("pdf_weight")
+
+    if not self.store_all_weights:
+        self.produces.update({
+            "pdf_weight_up",
+            "pdf_weight_down",
+        })
+    elif self.store_split_sets:
+        self.produces.update({
+            "pdf_weights_hessian",
+            "pdf_weights_alphas",
+        })
+    else:
+        self.produces.add("pdf_weights")
 
 
 def _raise_unknown_action(attr: str, action: str, known_actions: tuple[str]) -> None:
