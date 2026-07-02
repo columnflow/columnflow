@@ -6,7 +6,6 @@ Basic objects for defining statistical inference models.
 
 from __future__ import annotations
 
-import enum
 import copy as _copy
 
 import law
@@ -15,7 +14,7 @@ import yaml
 
 from columnflow.types import Generator, Callable, TextIO, Sequence, Any, Hashable, Type, T
 from columnflow.util import (
-    CachedDerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url, freeze,
+    CachedDerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url, freeze, StrEnum,
 )
 
 
@@ -24,7 +23,7 @@ logger = law.logger.get_logger(__name__)
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
 
 
-class ParameterType(enum.Enum):
+class ParameterType(StrEnum):
     """
     Parameter type flag.
 
@@ -38,12 +37,6 @@ class ParameterType(enum.Enum):
     rate_uniform = "rate_uniform"
     rate_unconstrained = "rate_unconstrained"
     shape = "shape"
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}.{self.value}>"
-
-    def __str__(self) -> str:
-        return self.value
 
     @property
     def is_rate(self) -> bool:
@@ -70,7 +63,7 @@ class ParameterType(enum.Enum):
         }
 
 
-class ParameterTransformation(enum.Enum):
+class ParameterTransformation(StrEnum):
     """
     Flags denoting transformations to be applied on parameters.
 
@@ -122,12 +115,6 @@ class ParameterTransformation(enum.Enum):
     envelope_enforce_two_sided = "envelope_enforce_two_sided"
     flip_smaller_if_one_sided = "flip_smaller_if_one_sided"
     flip_larger_if_one_sided = "flip_larger_if_one_sided"
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}.{self.value}>"
-
-    def __str__(self) -> str:
-        return self.value
 
     @property
     def from_shape(self) -> bool:
@@ -198,7 +185,7 @@ class ParameterTransformations(tuple):
         return any(t.from_rate for t in self)
 
 
-class FlowStrategy(enum.Enum):
+class FlowStrategy(StrEnum):
     """
     Strategy to handle over- and underflow bin contents.
 
@@ -212,9 +199,6 @@ class FlowStrategy(enum.Enum):
     warn = "warn"
     remove = "remove"
     move = "move"
-
-    def __str__(self) -> str:
-        return self.value
 
 
 class InferenceModelMeta(CachedDerivableMeta):
