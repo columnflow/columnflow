@@ -12,6 +12,7 @@ import os
 import io
 import re
 import abc
+import enum
 import uuid
 import queue
 import threading
@@ -618,6 +619,15 @@ def get_source_code(obj: Any, indent: str | int = None) -> str:
         )
 
     return code
+
+
+class StrEnum(enum.Enum):
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}.{self.value}>"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 class DotDict(OrderedDict):
