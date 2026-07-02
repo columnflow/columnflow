@@ -180,6 +180,8 @@ def electron_weights(
 
 @electron_weights.init
 def electron_weights_init(self: Producer, **kwargs) -> None:
+    super(electron_weights, self).init_func(**kwargs)
+
     # add the product of nominal and up/down variations to produced columns
     self.produces.add(f"{self.weight_name}{{,_up,_down}}")
 
@@ -191,6 +193,8 @@ def electron_weights_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
+    super(electron_weights, self).requires_func(task=task, reqs=reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -207,6 +211,14 @@ def electron_weights_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(electron_weights, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
+
     self.electron_config = self.get_electron_config()
 
     # load the corrector

@@ -1,4 +1,4 @@
-# version 18
+# version 19
 
 # exact versions for core array packages
 awkward==2.8.9
@@ -8,6 +8,7 @@ correctionlib==2.7.0
 coffea==2025.9.0
 
 # minimum versions for general packages
+rucio~=40.3.0
 zstandard~=0.25.0
 lz4~=4.4.4
 xxhash~=3.5.0

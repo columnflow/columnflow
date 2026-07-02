@@ -202,6 +202,8 @@ def tec(
 
 @tec.init
 def tec_init(self: Calibrator, **kwargs) -> None:
+    super(tec, self).init_func(**kwargs)
+
     self.tec_cfg = self.get_tec_config()
 
     # add nominal met columns of propagating nominal tec
@@ -229,6 +231,8 @@ def tec_requires(
     reqs: dict[str, DotDict[str, Any]],
     **kwargs,
 ) -> None:
+    super(tec, self).requires_func(task=task, reqs=reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -245,6 +249,8 @@ def tec_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(tec, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
+
     # create the tec corrector
     tau_file = self.get_tau_file(reqs["external_files"].files)
     self.tec_corrector = load_correction_set(tau_file)[self.tec_cfg.correction_set]

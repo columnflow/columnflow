@@ -232,9 +232,10 @@ def pdf_weights(
 
 @pdf_weights.init
 def pdf_weight_init(self: Producer, **kwargs) -> None:
+    super(pdf_weights, self).init_func(**kwargs)
+
     # add produced columns: nominal+all, nominal+up+down or nominal + hessian/alpha_s
     self.produces.add("pdf_weight")
-
     if not self.store_all_weights:
         self.produces.update({
             "pdf_weight_up",

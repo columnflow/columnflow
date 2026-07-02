@@ -455,7 +455,7 @@ def create_category_id(
         subsequently in an array, please be aware that values 8 or more require a ``np.int64``.
     """
     # create the hash
-    h = law.util.create_hash((config.name, config.id, category_name, salt), l=hash_len)
+    h = law.util.create_hash((config.name, config.id, category_name, salt), hash_len)
     h = int(h, base=16)
 
     # add an offset to ensure that are hashes are above a threshold

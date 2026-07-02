@@ -6,10 +6,7 @@ __all__ = ["HistUtilTests"]
 import unittest
 
 from columnflow.util import maybe_import
-from columnflow.hist_util import (
-    add_hist_axis, create_hist_from_variables, create_columnflow_hist,
-    translate_hist_intcat_to_strcat,
-)
+from columnflow.hist_util import add_hist_axis, create_hist_from_variables, translate_hist_intcat_to_strcat
 import order as od
 
 np = maybe_import("numpy")
@@ -96,7 +93,14 @@ class HistUtilTests(unittest.TestCase):
         self.assertEqual(histogram, histogram_manually)
 
         # test with default categorical axes
-        histogram = create_columnflow_hist(*self.variable_examples)
+        histogram = create_hist_from_variables(
+            *self.variable_examples,
+            categorical_axes=[
+                ("category", "intcat"),
+                ("process", "intcat"),
+                ("shift", "strcat"),
+            ],
+        )
 
         expected_default_axes = {
             "category": hist.axis.IntCategory,

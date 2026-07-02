@@ -31,6 +31,8 @@ def cf_default_keep_columns(self: Reducer, events: ak.Array, selection: ak.Array
 
 @cf_default_keep_columns.post_init
 def cf_default_keep_columns_post_init(self: Reducer, task: law.Task, **kwargs) -> None:
+    super(cf_default_keep_columns, self).post_init_func(task=task, **kwargs)
+
     for c in self.config_inst.x.keep_columns.get(task.task_family, ["*"]):
         self.produces.update(task._expand_keep_column(c))
 
@@ -59,6 +61,8 @@ def cf_default(self: Reducer, events: ak.Array, selection: ak.Array, task: law.T
 
 @cf_default.init
 def cf_default_init(self: Reducer, **kwargs) -> None:
+    super(cf_default, self).init_func(**kwargs)
+
     if self.add_keep_columns:
         self.uses.add(cf_default_keep_columns.PRODUCES)
         self.produces.add(cf_default_keep_columns.PRODUCES)
@@ -70,6 +74,8 @@ def cf_default_init(self: Reducer, **kwargs) -> None:
 
 @cf_default.post_init
 def cf_default_post_init(self: Reducer, task: law.Task, **kwargs) -> None:
+    super(cf_default, self).post_init_func(task=task, **kwargs)
+
     # the updates to used columns are only necessary if the task invokes the reducer
     if not task.invokes_reducer:
         return

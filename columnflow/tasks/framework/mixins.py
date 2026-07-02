@@ -368,11 +368,12 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         inst_dict = cls.get_calibrator_dict(params) if params else None
 
         insts = []
+        _cache = {}
         for calibrator in calibrators:
             calibrator_cls = Calibrator.get_cls(calibrator)
             if not calibrator_cls.exposed:
                 raise RuntimeError(f"cannot use unexposed calibrator '{calibrator}' in {cls.__name__}")
-            insts.append(calibrator_cls(inst_dict=inst_dict))
+            insts.append(calibrator_cls(inst_dict=inst_dict, instance_cache=_cache))
 
         return insts
 
@@ -1190,11 +1191,12 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         inst_dict = cls.get_producer_dict(params) if params else None
 
         insts = []
+        _cache = {}
         for producer in producers:
             producer_cls = Producer.get_cls(producer)
             if not producer_cls.exposed:
                 raise RuntimeError(f"cannot use unexposed producer '{producer}' in {cls.__name__}")
-            insts.append(producer_cls(inst_dict=inst_dict))
+            insts.append(producer_cls(inst_dict=inst_dict, instance_cache=_cache))
 
         return insts
 
@@ -2136,8 +2138,10 @@ class VariablesMixin(ConfigTask):
         # resolve variables
         if (variables := params.get("variables", law.no_value)) != law.no_value:
             # when empty, use the ones defined on class level
-            if variables in {(), (RESOLVE_DEFAULT,)} and cls.default_variables:
-                variables = tuple(cls.default_variables)
+            if variables == (RESOLVE_DEFAULT,):
+                variables = ()
+            if variables == () and cls.default_variables:
+                variables = law.util.make_tuple(cls.default_variables)
 
             # additional resolution and expansion requires a config
             if (container := cls._get_config_container(params)):
@@ -2167,13 +2171,9 @@ class VariablesMixin(ConfigTask):
                     resolved_variables.extend(map(cls.join_multi_variable, itertools.product(*resolved_parts)))
                 variables = law.util.make_unique(resolved_variables)
 
-            # when still empty, fallback to using all known variables
-            if not variables:
-                variables = sorted(set.intersection(*(set(c.variables.names()) for c in law.util.make_list(container))))
-
-            # complain when no variables were found
-            if not variables and not cls.allow_empty_variables:
-                raise ValueError(f"no variables found matching {params['variables']}")
+            # when still empty, complaion or fallback to using all known variables
+            if not variables and not cls.allow_missing_variables:
+                raise ValueError(f"no variables found matching '{','.join(params['variables'])}'")
 
             params["variables"] = tuple(variables)
 

@@ -127,7 +127,9 @@ def top_pt_weight(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @top_pt_weight.init
-def top_pt_weight_init(self: Producer) -> None:
+def top_pt_weight_init(self: Producer, **kwargs) -> None:
+    super(top_pt_weight, self).init_func(**kwargs)
+
     # store the top pt weight config
     self.cfg = self.get_top_pt_weight_config()
     if not isinstance(self.cfg, (TopPtWeightFromDataConfig, TopPtWeightFromTheoryConfig)):

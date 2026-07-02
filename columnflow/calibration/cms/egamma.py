@@ -160,6 +160,8 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
 
 @_egamma_scale_smear.init
 def _egamma_scale_smear_init(self: Calibrator, **kwargs) -> None:
+    super(_egamma_scale_smear, self).init_func(**kwargs)
+
     # store the config
     self.cfg = self.get_scale_smear_config()
 
@@ -182,6 +184,8 @@ def _egamma_scale_smear_init(self: Calibrator, **kwargs) -> None:
 
 @_egamma_scale_smear.requires
 def _egamma_scale_smear_requires(self, task: law.Task, reqs: dict[str, DotDict[str, Any]], **kwargs) -> None:
+    super(_egamma_scale_smear, self).requires_func(task=task, reqs=reqs, **kwargs)
+
     if "external_files" in reqs:
         return
 
@@ -198,6 +202,14 @@ def _egamma_scale_smear_setup(
     reader_targets: law.util.InsertableDict,
     **kwargs,
 ) -> None:
+    super(_egamma_scale_smear, self).setup_func(
+        task=task,
+        reqs=reqs,
+        inputs=inputs,
+        reader_targets=reader_targets,
+        **kwargs,
+    )
+
     # get and load the correction file
     corr_file = self.get_correction_file(reqs["external_files"].files)
     corr_set = load_correction_set(corr_file)

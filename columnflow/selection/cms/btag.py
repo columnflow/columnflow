@@ -99,7 +99,9 @@ def fill_btag_wp_count_hists(
 
 
 @fill_btag_wp_count_hists.init
-def fill_btag_wp_count_hists_init(self: Selector) -> None:
+def fill_btag_wp_count_hists_init(self: Selector, **kwargs) -> None:
+    super(fill_btag_wp_count_hists, self).init_func(**kwargs)
+
     # retrieve and store the config
     self.cfg: BTagWPCountConfig = self.get_btag_wp_count_config()
 

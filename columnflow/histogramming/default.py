@@ -48,11 +48,11 @@ def cf_default_create_hist(
     """
     return create_hist_from_variables(
         *variables,
-        categorical_axes=(
+        categorical_axes=[
             ("category", "intcat"),
             ("process", "intcat"),
-            ("shift", "intcat"),
-        ),
+            ("shift", "intcat", [0]),
+        ],
         weight=True,
     )
 
@@ -102,11 +102,15 @@ def cf_default_post_process_hist(self: HistProducer, h: hist.Hist, task: law.Tas
             return self.config_inst.get_category(cat_id).name
         h = translate_hist_intcat_to_strcat(h, "category", get_category_name)
     if "process" in axis_names:
-        process_map = {proc_id: self.config_inst.get_process(proc_id).name for proc_id in h.axes["process"]}
-        h = translate_hist_intcat_to_strcat(h, "process", process_map)
+        @functools.cache
+        def get_process_name(process_id: int) -> str:
+            return self.config_inst.get_process(process_id).name
+        h = translate_hist_intcat_to_strcat(h, "process", get_process_name)
     if "shift" in axis_names:
-        shift_map = {task.global_shift_inst.id: task.global_shift_inst.name}
-        h = translate_hist_intcat_to_strcat(h, "shift", shift_map)
+        @functools.cache
+        def get_shift_name(shift_id: int) -> str:
+            return self.config_inst.get_shift(shift_id).name
+        h = translate_hist_intcat_to_strcat(h, "shift", get_shift_name)
 
     return h
 
@@ -158,7 +162,9 @@ def all_weights(self: HistProducer, events: ak.Array, **kwargs) -> ak.Array:
 
 
 @all_weights.init
-def all_weights_init(self: HistProducer) -> None:
+def all_weights_init(self: HistProducer, **kwargs) -> None:
+    super(all_weights, self).init_func(**kwargs)
+
     weight_columns = set()
 
     if self.dataset_inst.is_data:

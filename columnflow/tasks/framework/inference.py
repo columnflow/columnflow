@@ -12,7 +12,7 @@ import order as od
 from columnflow.tasks.framework.base import Requirements
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, HistProducerClassMixin,
-    InferenceModelMixin, HistHookMixin, MLModelsMixin,
+    InferenceModelMixin, HistHookMixin, MLModelsMixin, VariablesMixin,
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeShiftedHistograms
@@ -203,6 +203,13 @@ class SerializeInferenceModelBase(
         reqs = {}
         for config_inst, data in self.combined_config_data.items():
             reqs[config_inst.name] = {}
+            # ensure that all variables exist
+            for var_name in set.union(*map(set, map(VariablesMixin.split_multi_variable, data["variables"]))):
+                if not config_inst.has_variable(var_name):
+                    raise ValueError(
+                        f"config '{config_inst.name}' does not have variable '{var_name}' defined as required by "
+                        f"inference model '{self.inference_model}'",
+                    )
             # mc datasets
             for dataset_name in sorted(data["mc_datasets"]):
                 reqs[config_inst.name][dataset_name] = self._hist_requirement(
@@ -266,15 +273,19 @@ class SerializeInferenceModelBase(
                         # gather all subprocesses for a full query later
                         sub_process_insts = [sub for sub, _, _ in process_inst.walk_processes(include_self=True)]
 
-                        # there must be at least one matching sub process
-                        if not any(p.name in h.axes["process"] for p in sub_process_insts):
-                            raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
+                        # only perform subprocess selection if there are any on the process axis
+                        if len(h.axes["process"]):
+                            # then, there must be at least one matching sub process
+                            if not any(p.name in h.axes["process"] for p in sub_process_insts):
+                                raise Exception(f"no '{variable}' histograms found for process '{process_inst.name}'")
 
-                        # select and reduce over relevant processes
-                        h_proc = h[{
-                            "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
-                        }]
-                        h_proc = h_proc[{"process": sum}]
+                            # select and reduce over relevant processes
+                            h_proc = h[{
+                                "process": [hist.loc(p.name) for p in sub_process_insts if p.name in h.axes["process"]],
+                            }]
+                            h_proc = h_proc[{"process": sum}]
+                        else:
+                            h_proc = h[{"process": sum}]
 
                         # additional custom reductions
                         h_proc = self.modify_process_hist(

@@ -720,19 +720,17 @@ def apply_ax_kwargs(ax: plt.Axes, kwargs: dict[str, Any]) -> None:
         ax.tick_params(axis="y", labelrotation=other_kwargs.get("yrotation"))
     if other_kwargs.get("xticklabelformat") is not None:
         _kwargs = other_kwargs["xticklabelformat"].copy()
-        if ax.get_xscale() == "log":
+        if not callable(getattr(ax.xaxis.major.formatter, "set_scientific", None)):
             if _kwargs.get("style") == "sci":
                 _kwargs.pop("style")
-            if _kwargs.get("useMathText"):
-                _kwargs.pop("useMathText")
+                _kwargs.pop("useMathText", None)
         ax.ticklabel_format(axis="x", **_kwargs)
     if other_kwargs.get("yticklabelformat") is not None:
         _kwargs = other_kwargs["yticklabelformat"].copy()
-        if ax.get_yscale() == "log":
+        if not callable(getattr(ax.yaxis.major.formatter, "set_scientific", None)):
             if _kwargs.get("style") == "sci":
                 _kwargs.pop("style")
-            if _kwargs.get("useMathText"):
-                _kwargs.pop("useMathText")
+                _kwargs.pop("useMathText", None)
         ax.ticklabel_format(axis="y", **_kwargs)
     if other_kwargs.get("xoffsettext") is not None:
         ax.xaxis.get_offset_text().set(**other_kwargs["xoffsettext"])

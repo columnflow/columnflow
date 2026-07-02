@@ -894,7 +894,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                 not (0 < max_len < (len(r) + sum(map(len, objects[:max_count])) + len(sep) * max_count + hash_len))
             ):
                 r += sep.join(objects[:max_count])
-                r += f"{sep}{law.util.create_hash(objects[max_count:], l=hash_len)}"
+                r += f"{sep}{law.util.create_hash(objects[max_count:], hash_len)}"
             else:
                 r += sep.join(objects)
         else:
@@ -902,7 +902,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
 
         # handle overall truncation
         if max_len > 0 and len(r) > max_len:
-            r = f"{r[:max_len - hash_len - len(sep)]}{sep}{law.util.create_hash(r, l=hash_len)}"
+            r = f"{r[:max_len - hash_len - len(sep)]}{sep}{law.util.create_hash(r, hash_len)}"
 
         return r
 

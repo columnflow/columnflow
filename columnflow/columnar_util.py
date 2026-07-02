@@ -1115,9 +1115,19 @@ def sorted_ak_to_root(
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
 
+    # helper to linearize nested arrays
+    def pack(ak_array, prefix=""):
+        packed = {}
+        for field in ak_array.fields:
+            if ak_array[field].fields:
+                packed.update(pack(ak_array[field], prefix + field + "_"))
+            else:
+                packed[prefix + field] = ak_array[field]
+        return packed
+
     # create the file
     f = uproot.recreate(path)
-    f[tree_name] = {field: ak_array[field] for field in ak_array.fields}
+    f[tree_name] = pack(ak_array)
     f.close()
 
 
@@ -1824,7 +1834,7 @@ class ArrayFunction(Derivable):
     check_used_columns = True
     check_produced_columns = True
     _dependency_sets = {"uses", "produces"}
-    log_runtime = law.config.get_expanded_boolean("analysis", "log_array_function_runtime", False)
+    log_runtime = law.config.get_expanded_bool("analysis", "log_array_function_runtime", False)
 
     # flags for declaring inputs (via uses) or outputs (via produces)
     class IOFlag(enum.Flag):
@@ -2160,7 +2170,7 @@ class ArrayFunction(Derivable):
             cls = cls_or_inst if is_cls else cls_or_inst.__class__
 
             # skip when the dependency is already present
-            if only_update and cls in self.deps:
+            if cls in self.deps:
                 return self.deps[cls]
 
             # create or get the instance
@@ -3490,7 +3500,7 @@ class ChunkedIOHandler(object):
         read_options: dict | Sequence[dict] | None = None,
         read_columns: set | Sequence[set] | None = None,
         iter_message: str = "handling chunk {pos.index}",
-        debug: bool = law.config.get_expanded_boolean("analysis", "chunked_io_debug", False),
+        debug: bool = law.config.get_expanded_bool("analysis", "chunked_io_debug", False),
     ):
         super().__init__()
 
