@@ -2138,8 +2138,10 @@ class VariablesMixin(ConfigTask):
         # resolve variables
         if (variables := params.get("variables", law.no_value)) != law.no_value:
             # when empty, use the ones defined on class level
-            if variables in {(), (RESOLVE_DEFAULT,)} and cls.default_variables:
-                variables = tuple(cls.default_variables)
+            if variables == (RESOLVE_DEFAULT,):
+                variables = ()
+            if variables == () and cls.default_variables:
+                variables = law.util.make_tuple(cls.default_variables)
 
             # additional resolution and expansion requires a config
             if (container := cls._get_config_container(params)):
@@ -2169,13 +2171,9 @@ class VariablesMixin(ConfigTask):
                     resolved_variables.extend(map(cls.join_multi_variable, itertools.product(*resolved_parts)))
                 variables = law.util.make_unique(resolved_variables)
 
-            # when still empty, fallback to using all known variables
-            if not variables:
-                variables = sorted(set.intersection(*(set(c.variables.names()) for c in law.util.make_list(container))))
-
-            # complain when no variables were found
-            if not variables and not cls.allow_empty_variables:
-                raise ValueError(f"no variables found matching {params['variables']}")
+            # when still empty, complaion or fallback to using all known variables
+            if not variables and not cls.allow_missing_variables:
+                raise ValueError(f"no variables found matching '{','.join(params['variables'])}'")
 
             params["variables"] = tuple(variables)
 
