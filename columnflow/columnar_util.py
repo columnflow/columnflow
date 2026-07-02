@@ -2170,7 +2170,7 @@ class ArrayFunction(Derivable):
             cls = cls_or_inst if is_cls else cls_or_inst.__class__
 
             # skip when the dependency is already present
-            if only_update and cls in self.deps:
+            if cls in self.deps:
                 return self.deps[cls]
 
             # create or get the instance

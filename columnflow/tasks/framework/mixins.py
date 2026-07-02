@@ -368,11 +368,12 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
         inst_dict = cls.get_calibrator_dict(params) if params else None
 
         insts = []
+        _cache = {}
         for calibrator in calibrators:
             calibrator_cls = Calibrator.get_cls(calibrator)
             if not calibrator_cls.exposed:
                 raise RuntimeError(f"cannot use unexposed calibrator '{calibrator}' in {cls.__name__}")
-            insts.append(calibrator_cls(inst_dict=inst_dict))
+            insts.append(calibrator_cls(inst_dict=inst_dict, instance_cache=_cache))
 
         return insts
 
@@ -1190,11 +1191,12 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
         inst_dict = cls.get_producer_dict(params) if params else None
 
         insts = []
+        _cache = {}
         for producer in producers:
             producer_cls = Producer.get_cls(producer)
             if not producer_cls.exposed:
                 raise RuntimeError(f"cannot use unexposed producer '{producer}' in {cls.__name__}")
-            insts.append(producer_cls(inst_dict=inst_dict))
+            insts.append(producer_cls(inst_dict=inst_dict, instance_cache=_cache))
 
         return insts
 

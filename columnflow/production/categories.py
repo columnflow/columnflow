@@ -88,16 +88,12 @@ def category_ids_init(self: Producer, **kwargs) -> None:
                 categorizer = Categorizer.get_cls(sel)
             else:
                 raise Exception(
-                    f"selection '{sel}' of category '{cat_inst.name}' cannot be resolved to an "
-                    "existing Categorizer object",
+                    f"selection '{sel}' of category '{cat_inst.name}' cannot be resolved to an existing Categorizer",
                 )
 
             # the categorizer must be exposed
             if not categorizer.exposed:
-                raise RuntimeError(
-                    f"cannot use unexposed categorizer '{categorizer}' to evaluate category "
-                    f"{cat_inst}",
-                )
+                raise RuntimeError(f"cannot use unexposed categorizer '{categorizer}' to evaluate category {cat_inst}")
 
             # update dependency sets
             self.uses.add(categorizer)
