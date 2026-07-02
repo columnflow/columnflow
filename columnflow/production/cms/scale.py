@@ -4,13 +4,12 @@
 Column production methods related to the renormalization and factorization scales.
 """
 
-import enum
 import functools
 
 import law
 
 from columnflow.production import Producer, producer
-from columnflow.util import maybe_import, DotDict
+from columnflow.util import maybe_import, DotDict, StrEnum
 from columnflow.columnar_util import set_ak_column, ak_concatenate_safe
 
 np = maybe_import("numpy")
@@ -23,7 +22,7 @@ logger = law.logger.get_logger(__name__)
 set_ak_column_f32 = functools.partial(set_ak_column, value_type=np.float32)
 
 
-class ScaleWeightOutput(enum.Enum):
+class ScaleWeightOutput(StrEnum):
     """
     Flag to denote which type of weights to output in the :py:class:`murmuf_weights` producer. Options:
 
@@ -37,12 +36,6 @@ class ScaleWeightOutput(enum.Enum):
     correlated = "correlated"
     single_correlated = "single_correlated"
     raw = "raw"
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}.{self.value}>"
-
-    def __str__(self) -> str:
-        return self.value
 
 
 @producer(
