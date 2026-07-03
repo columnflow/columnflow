@@ -136,6 +136,7 @@ class CreateYieldTable(_CreateYieldTable):
     def run(self):
         import hist
         from tabulate import tabulate
+        from columnflow.plotting.plot_util import remove_label_placeholders
 
         inputs = self.input()
         outputs = self.output()
@@ -231,7 +232,7 @@ class CreateYieldTable(_CreateYieldTable):
                 }
 
             # initialize dicts
-            yields_str = defaultdict(list, {"Process": [proc.label for proc in processes]})
+            yields_str = defaultdict(list, {"Process": [remove_label_placeholders(proc.label) for proc in processes]})
             raw_yields = defaultdict(dict, {})
 
             # apply normalization and format
@@ -256,7 +257,7 @@ class CreateYieldTable(_CreateYieldTable):
                     )
                     if "latex" in self.table_format:
                         yield_str = f"${yield_str}$"
-                    yields_str[category.label].append(yield_str)
+                    yields_str[remove_label_placeholders(category.label)].append(yield_str)
 
             # create, print and save the yield table
             yield_table = tabulate(yields_str, headers="keys", tablefmt=self.table_format)
