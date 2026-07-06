@@ -1063,7 +1063,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             "JER": jer,
             "JERSF": jersf,
         }
-        smear_factors = self.jer_tool.evaluate(*(tool_variable_map[var.name] for var in self.jer_tool.inputs))
+        smear_factors = self.jer_tool.evaluate(*(tool_variable_map[inp.name] for inp in self.jer_tool.inputs))
 
         # retro actively apply the custom stochastic_smearing_mask
         smear_factors = ak.where(
