@@ -814,6 +814,7 @@ class JERConfig(TAFConfig):
     campaign: str
     version: str
     external_file_key: str | None = None
+    use_jer_tool: bool = False
 
     @classmethod
     def new(cls, obj: JERConfig | dict[str, Any]) -> JERConfig:
@@ -883,8 +884,8 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     met_name="MET",  # TODO: move to JERConfig.met_name?
     # toggle for propagation to MET
     propagate_met=True,  # TODO: move to JERConfig.propagate_met?
-    # use deterministic seeds for random smearing and
-    # take the "index"-th random number per seed when not -1
+    # use deterministic seeds for random smearing and take the "index"-th random number per seed when not -1
+    # (only allowed when not using the central jer smearing tool, see JERConfig and get_jer_tool_file)
     deterministic_seed_index=-1,
     # function to determine the correction file
     get_jer_file=functools.partialmethod(get_jerc_file_default, get_config_attr="get_jer_config"),
@@ -892,6 +893,9 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
     get_jer_config=get_jer_config_default,
     # function to determine the jec configuration dict
     get_jec_config=get_jec_config_default,
+    # function to get the jer smearing tool (correctionlib) file from the config
+    # (see https://cms-jerc.web.cern.ch/JER/#smearing-procedures)
+    get_jer_tool_file=(lambda self, external_files: external_files.jer_tool),
     # jec uncertainty sources to propagate jer to, defaults to config when empty
     jec_uncertainty_sources=None,  # TODO: solely use JECConfig.uncertainty_sources?
     # whether gen jet matching should be performed relative to the nominal jet pt, or the jec varied values
@@ -970,15 +974,6 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     events = set_ak_column_f32(events, f"{jet_name}.pt_unsmeared", events[jet_name].pt)
     events = set_ak_column_f32(events, f"{jet_name}.mass_unsmeared", events[jet_name].mass)
 
-    # normally distributed random numbers per jet for use in stochastic smearing below
-    random_normal = (
-        ak_random(0, 1, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
-        if self.deterministic_seed_index >= 0
-        else ak_random(0, 1, rand_func=np.random.Generator(
-            np.random.SFC64(events.event.to_list())).normal,
-        )
-    )
-
     # obtain rho, which might be located at different routes, depending on the nano version
     rho = (
         events.fixedGridRhoFastjetAll
@@ -1044,59 +1039,87 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         axis=-1,
     )
 
-    # -- stochastic smearing
-
-    # scale random numbers according to JER SF
-    jersf2_m1 = jersf**2 - 1
-    add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
-
-    # compute smearing factors (stochastic method)
-    smear_factors_stochastic = ak.where(
-        self.stochastic_smearing_mask(events[jet_name]),
-        1.0 + random_normal * jer * add_smear,
-        1.0,
-    )
-
-    # -- scaling method (using gen match)
-
+    # gen jet matching
     # mask negative gen jet indices (= no gen match)
     gen_jet_idx = events[jet_name][self.gen_jet_idx_column]
     valid_gen_jet_idxs = ak.mask(gen_jet_idx, gen_jet_idx >= 0)
-
     # pad list of gen jets to prevent index error on match lookup
     max_gen_jet_idx = ak.max(valid_gen_jet_idxs)
     padded_gen_jets = ak.pad_none(
         events[gen_jet_name],
         0 if max_gen_jet_idx is None else (max_gen_jet_idx + 1),
     )
-
     # gen jets that match the reconstructed jets
     matched_gen_jet = padded_gen_jets[valid_gen_jet_idxs]
 
-    # compute the relative (reco - gen) pt difference
-    if self.gen_jet_matching_nominal:
-        # use nominal pt for matching
-        match_pt = events[jet_name].pt
+    # tool based vs. manual implementation
+    if self.jer_tool:
+        tool_variable_map = {
+            "JetPt": events[jet_name].pt,
+            "JetEta": events[jet_name].eta,
+            "GenPt": ak.fill_none(matched_gen_jet.pt, -1.0, axis=1),
+            "Rho": rho,
+            "EventID": events.event,
+            "JER": jer,
+            "JERSF": jersf,
+        }
+        smear_factors = self.jer_tool.evaluate(*(tool_variable_map[var.name] for var in self.jer_tool.inputs))
+
+        # retro actively apply the custom stochastic_smearing_mask
+        smear_factors = ak.where(
+            (self.stochastic_smearing_mask(events[jet_name]) & ~ak.is_none(matched_gen_jet)),
+            smear_factors,
+            1.0,
+        )
     else:
-        # concatenate varied pt values for broadcasting
-        pt_names = ["pt" for _ in self.jer_variations] + [f"pt_{jec_var}" for jec_var in self.jec_variations]
-        match_pt = ak_concatenate_safe([events[jet_name][pt_name][..., None] for pt_name in pt_names], axis=-1)
-    pt_relative_diff = 1 - matched_gen_jet.pt / match_pt
+        # -- stochastic smearing
 
-    # test if matched gen jets are within 3 * resolution
-    # (no check for Delta-R matching criterion; we assume this was done during nanoAOD production to get the genJetIdx)
-    is_matched_pt = np.abs(pt_relative_diff) < 3 * jer
-    is_matched_pt = ak.fill_none(is_matched_pt, False)  # masked values = no gen match
+        # scale random numbers according to JER SF
+        jersf2_m1 = jersf**2 - 1
+        add_smear = np.sqrt(ak.where(jersf2_m1 < 0, 0, jersf2_m1))
 
-    # compute smearing factors (scaling method)
-    smear_factors_scaling = 1.0 + (jersf - 1.0) * pt_relative_diff
+        # normally distributed random numbers per jet
+        random_normal = (
+            ak_random(0, 1, events[jet_name].deterministic_seed, rand_func=self.deterministic_normal)
+            if self.deterministic_seed_index >= 0
+            else ak_random(0, 1, rand_func=np.random.Generator(
+                np.random.SFC64(events.event.to_list())).normal,
+            )
+        )
 
-    # -- hybrid smearing: take smear factors from scaling if there was a match,
-    # otherwise take the stochastic ones
-    smear_factors = ak.where(is_matched_pt, smear_factors_scaling, smear_factors_stochastic)
+        # compute smearing factors (stochastic method)
+        smear_factors_stochastic = ak.where(
+            self.stochastic_smearing_mask(events[jet_name]),
+            1.0 + random_normal * jer * add_smear,
+            1.0,
+        )
 
-    # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
-    smear_factors = ak.fill_none(smear_factors, 0.0)
+        # -- scaling method (using gen match)
+
+        # compute the relative (reco - gen) pt difference
+        if self.gen_jet_matching_nominal:
+            # use nominal pt for matching
+            match_pt = events[jet_name].pt
+        else:
+            # concatenate varied pt values for broadcasting
+            pt_names = ["pt" for _ in self.jer_variations] + [f"pt_{jec_var}" for jec_var in self.jec_variations]
+            match_pt = ak_concatenate_safe([events[jet_name][pt_name][..., None] for pt_name in pt_names], axis=-1)
+        pt_relative_diff = 1 - matched_gen_jet.pt / match_pt
+
+        # test if matched gen jets are within 3 * resolution
+        # (no check for dR matching criterion; we assume this was done during nanoAOD production to get the genJetIdx)
+        is_matched_pt = np.abs(pt_relative_diff) < 3 * jer
+        is_matched_pt = ak.fill_none(is_matched_pt, False)  # masked values = no gen match
+
+        # compute smearing factors (scaling method)
+        smear_factors_scaling = 1.0 + (jersf - 1.0) * pt_relative_diff
+
+        # -- hybrid smearing: take smear factors from scaling if there was a match,
+        # otherwise take the stochastic ones
+        smear_factors = ak.where(is_matched_pt, smear_factors_scaling, smear_factors_stochastic)
+
+        # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
+        smear_factors = ak.fill_none(smear_factors, 0.0)
 
     # to allow for code simplifications below, store the reference pt and mass columns upon which the smearing is based
     # into the events array for cases where it shouldn't already exist
@@ -1221,6 +1244,9 @@ def jer_init(self: Calibrator, **kwargs) -> None:
         if jec_sources:
             self.produces |= met_jec_columns
 
+    if self.jer_cfg.use_jer_tool:
+        self.uses.add("event")
+
 
 @jer.requires
 def jer_requires(
@@ -1280,10 +1306,6 @@ def jer_setup(
     """
     super(jer, self).setup_func(task=task, reqs=reqs, inputs=inputs, reader_targets=reader_targets, **kwargs)
 
-    # import the correction sets from the external file
-    jer_file = self.get_jer_file(reqs["external_files"].files)
-    correction_set = load_correction_set(jer_file)
-
     # compute JER keys from config information
     if self.bjec_cfg is None:
         jer_keys = {
@@ -1303,14 +1325,30 @@ def jer_setup(
             ),
         }
 
+    # import the correction sets from the external file
+    jer_file = self.get_jer_file(reqs["external_files"].files)
+    correction_set = load_correction_set(jer_file)
+
     # store the evaluators
     self.evaluators = {
         name: get_evaluators(correction_set, [key])[0]
         for name, key in jer_keys.items()
     }
 
+    # check if the jer smearing tool should be used, and optionally set it up
+    self.jer_tool = None
+    if self.jer_cfg.use_jer_tool:
+        jer_tool_file = self.get_jer_tool_file(reqs["external_files"].files)
+        self.jer_tool = load_correction_set(jer_tool_file)["JERSmear"]
+
     # use deterministic seeds for random smearing if requested
     if self.deterministic_seed_index >= 0:
+        # deterministic seeds and the jer smearing tool should not be used simultaneously
+        if self.jer_tool is not None:
+            raise ValueError(
+                "deterministic seeds for random smearing and the jer smearing tool should not be used simultaneously",
+            )
+
         idx = self.deterministic_seed_index
         bit_generator = np.random.SFC64
 
