@@ -41,7 +41,6 @@ def cf_default_create_hist(
     self: HistProducer,
     variables: list[od.Variable],
     task: law.Task,
-    **kwargs,
 ) -> hist.Hist:
     """
     Define the histogram structure for the default histogram producer.
@@ -62,7 +61,7 @@ def cf_default_fill_hist(
     self: HistProducer,
     h: hist.Hist,
     data: dict[str, Any],
-    variable_insts: list[od.Variable],
+    variables: list[od.Variable],
     events: ak.Array,
     task: law.Task,
 ) -> None:
