@@ -15,6 +15,7 @@ from columnflow.production import TaskArrayFunctionWithProducerRequirements
 from columnflow.util import DerivableMeta, maybe_import, UNSET
 from columnflow.types import TYPE_CHECKING, Any, Callable, Sequence, UNSET_TYPE
 
+ak = maybe_import("awkward")
 if TYPE_CHECKING:
     hist = maybe_import("hist")
 
@@ -169,6 +170,8 @@ class HistProducer(TaskArrayFunctionWithProducerRequirements):
 
             - *h*, the histogram (or a container with histograms) to fill.
             - *data*, a dictionary with data to fill.
+            - *variable_insts*, a list of :py:class:`order.Variable` instances (often just one).
+            - *events*, initial event data.
             - *task*, the invoking task instance.
 
         The decorator does not return the wrapped function.
@@ -237,30 +240,37 @@ class HistProducer(TaskArrayFunctionWithProducerRequirements):
         """
         Invokes the :py:meth:`create_hist_func` of this instance and returns its result, forwarding all arguments.
         """
-        return self.create_hist_func(variables, task=task)
+        return self.create_hist_func(variables=variables, task=task)
 
-    def run_fill_hist(self, h: Any, data: dict[str, Any], task: law.Task) -> None:
+    def run_fill_hist(
+        self,
+        h: Any,
+        data: dict[str, Any],
+        variable_insts: list[od.Variable],
+        events: ak.Array,
+        task: law.Task,
+    ) -> None:
         """
         Invokes the :py:meth:`fill_hist_func` of this instance and returns its result, forwarding all arguments.
         """
-        return self.fill_hist_func(h, data, task=task)
+        return self.fill_hist_func(h=h, data=data, variable_insts=variable_insts, events=events, task=task)
 
     def run_post_process_hist(self, h: Any, task: law.Task) -> Any:
         """
         Invokes the :py:meth:`post_process_hist_func` of this instance and returns its result, forwarding all arguments.
         """
-        if not callable(self.post_process_hist_func):
-            return h
-        return self.post_process_hist_func(h, task=task)
+        if callable(self.post_process_hist_func):
+            h = self.post_process_hist_func(h=h, task=task)
+        return h
 
     def run_post_process_merged_hist(self, h: Any, task: law.Task) -> hist.Hist:
         """
         Invokes the :py:meth:`post_process_merged_hist_func` of this instance and returns its result, forwarding all
         arguments.
         """
-        if not callable(self.post_process_merged_hist_func):
-            return h
-        return self.post_process_merged_hist_func(h, task=task)
+        if callable(self.post_process_merged_hist_func):
+            h = self.post_process_merged_hist_func(h=h, task=task)
+        return h
 
 
 # shorthand

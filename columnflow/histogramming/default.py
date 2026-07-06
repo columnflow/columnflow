@@ -58,12 +58,19 @@ def cf_default_create_hist(
 
 
 @cf_default.fill_hist
-def cf_default_fill_hist(self: HistProducer, h: hist.Hist, data: dict[str, Any], task: law.Task) -> None:
+def cf_default_fill_hist(
+    self: HistProducer,
+    h: hist.Hist,
+    data: dict[str, Any],
+    variable_insts: list[od.Variable],
+    events: ak.Array,
+    task: law.Task,
+) -> None:
     """
     Fill the histogram with the data.
     """
     # in case multiple variable axes are given that refer to data arrays with more than one dimension (i.e. nested),
-    # check if they are broadcasting-compatible since otherwise, the full combinatorics of values would be fille which
+    # check if they are broadcasting-compatible since otherwise, the full combinatorics of values would be filled which
     # is not supported by fill_hist in its default implementation
     import hist
 

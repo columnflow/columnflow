@@ -313,11 +313,17 @@ class CreateHistograms(_CreateHistograms):
                         fill_data[variable_inst.name] = expr(masked_events)
 
                     # let the hist producer fill it
-                    self.hist_producer_inst.run_fill_hist(histograms[var_key], fill_data, task=self)
+                    self.hist_producer_inst.run_fill_hist(
+                        h=histograms[var_key],
+                        data=fill_data,
+                        variable_insts=variable_insts,
+                        events=masked_events,
+                        task=self,
+                    )
 
         # post-process the histograms
         for var_key in self.variable_tuples.keys():
-            histograms[var_key] = self.hist_producer_inst.run_post_process_hist(histograms[var_key], task=self)
+            histograms[var_key] = self.hist_producer_inst.run_post_process_hist(h=histograms[var_key], task=self)
 
             # check the format after post-processing if no merged preprocessing will take place
             if (
@@ -465,7 +471,7 @@ class MergeHistograms(_MergeHistograms):
             merged = sum_hists(variable_hists)
 
             # post-process the merged histogram
-            merged = self.hist_producer_inst.run_post_process_merged_hist(merged, task=self)
+            merged = self.hist_producer_inst.run_post_process_merged_hist(h=merged, task=self)
 
             # ensure the format is compatible
             if not self.hist_producer_inst.skip_compatibility_check:
