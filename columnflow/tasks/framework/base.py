@@ -24,7 +24,7 @@ import law
 import order as od
 
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
-from columnflow.util import get_docs_url, is_regex, prettify, DotDict, freeze
+from columnflow.util import is_regex, prettify, DotDict, freeze
 from columnflow.types import Sequence, Callable, Any, T
 
 
@@ -216,10 +216,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return {}
 
         # apply brace expansion to keys
-        items = sum((
-            [(_key, value) for _key in law.util.brace_expand(key)]
-            for key, value in items
-        ), [])
+        items = law.util.flatten(
+            ([(_key, value) for _key in law.util.brace_expand(key)] for key, value in items),
+            flatten_tuple=False,
+        )
 
         # breakup keys at double underscores and create a nested dictionary
         items_dict = {}
@@ -240,7 +240,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     # assign value to the last nesting level, do not overwrite
                     if part not in d:
                         d[part] = value
-                    elif isinstance(d[part], dict):
+                    elif isinstance(d[part], dict) and "*" not in d[part]:
                         d[part]["*"] = value
 
         return items_dict
@@ -382,10 +382,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         prefix = "task"
         keys[prefix] = f"{prefix}_{cls.task_family}"
 
-        # for backwards compatibility, add the task family again without the prefix
-        # (TODO: this should be removed in the future)
-        keys[f"{prefix}_compat"] = cls.task_family
-
         return keys
 
     @classmethod
@@ -418,23 +414,6 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             regex = is_regex(pattern)
             for i, key in enumerate(_keys):
                 if law.util.multi_match(key, pattern, regex=regex):
-                    # for a limited time, show a deprecation warning when the old task family key was matched
-                    # (old = no "task_" prefix)
-                    # TODO: remove once deprecated
-                    if "task_compat" in keys and key == keys["task_compat"]:
-                        docs_url = get_docs_url(
-                            "user_guide",
-                            "best_practices.html",
-                            anchor="selecting-output-locations",
-                        )
-                        logger.warning_once(
-                            "dfs_lookup_old_task_key",
-                            f"during the lookup of a pinned location, version or resource value of a '{cls.__name__}' "
-                            f"task, an entry matched based on the task family '{key}' that misses the new 'task_' "
-                            "prefix; please update the pinned entries in your law.cfg file by adding the 'task_' "
-                            f"prefix to entries that contain the task family, e.g. 'task_{key}: VALUE'; support for "
-                            f"missing prefixes will be removed in a future version; see {docs_url} for more info",
-                        )
                     # remove the matched key from remaining lookup keys
                     _keys.pop(i)
                     # when obj is not a dict, we found the value
