@@ -276,7 +276,10 @@ class CreateHistograms(_CreateHistograms):
 
                     if var_key not in histograms:
                         # create the histogram in the first chunk
-                        histograms[var_key] = self.hist_producer_inst.run_create_hist(variable_insts, task=self)
+                        histograms[var_key] = self.hist_producer_inst.run_create_hist(
+                            variables=variable_insts,
+                            task=self,
+                        )
 
                     # mask events and weights when selection expressions are found
                     masked_events = events
@@ -316,7 +319,7 @@ class CreateHistograms(_CreateHistograms):
                     self.hist_producer_inst.run_fill_hist(
                         h=histograms[var_key],
                         data=fill_data,
-                        variable_insts=variable_insts,
+                        variables=variable_insts,
                         events=masked_events,
                         task=self,
                     )
