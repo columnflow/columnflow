@@ -105,14 +105,11 @@ def murmuf_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     # store output columns
     for weight_name in self.weight_names:
-        if self.scale_weight_output == ScaleWeightOutput.raw:
-            # raw, normalized weight
-            weights = ones if weight_name == "mur_nom_muf_nom" else murf_weights[:, indices[weight_name]]
-        elif weight_name.endswith("_weight"):
-            # nominal weight, just store ones
-            weights = ones
-        else:
-            # varied weight, lookup values by index
+        weights = ones
+        if self.scale_weight_output == ScaleWeightOutput.raw and weight_name != "mur_nom_muf_nom":
+            weights = ones.copy()
+            weights[non_zero_mask] = murf_weights[:, indices[weight_name]]
+        elif self.scale_weight_output != ScaleWeightOutput.raw and not weight_name.endswith("_weight"):
             weights = ones.copy()
             weights[non_zero_mask] = murf_weights[:, indices[self.weight_map[weight_name]]]
         # store it

@@ -198,11 +198,8 @@ def pdf_weights(
             events = fill_at_f32(events, invalid_pdf_weight, "pdf_weight_down", 0)
 
     else:  # raw
-        # mask to select events with alphas weights
-        has_alphas = n_weights == 103
-
         # log if events have pdf weights but miss alpha_s
-        if ak.any(~has_alphas):
+        if ak.any(~(has_alphas := n_weights == 103)):
             frac_abs = float(ak.mean(has_alphas)) * 100
             frac_rel = float(ak.mean(has_alphas[~invalid_mask])) * 100
             logger.warning(
