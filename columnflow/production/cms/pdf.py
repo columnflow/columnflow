@@ -208,7 +208,7 @@ def pdf_weights(
             )
 
         # pad to have 102 entries
-        pdf_weights = ak.fill_none(ak.pad_none(pdf_weights, 102, axis=1, clip=True), 1)
+        pdf_weights = ak.fill_none(ak.pad_none(pdf_weights, 102, axis=1), 1)
 
         # store hessian weights
         events = set_ak_column_f32(events, "pdf_weights_hessian", pdf_weights[:, :100])
