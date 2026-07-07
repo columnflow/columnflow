@@ -207,19 +207,17 @@ def pdf_weights(
             frac_rel = float(ak.mean(has_alphas[~invalid_mask])) * 100
             logger.warning(
                 f"in dataset {self.dataset_inst.name}, only {frac_abs:.2f}% of the events have valid alpha_s weights "
-                f"({frac_rel:.2f}% of those with valid pf weights);  issing ones will be filled with 1",
+                f"({frac_rel:.2f}% of those with valid pdf weights); missing ones will be filled with 1",
             )
+
+        # pad to have 102 entries
+        pdf_weights = ak.fill_none(ak.pad_none(pdf_weights, 102, axis=1, clip=True), 1)
 
         # store hessian weights
         events = set_ak_column_f32(events, "pdf_weights_hessian", pdf_weights[:, :100])
 
-        # create and store alphas weights, filled with 1 when missing
-        alphas_weights = ak.where(
-            has_alphas,
-            pdf_weights[:, 100:102],
-            full_like(events.LHEPdfWeight[:, :2], 1.0, dtype=np.float32),
-        )[:, [0, 1]]
-        events = set_ak_column_f32(events, "pdf_weights_alphas", alphas_weights)
+        # store pdf weights
+        events = set_ak_column_f32(events, "pdf_weights_alphas", pdf_weights[:, 100:102])
 
     return events
 
