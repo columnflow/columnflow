@@ -1342,7 +1342,7 @@ def jer_setup(
     correction_set = load_correction_set(jer_file)
 
     # check if the correction set has the updated format with "*_SFUncertainty_*" evaluators
-    self.has_sfunc_evaluator = law.util.make_tuple(jer_keys["sfunc"])[0] in correction_set
+    self.has_sfunc_evaluator = law.util.make_tuple(jer_keys["sfunc"])[0] in set(correction_set.keys())
     if not self.has_sfunc_evaluator:
         del jer_keys["sfunc"]
 
