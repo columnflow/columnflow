@@ -1018,10 +1018,17 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         jer[jec_var] = run_evaluator("jer", _variable_map)
 
     # extract scale factors
+    # uncertainties are extracted with the same evaluator, or a dedicated one as of the new JME format
     jersf = {}
-    for jer_var in self.jer_variations:
-        _variable_map = variable_map | {"systematic": jer_var}
-        jersf[jer_var] = run_evaluator("sf", _variable_map)
+    if self.has_sfunc_evaluator:
+        jersf[jer_nom] = run_evaluator("sf", variable_map)
+        sfunc = run_evaluator("sfunc", variable_map)
+        jersf[jer_up] = jersf[jer_nom] * (1 + sfunc)
+        jersf[jer_down] = jersf[jer_nom] * (1 - sfunc)
+    else:
+        for jer_var in self.jer_variations:
+            _variable_map = variable_map | {"systematic": jer_var}
+            jersf[jer_var] = run_evaluator("sf", _variable_map)
 
     # extract scale factors for jec uncertainties
     for jec_var in self.jec_variations:
@@ -1311,6 +1318,7 @@ def jer_setup(
         jer_keys = {
             "jer": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_PtResolution_{self.jer_cfg.jet_type}",
             "sf": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.jer_cfg.jet_type}",
+            "sfunc": f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_SFUncertainty_{self.jer_cfg.jet_type}",
         }
     else:
         # group evaluators in pairs (tagged, untagged)
@@ -1323,11 +1331,20 @@ def jer_setup(
                 f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.bjec_cfg.jet_types[0]}",
                 f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_ScaleFactor_{self.bjec_cfg.jet_types[1]}",
             ),
+            "sfunc": (
+                f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_SFUncertainty_{self.bjec_cfg.jet_types[0]}",
+                f"{self.jer_cfg.campaign}_{self.jer_cfg.version}_MC_SFUncertainty_{self.bjec_cfg.jet_types[1]}",
+            ),
         }
 
     # import the correction sets from the external file
     jer_file = self.get_jer_file(reqs["external_files"].files)
     correction_set = load_correction_set(jer_file)
+
+    # check if the correction set has the updated format with "*_SFUncertainty_*" evaluators
+    self.has_sfunc_evaluator = law.util.make_tuple(jer_keys["sfunc"])[0] in set(correction_set.keys())
+    if not self.has_sfunc_evaluator:
+        del jer_keys["sfunc"]
 
     # store the evaluators
     self.evaluators = {
