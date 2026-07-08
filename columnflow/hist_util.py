@@ -123,6 +123,13 @@ def fill_hist(
             del arrays, unpacked_arrays, unpacked_dict
 
         else:
+            # strings cannot be handled yet in the cartesian product
+            for ax_name, value in data.items():
+                if isinstance(value, str):
+                    raise TypeError(
+                        "cannot perform cartesian product during histogram filling with string data for axis "
+                        f"'{ax_name}': '{value}'",
+                    )
             arrays = ak.flatten(ak.cartesian(data))
             data = {field: arrays[field] for field in arrays.fields}
             del arrays
