@@ -388,6 +388,8 @@ class MergeHistograms(_MergeHistograms):
         CreateHistograms=CreateHistograms,
     )
 
+    invokes_hist_producer = True
+
     @classmethod
     def req_params(cls, inst: AnalysisTask, **kwargs) -> dict:
         _prefer_cli = law.util.make_set(kwargs.get("_prefer_cli", [])) | {"variables"}
