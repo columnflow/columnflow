@@ -89,6 +89,9 @@ class TaskShifts:
     def __hash__(self) -> int:
         return hash((frozenset(self.local), frozenset(self.upstream)))
 
+    def __contains__(self, shift: str) -> bool:
+        return shift in self.local or shift in self.upstream
+
 
 class BaseTask(law.Task):
 

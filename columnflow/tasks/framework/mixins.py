@@ -2491,9 +2491,9 @@ class ShiftSourcesMixin(ConfigTask):
                     raise ValueError("known_shifts must be set before resolving shift sources")
                 sources = [
                     source for source in sources
-                    if source == "nominal" or (
-                        f"{source}_up" in params["known_shifts"].upstream and
-                        f"{source}_down" in params["known_shifts"].upstream
+                    if (
+                        source == "nominal" or
+                        (f"{source}_up" in params["known_shifts"] and f"{source}_down" in params["known_shifts"])
                     )
                 ]
 
