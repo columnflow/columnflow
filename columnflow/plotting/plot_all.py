@@ -8,6 +8,7 @@ from __future__ import annotations
 
 __all__ = []
 
+import law
 import order as od
 
 from columnflow.util import maybe_import, try_float
@@ -337,10 +338,12 @@ def plot_all(
     The *style_config* expects fields (all optional):
 
         - "gridspec_cfg": dict
+        - "subplots_cfg": dict
         - "ax_cfg": dict
         - "rax_cfg": dict
         - "legend_cfg": dict
         - "cms_label_cfg": dict
+        - "annotate_cfg": dict or list[dict]
 
     :param plot_config: Dictionary that defines which plot methods will be called with which key word arguments.
     :param style_config: Dictionary that defines arguments on how to style the overall plot.
@@ -504,22 +507,23 @@ def plot_all(
         # make legend using ordered handles/labels
         ax.legend(handles, labels, **legend_kwargs)
 
-    # custom annotation
-    log_x = style_config.get("ax_cfg", {}).get("xscale", "linear") == "log"
-    annotate_kwargs = {
-        "text": "",
-        "xy": (
-            get_position(*ax.get_xlim(), factor=0.05, logscale=log_x),
-            get_position(*ax.get_ylim(), factor=0.95, logscale=log_y),
-        ),
-        "xycoords": "data",
-        "color": "black",
-        "fontsize": 22,
-        "horizontalalignment": "left",
-        "verticalalignment": "top",
-    }
-    annotate_kwargs.update(style_config.get("annotate_cfg", {}))
-    ax.annotate(**annotate_kwargs)
+    # custom annotations
+    if (annotate_config := style_config.get("annotate_cfg", None)):
+        log_x = style_config.get("ax_cfg", {}).get("xscale", "linear") == "log"
+        annotate_kwargs = {
+            "text": "",
+            "xy": (
+                get_position(*ax.get_xlim(), factor=0.05, logscale=log_x),
+                get_position(*ax.get_ylim(), factor=0.95, logscale=log_y),
+            ),
+            "xycoords": "data",
+            "color": "black",
+            "fontsize": 22,
+            "horizontalalignment": "left",
+            "verticalalignment": "top",
+        }
+        for _annotate_cfg in law.util.make_list(annotate_config):
+            ax.annotate(**{**annotate_kwargs, **_annotate_cfg})
 
     # cms label
     if cms_label != "skip":
