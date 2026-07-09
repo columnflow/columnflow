@@ -98,7 +98,7 @@ def get_br_from_inclusive_datasets(
 
     # step 3: per process, structure the assigned datasets and corresponding processes in DAGs, from more inclusive down
     #         to more exclusive phase spaces; usually each DAG can contain multiple paths to compute the BR of a single
-    #         process; this is resolved in step 4
+    #         process; this is selected and resolved in step 4
     @dataclasses.dataclass
     class Node:
         process_inst: od.Process
@@ -481,12 +481,27 @@ def normalization_weights_setup(
         self.update_dataset_selection_stats,
     )
 
+    # consistency check 1: none of the processes should be a sub-process of another one, i.e., they should all be
+    # "lowest level" processes; if not, the (sub) process id assignment was not done correctly
+    all_process_ids = list(map(int, merged_selection_stats_sum_weights["sum_mc_weight_per_process"]))
+    all_process_insts = list(map(self.config_inst.get_process, all_process_ids))
+    for proc_inst_1, proc_inst_2 in itertools.combinations(all_process_insts, 2):
+        contains_1_2 = proc_inst_1.has_process(proc_inst_2, deep=True)
+        contains_2_1 = proc_inst_2.has_process(proc_inst_1, deep=True)
+        if contains_1_2 or contains_2_1:
+            raise Exception(
+                f"found two processes '{proc_inst_1.name}' ({proc_inst_1.id}) and '{proc_inst_2.name}' "
+                f"({proc_inst_2.id}) in the merged selection stats that are sub-processes of each other; this is "
+                "most likely a misconfiguration of the manual sub process id assignment upstream; make sure that "
+                f"the sub-processes of '{(proc_inst_1 if contains_1_2 else proc_inst_2).name}' are assigned instead",
+            )
+
     # get all process ids and instances seen and assigned during selection of this dataset
     # (i.e., all possible processes that might be encountered during event processing)
     process_ids = set(map(int, dataset_selection_stats_br[self.dataset_inst.name]["sum_mc_weight_per_process"]))
     process_insts = set(map(self.config_inst.get_process, process_ids))
 
-    # consistency check: when the main process of the current dataset is part of these "lowest level" processes,
+    # consistency check 2: when the main process of the current dataset is part of these "lowest level" processes,
     # there should only be this single process, otherwise the manual (sub) process assignment does not match the
     # general dataset -> main process info
     if self.dataset_inst.processes.get_first() in process_insts and len(process_insts) > 1:
