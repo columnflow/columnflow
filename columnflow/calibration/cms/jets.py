@@ -522,8 +522,8 @@ def jec(
     # apply full jet correction
     events = set_ak_column_f32(events, f"{jet_name}.pt", events[jet_name].pt_raw * jec_factors)
     events = set_ak_column_f32(events, f"{jet_name}.mass", events[jet_name].mass_raw * jec_factors)
-    rawFactor = ak.nan_to_num(1 - events[jet_name].pt_raw / events[jet_name].pt, nan=0.0)
-    events = set_ak_column_f32(events, f"{jet_name}.rawFactor", rawFactor)
+    raw_factor = ak.nan_to_num(1 - events[jet_name].pt_raw / events[jet_name].pt, nan=0.0)
+    events = set_ak_column_f32(events, f"{jet_name}.rawFactor", raw_factor)
     events = self[attach_coffea_behavior](events, collections=[jet_name], **kwargs)
 
     # nominal met propagation
@@ -815,6 +815,7 @@ class JERConfig(TAFConfig):
     version: str
     external_file_key: str | None = None
     use_jer_tool: bool = False
+    uncertainty_regions: dict[str, Callable[[ak.Array], ak.Array]] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def new(cls, obj: JERConfig | dict[str, Any]) -> JERConfig:
@@ -967,9 +968,6 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     if self.dataset_inst.is_data:
         raise ValueError("attempt to apply jet energy resolution smearing in data")
 
-    # prepare variations
-    jer_nom, jer_up, jer_down = self.jer_variations
-
     # save the unsmeared properties in case they are needed later
     events = set_ak_column_f32(events, f"{jet_name}.pt_unsmeared", events[jet_name].pt)
     events = set_ak_column_f32(events, f"{jet_name}.mass_unsmeared", events[jet_name].mass)
@@ -986,7 +984,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         "JetEta": events[jet_name].eta,
         "JetPt": events[jet_name].pt,
         "Rho": rho,
-        "systematic": jer_nom,
+        "systematic": "nom",
     }
 
     # helper to run the jer evaluators in normal or b-regression style
@@ -1006,43 +1004,49 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             )
 
     # extract nominal pt resolution
-    jer = {jer_nom: run_evaluator("jer", variable_map)}
+    jer = {"": run_evaluator("jer", variable_map)}
 
     # for simplifications below, use the same values for jer variations
-    jer[jer_up] = jer[jer_nom]
-    jer[jer_down] = jer[jer_nom]
+    for jer_postfix in self.jer_postfixes:
+        jer[jer_postfix] = jer[""]
 
     # extract pt resolutions evaluted for jec uncertainties
     for jec_var in self.jec_variations:
-        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
-        jer[jec_var] = run_evaluator("jer", _variable_map)
+        jec_postfix = f"_{jec_var}"
+        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt{jec_postfix}"]}
+        jer[jec_postfix] = run_evaluator("jer", _variable_map)
 
     # extract scale factors
     # uncertainties are extracted with the same evaluator, or a dedicated one as of the new JME format
-    jersf = {}
+    jersf = {"": run_evaluator("sf", variable_map)}
     if self.has_sfunc_evaluator:
-        jersf[jer_nom] = run_evaluator("sf", variable_map)
         sfunc = run_evaluator("sfunc", variable_map)
-        jersf[jer_up] = jersf[jer_nom] * (1 + sfunc)
-        jersf[jer_down] = jersf[jer_nom] * (1 - sfunc)
+        for jer_postfix in self.jer_postfixes:
+            sign = 1 if jer_postfix.endswith("_up") else -1
+            jersf[jer_postfix] = jersf[""] * (1 + sign * sfunc)
     else:
-        for jer_var in self.jer_variations:
-            _variable_map = variable_map | {"systematic": jer_var}
-            jersf[jer_var] = run_evaluator("sf", _variable_map)
+        for jer_postfix in self.jer_postfixes:
+            direction = jer_postfix.rsplit("_", 1)[-1]
+            _variable_map = {**variable_map, "systematic": direction}
+            jersf[jer_postfix] = run_evaluator("sf", _variable_map)
 
     # extract scale factors for jec uncertainties
     for jec_var in self.jec_variations:
-        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt_{jec_var}"]}
-        jersf[jec_var] = run_evaluator("sf", _variable_map)
+        jec_postfix = f"_{jec_var}"
+        _variable_map = variable_map | {"JetPt": events[jet_name][f"pt{jec_postfix}"]}
+        jersf[jec_postfix] = run_evaluator("sf", _variable_map)
+
+    # jer and jersf keys are now identical to postifxes
+    assert tuple(self.postfixes) == tuple(jer.keys()) == tuple(jersf.keys())
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)
     jer = ak_concatenate_safe(
-        [jer[v][..., None] for v in self.jer_variations + self.jec_variations],
+        [jer[v][..., None] for v in self.postfixes],
         axis=-1,
     )
     jersf = ak_concatenate_safe(
-        [jersf[v][..., None] for v in self.jer_variations + self.jec_variations],
+        [jersf[v][..., None] for v in self.postfixes],
         axis=-1,
     )
 
@@ -1109,7 +1113,8 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             match_pt = events[jet_name].pt
         else:
             # concatenate varied pt values for broadcasting
-            pt_names = ["pt" for _ in self.jer_variations] + [f"pt_{jec_var}" for jec_var in self.jec_variations]
+            n_jer_vars = (1 + 2 * len(self.jer_cfg.uncertainty_regions)) if self.jer_cfg.uncertainty_regions else 3
+            pt_names = n_jer_vars * ["pt"] + [f"pt_{jec_var}" for jec_var in self.jec_variations]
             match_pt = ak_concatenate_safe([events[jet_name][pt_name][..., None] for pt_name in pt_names], axis=-1)
         pt_relative_diff = 1 - matched_gen_jet.pt / match_pt
 
@@ -1128,15 +1133,34 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         # ensure array is not nullable (avoid ambiguity on Arrow/Parquet conversion)
         smear_factors = ak.fill_none(smear_factors, 0.0)
 
+    # when uncertainty regions are defined, set smear factors for non-matching jets back to 1
+    if self.jer_cfg.uncertainty_regions:
+        regional_smear_factors = []
+        for i, (region_name, region_func) in enumerate(self.jer_cfg.uncertainty_regions.items()):
+            region_mask = region_func(events[jet_name])
+            # apply to both variations
+            regional_smear_factors.append(ak.where(region_mask, smear_factors[..., 2 * i + 1], 1.0))
+            regional_smear_factors.append(ak.where(region_mask, smear_factors[..., 2 * i + 2], 1.0))
+        # concatenate back
+        smear_factors = ak_concatenate_safe(
+            [
+                smear_factors[..., :1],  # nominal
+                *(f[..., None] for f in regional_smear_factors),
+                smear_factors[..., 1 + len(regional_smear_factors):],  # jec variations
+            ],
+            axis=2,
+        )
+
     # to allow for code simplifications below, store the reference pt and mass columns upon which the smearing is based
-    # into the events array for cases where it shouldn't already exist
-    for direction in ["up", "down"]:
-        events = set_ak_column_f32(events, f"{jet_name}.pt_jer_{direction}", events[jet_name].pt)
-        events = set_ak_column_f32(events, f"{jet_name}.mass_jer_{direction}", events[jet_name].mass)
+    # in the events array for cases where it does not already exist
+    for jer_postfix in self.jer_postfixes:
+        events = set_ak_column_f32(events, f"{jet_name}.pt{jer_postfix}", events[jet_name].pt)
+        events = set_ak_column_f32(events, f"{jet_name}.mass{jer_postfix}", events[jet_name].mass)
+
         # when propagating met, do the same for respective columns
         if self.propagate_met:
-            events = set_ak_column_f32(events, f"{met_name}.pt_jer_{direction}", events[met_name].pt)
-            events = set_ak_column_f32(events, f"{met_name}.phi_jer_{direction}", events[met_name].phi)
+            events = set_ak_column_f32(events, f"{met_name}.pt{jer_postfix}", events[met_name].pt)
+            events = set_ak_column_f32(events, f"{met_name}.phi{jer_postfix}", events[met_name].phi)
 
     # when propagating met, before smearing is applied, store pt and phi of the full jet system for all variations using
     # string postfixes as keys
@@ -1189,12 +1213,6 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     return events
 
 
-jer_horn_handling = jer.derive("jer_horn_handling", cls_dict={
-    # source: https://cms-jerc.web.cern.ch/Recommendations/#note-25eta30
-    "stochastic_smearing_mask": lambda self, jets: (abs(jets.eta) < 2.5) | (abs(jets.eta) > 3.0),
-})
-
-
 @jer.init
 def jer_init(self: Calibrator, **kwargs) -> None:
     super(jer, self).init_func(**kwargs)
@@ -1212,17 +1230,12 @@ def jer_init(self: Calibrator, **kwargs) -> None:
 
     # prepare jec variations
     self.jec_variations = sum(([f"jec_{unc}_up", f"jec_{unc}_down"] for unc in self.jec_uncertainty_sources), [])
-
     jet_jec_columns = {f"{self.jet_name}.{{pt,mass}}_{jec_source}" for jec_source in self.jec_variations}
     met_jec_columns = {f"{self.met_name}.{{pt,phi}}_{jec_source}" for jec_source in self.jec_variations}
 
     # determine gen-level jet index column
     lower_first = lambda s: s[0].lower() + s[1:] if s else s
-    self.gen_jet_idx_column = lower_first(self.gen_jet_name) + "Idx"
-
-    # prepare jer variations and postfixes
-    self.jer_variations = ["nom", "up", "down"]
-    self.postfixes = ["", "_jer_up", "_jer_down"] + [f"_{jec_var}" for jec_var in self.jec_variations]
+    self.gen_jet_idx_column = f"{lower_first(self.gen_jet_name)}Idx"
 
     # register used jet columns
     self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,{self.gen_jet_idx_column}}}")
@@ -1234,8 +1247,23 @@ def jer_init(self: Calibrator, **kwargs) -> None:
     if self.bjec_cfg is not None:
         self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.bjet_selection_columns)}}}")
 
+    # determine postfixes of jer varied columns based on uncertainty regions
+    regions = list(self.jer_cfg.uncertainty_regions.keys())
+    if regions:
+        self.jer_postfixes = law.util.flatten([f"_jer_{region}_up", f"_jer_{region}_down"] for region in regions)
+    else:
+        self.jer_postfixes = ["_jer_up", "_jer_down"]
+    jer_postfixes_str = ",".join(self.jer_postfixes)
+
+    # prepare jer variations and overall postfixes
+    self.postfixes = [
+        "",
+        *self.jer_postfixes,
+        *(f"_{jec_var}" for jec_var in self.jec_variations),
+    ]
+
     # register produced jet columns
-    self.produces.add(f"{self.jet_name}.{{pt,mass}}{{,_unsmeared,_jer_up,_jer_down}}")
+    self.produces.add(f"{self.jet_name}.{{pt,mass}}{{,_unsmeared,{jer_postfixes_str}}}")
     if jec_sources:
         self.produces |= jet_jec_columns
 
@@ -1247,7 +1275,7 @@ def jer_init(self: Calibrator, **kwargs) -> None:
             self.uses |= met_jec_columns
 
         # register produced MET columns
-        self.produces.add(f"{self.met_name}.{{pt,phi}}{{,_jer_up,_jer_down,_unsmeared}}")
+        self.produces.add(f"{self.met_name}.{{pt,phi}}{{_unsmeared,{jer_postfixes_str}}}")
         if jec_sources:
             self.produces |= met_jec_columns
 
@@ -1375,6 +1403,12 @@ def jer_setup(
                 for _loc, _scale, _seed in zip(loc, scale, seed)
             ])
         self.deterministic_normal = deterministic_normal
+
+
+jer_horn_handling = jer.derive("jer_horn_handling", cls_dict={
+    # source: https://cms-jerc.web.cern.ch/Recommendations/#note-25eta30
+    "stochastic_smearing_mask": lambda self, jets: (abs(jets.eta) < 2.5) | (abs(jets.eta) > 3.0),
+})
 
 
 # explicit calibrators for standard jet collections
