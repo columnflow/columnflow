@@ -1011,8 +1011,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         jer[jer_postfix] = jer[""]
 
     # extract pt resolutions evaluted for jec uncertainties
-    for jec_var in self.jec_variations:
-        jec_postfix = f"_{jec_var}"
+    for jec_postfix in self.jec_postfixes:
         _variable_map = variable_map | {"JetPt": events[jet_name][f"pt{jec_postfix}"]}
         jer[jec_postfix] = run_evaluator("jer", _variable_map)
 
@@ -1031,8 +1030,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
             jersf[jer_postfix] = run_evaluator("sf", _variable_map)
 
     # extract scale factors for jec uncertainties
-    for jec_var in self.jec_variations:
-        jec_postfix = f"_{jec_var}"
+    for jec_postfix in self.jec_postfixes:
         _variable_map = variable_map | {"JetPt": events[jet_name][f"pt{jec_postfix}"]}
         jersf[jec_postfix] = run_evaluator("sf", _variable_map)
 
@@ -1114,7 +1112,7 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         else:
             # concatenate varied pt values for broadcasting
             n_jer_vars = (1 + 2 * len(self.jer_cfg.uncertainty_regions)) if self.jer_cfg.uncertainty_regions else 3
-            pt_names = n_jer_vars * ["pt"] + [f"pt_{jec_var}" for jec_var in self.jec_variations]
+            pt_names = n_jer_vars * ["pt"] + [f"pt{jec_postfix}" for jec_postfix in self.jec_postfixes]
             match_pt = ak_concatenate_safe([events[jet_name][pt_name][..., None] for pt_name in pt_names], axis=-1)
         pt_relative_diff = 1 - matched_gen_jet.pt / match_pt
 
@@ -1229,9 +1227,9 @@ def jer_init(self: Calibrator, **kwargs) -> None:
         self.jec_uncertainty_sources = jec_sources
 
     # prepare jec variations
-    self.jec_variations = sum(([f"jec_{unc}_up", f"jec_{unc}_down"] for unc in self.jec_uncertainty_sources), [])
-    jet_jec_columns = {f"{self.jet_name}.{{pt,mass}}_{jec_source}" for jec_source in self.jec_variations}
-    met_jec_columns = {f"{self.met_name}.{{pt,phi}}_{jec_source}" for jec_source in self.jec_variations}
+    self.jec_postfixes = sum(([f"_jec_{unc}_up", f"_jec_{unc}_down"] for unc in self.jec_uncertainty_sources), [])
+    jet_jec_columns = {f"{self.jet_name}.{{pt,mass}}{jec_postfix}" for jec_postfix in self.jec_postfixes}
+    met_jec_columns = {f"{self.met_name}.{{pt,phi}}{jec_postfix}" for jec_postfix in self.jec_postfixes}
 
     # determine gen-level jet index column
     lower_first = lambda s: s[0].lower() + s[1:] if s else s
@@ -1258,7 +1256,7 @@ def jer_init(self: Calibrator, **kwargs) -> None:
     self.postfixes = [
         "",
         *self.jer_postfixes,
-        *(f"_{jec_var}" for jec_var in self.jec_variations),
+        *self.jec_postfixes,
     ]
 
     # register produced jet columns
