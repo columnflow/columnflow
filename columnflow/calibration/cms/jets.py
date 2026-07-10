@@ -1240,8 +1240,7 @@ def jer_init(self: Calibrator, **kwargs) -> None:
     # register used jet columns
     self.uses.add(f"{self.jet_name}.{{pt,eta,phi,mass,{self.gen_jet_idx_column}}}")
     self.uses.add(f"{self.gen_jet_name}.{{pt,eta,phi}}")
-    if jec_sources:
-        self.uses |= jet_jec_columns
+    self.uses.update(jet_jec_columns)
 
     # register used jet columns needed for bjet regression if needed
     if self.bjec_cfg is not None:
@@ -1264,20 +1263,17 @@ def jer_init(self: Calibrator, **kwargs) -> None:
 
     # register produced jet columns
     self.produces.add(f"{self.jet_name}.{{pt,mass}}{{,_unsmeared,{jer_postfixes_str}}}")
-    if jec_sources:
-        self.produces |= jet_jec_columns
+    self.produces.update(jet_jec_columns)
 
     # additional columns when propagating MET
     if self.propagate_met:
         # register used MET columns
         self.uses.add(f"{self.met_name}.{{pt,phi}}")
-        if jec_sources:
-            self.uses |= met_jec_columns
+        self.uses.update(met_jec_columns)
 
         # register produced MET columns
         self.produces.add(f"{self.met_name}.{{pt,phi}}{{_unsmeared,{jer_postfixes_str}}}")
-        if jec_sources:
-            self.produces |= met_jec_columns
+        self.produces.update(met_jec_columns)
 
     if self.jer_cfg.use_jer_tool:
         self.uses.add("event")
