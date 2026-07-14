@@ -57,9 +57,7 @@ class ProduceColumns(_ProduceColumns):
 
     def requires(self):
         return {
-            "producer": law.util.make_unique(law.util.flatten(
-                self.producer_inst.run_requires(task=self),
-            )),
+            "producer": law.util.make_unique(law.util.flatten(self.producer_inst.run_requires(task=self))),
             "events": self.reqs.ProvideReducedEvents.req(self),
         }
 

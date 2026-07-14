@@ -137,9 +137,7 @@ class CreateHistograms(_CreateHistograms):
             ]
 
         # add hist_producer dependent requirements
-        reqs["hist_producer"] = law.util.make_unique(law.util.flatten(
-            self.hist_producer_inst.run_requires(task=self),
-        ))
+        reqs["hist_producer"] = law.util.make_unique(law.util.flatten(self.hist_producer_inst.run_requires(task=self)))
 
         # require merged events
         reqs["events"] = self.reqs.ProvideReducedEvents.req(self)
@@ -416,14 +414,13 @@ class MergeHistograms(_MergeHistograms):
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        if not self.pilot:
-            variables = self._get_variables()
-            if variables:
-                reqs["hists"] = self.reqs.CreateHistograms.req_different_branching(
-                    self,
-                    branch=-1,
-                    variables=tuple(variables),
-                )
+        variables = self._get_variables()
+        if variables:
+            reqs["hists"] = self.pilot_workflow_requires(self.reqs.CreateHistograms.req_different_branching(
+                self,
+                branch=-1,
+                variables=tuple(variables),
+            ))
 
         return reqs
 
@@ -548,17 +545,20 @@ class MergeShiftedHistograms(_MergeShiftedHistograms):
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        if not self.pilot:
-            # add nominal and both directions per shift source
-            for shift in expand_shift_sources(self.shift_sources):
-                reqs[shift] = self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
+        # add nominal and both directions per shift source
+        for shift_name in expand_shift_sources(self.shift_sources):
+            reqs[shift_name] = self.pilot_workflow_requires(self.reqs.MergeHistograms.req(
+                self,
+                shift=shift_name,
+                _prefer_cli={"variables"},
+            ))
 
         return reqs
 
     def requires(self):
         return {
-            shift: self.reqs.MergeHistograms.req(self, shift=shift, _prefer_cli={"variables"})
-            for shift in expand_shift_sources(self.branch_data)
+            shift_name: self.reqs.MergeHistograms.req(self, shift=shift_name, _prefer_cli={"variables"})
+            for shift_name in expand_shift_sources(self.branch_data)
         }
 
     def store_parts(self) -> law.util.InsertableDict:

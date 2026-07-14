@@ -93,9 +93,7 @@ class ReduceEvents(_ReduceEvents):
                 if calibrator_inst.produced_columns
             ],
             "selection": self.reqs.SelectEvents.req(self),
-            "reducer": law.util.make_unique(law.util.flatten(
-                self.reducer_inst.run_requires(task=self),
-            )),
+            "reducer": law.util.make_unique(law.util.flatten(self.reducer_inst.run_requires(task=self))),
         }
 
     def output(self):

@@ -100,9 +100,7 @@ class SelectEvents(_SelectEvents):
         }
 
         # add selector dependent requirements
-        reqs["selector"] = law.util.make_unique(law.util.flatten(
-            self.selector_inst.run_requires(task=self),
-        ))
+        reqs["selector"] = law.util.make_unique(law.util.flatten(self.selector_inst.run_requires(task=self)))
 
         return reqs
 
@@ -497,14 +495,10 @@ class MergeSelectionMasks(_MergeSelectionMasks):
         else:
             inputs = [inp["masks"] for inp in inputs]
 
-        law.pyarrow.merge_parquet_task(
-            self, inputs, output["masks"], writer_opts=self.get_parquet_writer_opts(),
-        )
+        law.pyarrow.merge_parquet_task(self, inputs, output["masks"], writer_opts=self.get_parquet_writer_opts())
 
     def zip_results_and_columns(self, inputs, tmp_dir):
-        from columnflow.columnar_util import (
-            Route, RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns,
-        )
+        from columnflow.columnar_util import Route, RouteFilter, sorted_ak_to_parquet, mandatory_coffea_columns
 
         # setup the normalization weights producer
         if self.dataset_inst.is_mc:
