@@ -613,3 +613,50 @@ def merge_axis_bins(
         }]
 
     return h
+
+
+def insert_axis_values(
+    h: hist.Hist,
+    axis_name: str,
+    axis_value: Any,
+    values: np.ndarray,
+    variances: np.ndarray | None = None,
+) -> None:
+    """
+    Inserts (in-place) values and optionally variances into a histogram *h* for a given *axis_name* and *axis_value*.
+
+    :param h: The histogram to insert values into.
+    :param axis_name: The name of the axis to insert values for.
+    :param axis_value: The value of the axis to insert values for.
+    :param values: The values to insert.
+    :param variances: The variances to insert. If *None*, no variances are inserted.
+    """
+    # check if variances are provided and can be inserted
+    if "variance" not in h.view().dtype.names and variances is not None:
+        raise ValueError("histogram does not store variances (weights), but variances were provided for insertion")
+
+    # get the axis and it's index
+    axis_names = [ax.name for ax in h.axes]
+    if axis_name not in axis_names:
+        raise ValueError(f"axis '{axis_name}' not found in histogram axes {axis_names}")
+    axis = h.axes[axis_name]
+    axis_index = axis_names.index(axis_name)
+
+    # get the value and its index
+    axis_values = list(axis)
+    if axis_value not in axis_values:
+        raise ValueError(f"axis value '{axis_value}' not found in axis '{axis_name}'")
+    value_index = axis_values.index(axis_value)
+
+    # create slice object using axis_index and value_index
+    insert_at = tuple(
+        axis_index * [slice(None, None)] +  # axes before target axis
+        [value_index] +  # last (= newest) position on amended axis
+        (len(axis_names) - axis_index - 1) * [slice(None, None)],  # remaining axes
+    )
+
+    # insert values
+    view = h.view()
+    view.value[insert_at] = values
+    if variances is not None:
+        view.variance[insert_at] = variances
