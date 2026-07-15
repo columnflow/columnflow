@@ -20,6 +20,8 @@ from columnflow.plotting.plot_util import (
     remove_label_placeholders,
     apply_label_placeholders,
     calculate_stat_error,
+    hatch_styles,
+    get_hatch_kwargs,
 )
 from columnflow.types import TYPE_CHECKING, Sequence
 
@@ -33,6 +35,7 @@ def draw_stat_error_bands(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
+    hatch_style: hatch_styles = "black",
     **kwargs,
 ) -> None:
     assert len(h.axes) == 1
@@ -52,11 +55,7 @@ def draw_stat_error_bands(
         "bottom": baseline * (1 - rel_stat_error),
         "height": baseline * 2 * rel_stat_error,
         "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
-        "hatch": "///",
-        "linewidth": 0,
-        "color": "none",
-        "edgecolor": "black",
-        "alpha": 1.0,
+        **get_hatch_kwargs(hatch_style),
         **kwargs,
     }
     ax.bar(**bar_kwargs)
@@ -69,6 +68,7 @@ def draw_syst_error_bands(
     shift_insts: Sequence[od.Shift],
     norm: float | Sequence | np.ndarray = 1.0,
     method: str = "quadratic_sum",
+    hatch_style: hatch_styles = "green_backwards",
     **kwargs,
 ) -> None:
     import hist
@@ -155,11 +155,7 @@ def draw_syst_error_bands(
         "bottom": baseline * (1 - rel_syst_error_down),
         "height": baseline * (rel_syst_error_up + rel_syst_error_down),
         "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
-        "hatch": "\\\\\\",
-        "linewidth": 0,
-        "color": "none",
-        "edgecolor": "#30c300",
-        "alpha": 1.0,
+        **get_hatch_kwargs(hatch_style),
         **kwargs,
     }
     ax.bar(**bar_kwargs)
