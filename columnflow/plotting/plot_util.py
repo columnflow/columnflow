@@ -19,8 +19,8 @@ import order as od
 import scinum as sn
 
 from columnflow.util import maybe_import, try_int, try_complex, safe_div, UNSET
-from columnflow.hist_util import copy_axis, sum_hists
-from columnflow.types import TYPE_CHECKING, Iterable, Any, Callable, Sequence, Hashable
+from columnflow.hist_util import copy_axis, sum_hists, ensure_bin_exists, insert_axis_values
+from columnflow.types import TYPE_CHECKING, Iterable, Any, Callable, Sequence, Hashable, Literal
 
 np = maybe_import("numpy")
 if TYPE_CHECKING:
@@ -521,7 +521,8 @@ def prepare_style_config(
 def prepare_stack_plot_config(
     hists: OrderedDict,
     shape_norm: bool | None = False,
-    hide_stat_errors: bool | None = None,
+    hide_stat_errors: bool = False,
+    merge_stat_errors: bool = False,
     shift_insts: Sequence[od.Shift] | None = None,
     density: bool = False,
     **kwargs,
@@ -615,31 +616,64 @@ def prepare_stack_plot_config(
                     plot_cfg[key]["yerr"] = False
 
     # draw statistical error for stack
-    if h_mc_stack is not None and not hide_stat_errors:
+    draw_stat_errors = bool(not hide_stat_errors and h_mc_stack is not None)
+    if draw_stat_errors and not merge_stat_errors:
         mc_norm = shape_norm_func(h_mc, shape_norm)
         plot_config["mc_stat_unc"] = {
             "method": "draw_stat_error_bands",
             "hist": h_mc,
-            "kwargs": {"norm": mc_norm, "label": "MC stat. unc."},
-            "ratio_kwargs": {"norm": h_mc.values()},
+            "kwargs": {
+                "norm": mc_norm,
+                "label": "MC stat. unc.",
+                "hatch_style": "black",
+            },
+            "ratio_kwargs": {
+                "norm": h_mc.values(),
+                "hatch_style": "black",
+            },
         }
 
     # draw systematic error for stack
-    if h_mc_stack is not None and mc_syst_hists:
+    draw_syst_errors = bool(mc_syst_hists and h_mc_stack is not None)
+    if draw_syst_errors:
         mc_norm = shape_norm_func(h_mc, shape_norm)
+        # when merging stat and syst errors, add a fake shift inst and extend shift axes of histograms to include it
+        _shift_insts = shift_insts
+        _mc_syst_hists = mc_syst_hists
+        label = "MC syst. unc."
+        hatch_style = "green_backwards"
+        if merge_stat_errors:
+            _shift_insts = [
+                *shift_insts,
+                od.Shift(name="mc_stat_up", id=100000, type="shape"),
+                od.Shift(name="mc_stat_down", id=100001, type="shape"),
+            ]
+            _mc_syst_hists = []
+            for h in mc_syst_hists:
+                h = ensure_bin_exists(h, "shift", ["mc_stat_up", "mc_stat_down"])  # always creates a copy
+                nom_view = h[{"shift": hist.loc("nominal")}].view()
+                stat_err = nom_view.variance**0.5
+                insert_axis_values(h, "shift", "mc_stat_up", nom_view.value + stat_err)
+                insert_axis_values(h, "shift", "mc_stat_down", nom_view.value - stat_err)
+                _mc_syst_hists.append(h)
+            label = "MC unc."
+            hatch_style = "black"
+        # add plot config
         plot_config["mc_syst_unc"] = {
             "method": "draw_syst_error_bands",
             "hist": h_mc,
             "kwargs": {
-                "syst_hists": mc_syst_hists,
-                "shift_insts": shift_insts,
+                "syst_hists": _mc_syst_hists,
+                "shift_insts": _shift_insts,
                 "norm": mc_norm,
-                "label": "MC syst. unc.",
+                "label": label,
+                "hatch_style": hatch_style,
             },
             "ratio_kwargs": {
                 "syst_hists": mc_syst_hists,
                 "shift_insts": shift_insts,
                 "norm": h_mc.values(),
+                "hatch_style": hatch_style,
             },
         }
 
@@ -671,6 +705,30 @@ def prepare_stack_plot_config(
                     plot_cfg[key]["yerr"] = False
 
     return plot_config
+
+
+HatchStyles = Literal["black", "green", "black_backwards", "green_backwards"]
+
+
+def get_hatch_kwargs(style: HatchStyles) -> dict[str, Any]:
+    kwargs = {
+        "linewidth": 0,
+        "color": "none",
+        "alpha": 1.0,
+    }
+
+    if style == "black":
+        kwargs.update({"hatch": "///", "edgecolor": "black"})
+    elif style == "black_backwards":
+        kwargs.update({"hatch": "\\\\\\", "edgecolor": "black"})
+    elif style == "green":
+        kwargs.update({"hatch": "///", "edgecolor": "#30c300"})
+    elif style == "green_backwards":
+        kwargs.update({"hatch": "\\\\\\", "edgecolor": "#30c300"})
+    else:
+        raise ValueError(f"unknown hatch style '{style}'")
+
+    return kwargs
 
 
 def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:

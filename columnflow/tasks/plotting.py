@@ -489,6 +489,11 @@ class PlotVariablesBaseMultiShifts(
         description="sets the title of the legend; when empty and only one process is present in "
         "the plot, the process_inst label is used; empty default",
     )
+    merge_stat_errors = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="whether to merge stat error bands into the combined shift error; default: None",
+    )
 
     # always ensure the nominal shift is present in shift sources
     enforce_nominal_shift_source = True
@@ -592,6 +597,7 @@ class PlotVariablesBaseMultiShifts(
         # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
         dict_add_strict(params, "legend_title", None if self.legend_title == law.NO_STR else self.legend_title)
+        dict_add_strict(params, "merge_stat_errors", self.merge_stat_errors)
         return params
 
 
