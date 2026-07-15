@@ -482,7 +482,7 @@ def select_category_bins(
 def ensure_bin_exists(
     h: hist.Hist,
     axis_name: str,
-    value: Any,
+    value: Any | Sequence[Any],
     add_growth: bool = True,
 ) -> hist.Hist:
     """
@@ -535,25 +535,27 @@ def ensure_bin_exists(
         data = h.view(flow=True)[create_slice(slice(0, -1))]
         h = hist.Hist(*new_axes, storage=h.storage_type(), data=data)
 
-    # nothing to do in case the value already exists
-    if value in axis:
-        return h
+    # extend for all values if a sequence is given
+    for _value in law.util.make_list(value):
+        # nothing to do in case the value already exists
+        if _value in axis:
+            continue
 
-    # strategy: fill dummy values, then zero them in view afterwards
-    # get bin centers of first bin in other axes
-    dummy_values = {
-        ax.name: (list(ax)[0] if isinstance(ax, categorical_types) else ax.centers[0])
-        for ax in h.axes if ax != axis
-    }
-    h.fill(**(dummy_values | {axis_name: value}))
-    # now zero array
-    view = h.view()
-    zero_pos = create_slice(-1)
-    if isinstance(h.storage_type(), (hist.storage.Weight, hist.storage.WeightedMean)):
-        view.value[zero_pos] = 0
-        view.variance[zero_pos] = 0
-    else:
-        view[zero_pos] = 0
+        # strategy: fill dummy values, then zero them in view afterwards
+        # get bin centers of first bin in other axes
+        dummy_values = {
+            ax.name: (list(ax)[0] if isinstance(ax, categorical_types) else ax.centers[0])
+            for ax in h.axes if ax != axis
+        }
+        h.fill(**(dummy_values | {axis_name: _value}))
+        # now zero array
+        view = h.view()
+        zero_pos = create_slice(-1)
+        if isinstance(h.storage_type(), (hist.storage.Weight, hist.storage.WeightedMean)):
+            view.value[zero_pos] = 0
+            view.variance[zero_pos] = 0
+        else:
+            view[zero_pos] = 0
 
     return h
 
