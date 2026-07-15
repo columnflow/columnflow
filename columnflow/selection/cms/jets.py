@@ -57,7 +57,7 @@ def jet_veto_map(
         1. https://cms-jerc.web.cern.ch/Recommendations/#jet-veto-maps
         2. https://cms-talk.web.cern.ch/t/updated-jet-selection-criterion-for-jet-veto-map/130527
     """
-    # jet selection
+    # jet selection (common to both run 2 and 3)
     jet = events.Jet
     jet_mask = (
         (jet.pt > 15) &
@@ -66,11 +66,11 @@ def jet_veto_map(
 
     # fold in veto id or manually filter against muons
     if self.use_lepton_veto_id:
-        jet_mask = jet_mask & (jet.jetId & (1 << 2) != 0)  # third bit is tightLepVeto
+        jet_mask = jet_mask & ((jet.jetId & (1 << 2)) != 0)  # third bit is tightLepVeto
     else:
         muon = events.Muon[events.Muon.isPFcand]
         jet_mask = jet_mask & (
-            (jet.jetId & (1 << 1) != 0) &  # second bit is tight
+            ((jet.jetId & (1 << 1)) != 0) &  # second bit is tight
             ak.all(events.Jet.metric_table(muon) >= 0.2, axis=2)
         )
 
@@ -141,6 +141,8 @@ def jet_veto_map(
     events = set_ak_column(events, "Jet.veto_map_mask", ~jet_mask)
 
     # create the selection result, letting events pass if no jets are vetoed
+    # note: for run 2 it is potentially not recommended to drop entire events, but only particular jets, but we still
+    # add this step to the selection result
     results = SelectionResult(
         steps={"jet_veto_map": ~ak.any(jet_mask, axis=1)},
     )
