@@ -50,6 +50,7 @@ def draw_stat_error_bands(
     baseline[(h.values() == 0) & (norm == 0)] = 1.0
     baseline[np.isnan(baseline)] = 0.0
 
+    # create bar plot args
     bar_kwargs = {
         "x": h.axes[0].centers,
         "bottom": baseline * (1 - rel_stat_error),
@@ -58,6 +59,12 @@ def draw_stat_error_bands(
         **get_hatch_kwargs(hatch_style),
         **kwargs,
     }
+
+    # evaluate label placeholders
+    if "label" in bar_kwargs:
+        bar_kwargs["label"] = remove_label_placeholders(apply_label_placeholders(bar_kwargs["label"]))
+
+    # plot
     ax.bar(**bar_kwargs)
 
 
@@ -69,6 +76,7 @@ def draw_syst_error_bands(
     norm: float | Sequence | np.ndarray = 1.0,
     method: str = "quadratic_sum",
     hatch_style: HatchStyles = "green_backwards",
+    show_rate_change: bool = False,
     **kwargs,
 ) -> None:
     import hist
@@ -150,6 +158,7 @@ def draw_syst_error_bands(
     baseline[(h.values() == 0) & (norm == 0)] = 1.0
     baseline[np.isnan(baseline)] = 0.0
 
+    # create bar plot args
     bar_kwargs = {
         "x": h.axes[0].centers,
         "bottom": baseline * (1 - rel_syst_error_down),
@@ -158,6 +167,25 @@ def draw_syst_error_bands(
         **get_hatch_kwargs(hatch_style),
         **kwargs,
     }
+
+    # optionally add integral change to label
+    if show_rate_change and isinstance(norm, (float, int)) and norm == 1:
+        up_effect = round((baseline * (1 + rel_syst_error_up)).sum() / baseline.sum() - 1, 3)
+        down_effect = round((baseline * (1 - rel_syst_error_down)).sum() / baseline.sum() - 1, 3)
+        if up_effect == -down_effect:
+            effect_str = fr"($\pm${up_effect * 100:.1f}%)"
+        else:
+            effect_str = f"({up_effect * 100:+.1f}/{down_effect * 100:+.1f}%)"
+        if "label" in bar_kwargs:
+            bar_kwargs["label"] += f"__BREAK__{effect_str}"
+        else:
+            bar_kwargs["label"] = effect_str
+
+    # evaluate label placeholders
+    if "label" in bar_kwargs:
+        bar_kwargs["label"] = remove_label_placeholders(apply_label_placeholders(bar_kwargs["label"]))
+
+    # plot
     ax.bar(**bar_kwargs)
 
 

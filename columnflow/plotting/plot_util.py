@@ -523,6 +523,7 @@ def prepare_stack_plot_config(
     shape_norm: bool | None = False,
     hide_stat_errors: bool = False,
     merge_stat_errors: bool = False,
+    show_syst_rate_change: bool = False,
     shift_insts: Sequence[od.Shift] | None = None,
     density: bool = False,
     **kwargs,
@@ -668,6 +669,7 @@ def prepare_stack_plot_config(
                 "norm": mc_norm,
                 "label": label,
                 "hatch_style": hatch_style,
+                "show_rate_change": show_syst_rate_change,
             },
             "ratio_kwargs": {
                 "syst_hists": mc_syst_hists,
