@@ -514,19 +514,18 @@ def maybe_int(i: Any) -> Any:
     return i
 
 
+def is_regex(s: str) -> bool:
+    """
+    Returns *True* if a string *s* is a regular expression containing both "^" and "$", and *False* otherwise.
+    """
+    return "^" in s and "$" in s
+
+
 def is_pattern(s: str) -> bool:
     """
     Returns *True* if a string *s* contains pattern characters such as "*" or "?", and *False* otherwise.
     """
-    return "*" in s or "?" in s or s.startswith("!")
-
-
-def is_regex(s: str) -> bool:
-    """
-    Returns *True* if a string *s* is a regular expression starting with "^" and ending with "$",
-    and *False* otherwise.
-    """
-    return s.startswith("^") and s.endswith("$")
+    return not is_regex(s) and ("*" in s or "?" in s)
 
 
 def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Callable[[str], bool]:
@@ -535,8 +534,8 @@ def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Calla
     or just a plain string and returns a function that can be used to test of a string matches that
     pattern.
 
-    Patterns starting with "^" and ending with "$" are considered regular expressions, and otherwise fnmatch patterns.
-    In the latter case, when the pattern starts with a "!", the match is inverted.
+    Patterns containing both "^" and "$" are considered regular expressions, and otherwise fnmatch patterns.
+    When the pattern starts with a "!", the match is inverted.
 
     When *pattern* is a sequence, all its patterns are compared the same way and the result is the
     combination given a *mode* which typically should be *any* or *all*.
@@ -574,6 +573,11 @@ def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Calla
     if pattern in ["*", "^.*$"]:
         return lambda s: True
 
+    negate = pattern.startswith("!")
+    if negate:
+        matcher = pattern_matcher(pattern[1:], mode=mode)
+        return lambda s: not matcher(s)
+
     # identify regular expressions
     if is_regex(pattern):
         cre = re.compile(pattern)
@@ -581,9 +585,6 @@ def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Calla
 
     # identify fnmatch patterns
     if is_pattern(pattern):
-        negate = pattern.startswith("!")
-        if negate:
-            return lambda s: not fnmatch.fnmatch(s, pattern[1:])
         return lambda s: fnmatch.fnmatch(s, pattern)
 
     # fallback to string comparison
