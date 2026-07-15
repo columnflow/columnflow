@@ -20,7 +20,7 @@ from columnflow.plotting.plot_util import (
     remove_label_placeholders,
     apply_label_placeholders,
     calculate_stat_error,
-    hatch_styles,
+    HatchStyles,
     get_hatch_kwargs,
 )
 from columnflow.types import TYPE_CHECKING, Sequence
@@ -35,7 +35,7 @@ def draw_stat_error_bands(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
-    hatch_style: hatch_styles = "black",
+    hatch_style: HatchStyles = "black",
     **kwargs,
 ) -> None:
     assert len(h.axes) == 1
@@ -68,7 +68,7 @@ def draw_syst_error_bands(
     shift_insts: Sequence[od.Shift],
     norm: float | Sequence | np.ndarray = 1.0,
     method: str = "quadratic_sum",
-    hatch_style: hatch_styles = "green_backwards",
+    hatch_style: HatchStyles = "green_backwards",
     **kwargs,
 ) -> None:
     import hist

@@ -707,10 +707,10 @@ def prepare_stack_plot_config(
     return plot_config
 
 
-hatch_styles = Literal["black", "green", "black_backwards", "green_backwards"]
+HatchStyles = Literal["black", "green", "black_backwards", "green_backwards"]
 
 
-def get_hatch_kwargs(style: hatch_styles) -> dict[str, Any]:
+def get_hatch_kwargs(style: HatchStyles) -> dict[str, Any]:
     kwargs = {
         "linewidth": 0,
         "color": "none",
