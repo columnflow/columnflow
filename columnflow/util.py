@@ -523,7 +523,8 @@ def is_regex(s: str) -> bool:
 
 def is_pattern(s: str) -> bool:
     """
-    Returns *True* if a string *s* contains pattern characters such as "*" or "?", and *False* otherwise.
+    Returns *True* if a string *s* is not a regular expression (see :py:func:`is_regex`) and contains pattern characters
+    such as "*" or "?", and *False* otherwise.
     """
     return not is_regex(s) and ("*" in s or "?" in s)
 

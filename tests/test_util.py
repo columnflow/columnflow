@@ -53,13 +53,15 @@ class UtilTest(unittest.TestCase):
 
     def test_is_regex(self):
         self.assertTrue(is_regex(r"^foo\d+.*$"))
-        self.assertFalse(is_regex(r"^no$atEnd"))
-        self.assertFalse(is_regex(r"no^atStart$"))
+        self.assertTrue(is_regex(r"^foo\d+.*($|_.+$)"))
+        self.assertFalse(is_regex(r"^nodollar"))
+        self.assertFalse(is_regex(r"nocirc$"))
 
     def test_is_pattern(self):
         self.assertTrue(is_pattern("foo*"))
         self.assertTrue(is_pattern("bar?"))
         self.assertFalse(is_pattern("not_a_pattern"))
+        self.assertFalse(is_pattern(r"^foo\d+.*$"))
 
     def test_pattern_matcher(self):
         matcher = pattern_matcher("foo*")
