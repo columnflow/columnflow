@@ -24,6 +24,7 @@ from columnflow.tasks.framework.plotting import (
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
+from columnflow.plotting import check_multi_variable_support, check_multi_category_support
 from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 from columnflow.hist_util import add_missing_shifts, sum_hists, select_category_bins
 from columnflow.config_util import get_shift_from_configs, expand_shift_sources
@@ -56,6 +57,12 @@ class PlotVariablesBase(_PlotVariablesBase):
         description="whether a single plot for all variables should be created; this requires that the used plot "
         "function accepts a nested dictionary with all variable and process histograms as an input; default: False",
     )
+    multi_category = luigi.BoolParameter(
+        default=False,
+        description="whether a single plot for all categories should be created; this requires that the used plot "
+        "function accepts a nested dictionary with all category and process histograms as an input; cannot be used in "
+        "conjunction with --multi-variable; default: False",
+    )
     bypass_branch_requirements = luigi.BoolParameter(
         default=False,
         description="whether to skip branch requirements and only use that of the workflow; default: False",
@@ -70,6 +77,28 @@ class PlotVariablesBase(_PlotVariablesBase):
     exclude_params_repr = {"bypass_branch_requirements"}
 
     exclude_index = True
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        # check multi flags
+        if self.multi_variable and self.multi_category:
+            raise Exception("cannot use --multi-variable and --multi-category at the same time")
+
+        # the plot function support for multi-flags
+        plot_func = self.get_plot_func(self.plot_function)
+        if self.multi_variable and not check_multi_variable_support(plot_func):
+            raise Exception(
+                f"plot function '{self.plot_function}' does not support multi-variable plotting; please change the "
+                "plot function or, if it actually has multi-variable support, decorate it with "
+                "@columnflow.plotting.supports_multi_variable",
+            )
+        if self.multi_category and not check_multi_category_support(plot_func):
+            raise Exception(
+                f"plot function '{self.plot_function}' does not support multi-category plotting; please change the "
+                "plot function or, if it actually has multi-category support, decorate it with "
+                "@columnflow.plotting.supports_multi_category",
+            )
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
