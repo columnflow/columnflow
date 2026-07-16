@@ -445,9 +445,10 @@ def remove_residual_axis(
 
 
 def prepare_style_config(
+    *,
     config_inst: od.Config,
-    category_inst: od.Category,
     variable_inst: od.Variable,
+    category_inst: od.Category | None = None,
     density: bool | None = False,
     shape_norm: bool | None = False,
     yscale: str | None = "",
@@ -464,9 +465,6 @@ def prepare_style_config(
         variable_inst.x("x_min", variable_inst.x_min),
         variable_inst.x("x_max", variable_inst.x_max),
     )
-
-    # build the label from category and optional variable selection labels
-    cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
 
     # unit format on axes (could be configurable)
     unit_format = "{title} [{unit}]"
@@ -499,12 +497,16 @@ def prepare_style_config(
             "xrotation": variable_inst.x("x_label_rotation", None),
         },
         "legend_cfg": {},
-        "annotate_cfg": {"text": cat_label or ""},
         "cms_label_cfg": {
             "lumi": f"{0.001 * config_inst.x.luminosity.get('nominal'):.1f}",  # /pb -> /fb
             "com": config_inst.campaign.ecm,
         },
     }
+
+    # build the label from category and optional variable selection labels
+    if category_inst:
+        cat_label = join_labels(category_inst.label, variable_inst.x("selection_label", None))
+        style_config["annotate_cfg"] = {"text": cat_label or ""}
 
     # disable minor ticks based on variable_inst
     axis_type = variable_inst.x("axis_type", "variable")

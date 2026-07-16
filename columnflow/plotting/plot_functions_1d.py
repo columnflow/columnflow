@@ -97,12 +97,12 @@ def plot_variable_stack(
 
     # prepare and update the style config
     default_style_config = prepare_style_config(
-        config_inst,
-        category_inst,
-        variable_inst,
-        density,
-        shape_norm,
-        yscale,
+        config_inst=config_inst,
+        variable_inst=variable_inst,
+        category_inst=category_inst,
+        density=density,
+        shape_norm=shape_norm,
+        yscale=yscale,
     )
     # additional, plot function specific changes
     if shape_norm:
@@ -211,12 +211,12 @@ def plot_variable_variants(
 
     # setup style config
     default_style_config = prepare_style_config(
-        config_inst,
-        category_inst,
-        variable_inst,
-        density,
-        shape_norm,
-        yscale,
+        config_inst=config_inst,
+        variable_inst=variable_inst,
+        category_inst=category_inst,
+        density=density,
+        shape_norm=shape_norm,
+        yscale=yscale,
     )
     # plot-function specific changes
     default_style_config["rax_cfg"]["ylim"] = (0., 1.1)
@@ -315,12 +315,12 @@ def plot_shifted_variable(
         yscale = "log" if variable_inst.log_y else "linear"
 
     default_style_config = prepare_style_config(
-        config_inst,
-        category_inst,
-        variable_inst,
-        density,
-        shape_norm,
-        yscale,
+        config_inst=config_inst,
+        variable_inst=variable_inst,
+        category_inst=category_inst,
+        density=density,
+        shape_norm=shape_norm,
+        yscale=yscale,
     )
     default_style_config["rax_cfg"]["ylim"] = (0.25, 1.75)
     default_style_config["rax_cfg"]["ylabel"] = "Ratio"
@@ -516,9 +516,9 @@ def plot_profile(
                     plot_cfg[key]["yerr"] = None
 
     default_style_config = prepare_style_config(
-        config_inst,
-        category_inst,
-        variable_insts[0],
+        config_inst=config_inst,
+        variable_inst=variable_insts[0],
+        category_inst=category_inst,
         density=density,
         yscale=yscale,
         xtick_rotation=kwargs.get("rotate_xticks", None),
