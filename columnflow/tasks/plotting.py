@@ -6,6 +6,7 @@ Tasks to plot different types of histograms.
 
 import itertools
 import functools
+import threading
 from collections import OrderedDict, defaultdict
 from abc import abstractmethod
 
@@ -24,6 +25,7 @@ from columnflow.tasks.framework.plotting import (
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
+from columnflow.plotting import check_multi_variable_support, check_multi_category_support
 from columnflow.util import DotDict, dev_sandbox, dict_add_strict
 from columnflow.hist_util import add_missing_shifts, sum_hists, select_category_bins
 from columnflow.config_util import get_shift_from_configs, expand_shift_sources
@@ -54,7 +56,14 @@ class PlotVariablesBase(_PlotVariablesBase):
     multi_variable = luigi.BoolParameter(
         default=False,
         description="whether a single plot for all variables should be created; this requires that the used plot "
-        "function accepts a nested dictionary with all variable and process histograms as an input; default: False",
+        "function is decorated with '@columnflow.plotting.supports_multi_variable' and accepts a nested dictionary "
+        "for the 'hists' argument with all variable and process histograms as an input; default: False",
+    )
+    multi_category = luigi.BoolParameter(
+        default=False,
+        description="whether a single plot for all categories should be created; this requires that the used plot "
+        "function is decorated with '@columnflow.plotting.supports_multi_category' and accepts a list of categories "
+        "for the 'category_inst' argument; cannot be used in conjunction with --multi-variable; default: False",
     )
     bypass_branch_requirements = luigi.BoolParameter(
         default=False,
@@ -71,14 +80,43 @@ class PlotVariablesBase(_PlotVariablesBase):
 
     exclude_index = True
 
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        # check multi flags
+        self._check_multi_flags()
+
+        # the plot function support for multi-flags
+        plot_func = self.get_plot_func(self.plot_function)
+        if self.multi_variable and not check_multi_variable_support(plot_func):
+            raise Exception(
+                f"plot function '{self.plot_function}' does not support multi-variable plotting; please change the "
+                "plot function or, if it actually has multi-variable support, decorate it with "
+                "@columnflow.plotting.supports_multi_variable",
+            )
+        if self.multi_category and not check_multi_category_support(plot_func):
+            raise Exception(
+                f"plot function '{self.plot_function}' does not support multi-category plotting; please change the "
+                "plot function or, if it actually has multi-category support, decorate it with "
+                "@columnflow.plotting.supports_multi_category",
+            )
+
+    def _check_multi_flags(self) -> None:
+        if self.multi_variable and self.multi_category:
+            raise Exception("cannot use --multi-variable and --multi-category at the same time")
+
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
         parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
         return parts
 
     def create_branch_map(self):
-        keys = ["category"]
-        seqs = [self.categories]
+        self._check_multi_flags()
+        keys = []
+        seqs = []
+        if not self.multi_category:
+            keys.append("category")
+            seqs.append(self.categories)
         if not self.multi_variable:
             keys.append("variable")
             seqs.append(self.variables)
@@ -177,8 +215,12 @@ class PlotVariablesBase(_PlotVariablesBase):
     def run(self):
         import hist
 
+        self._check_multi_flags()
+
         # prepare other config objects
+        categories = list(self.categories) if self.multi_category else [self.branch_data.category]
         variables = list(self.variables) if self.multi_variable else [self.branch_data.variable]
+        category_variable_combis = list(itertools.product(categories, variables))
         plot_shifts = self.get_plot_shifts()
         plot_shift_names = set(shift_inst.name for shift_inst in plot_shifts) | {"nominal"}
 
@@ -186,13 +228,17 @@ class PlotVariablesBase(_PlotVariablesBase):
         config_process_map, process_shift_map = self.get_config_process_map()
 
         # read histograms per variable name, config and process
-        hists: dict[str, dict[od.Config, dict[od.Process, hist.Hist]]] = {var_name: {} for var_name in variables}
-        with self.publish_step(f"plotting {','.join(variables)} in {self.branch_data.category}"):
+        hists: dict[tuple[str, str], dict[od.Config, dict[od.Process, hist.Hist]]] = {
+            tpl: {}
+            for tpl in category_variable_combis
+        }
+        with self.publish_step(f"plotting {','.join(variables)} in {','.join(categories)}"):
             inputs = self.input() or self.workflow_input().merged_hists
-            for var_name in variables:
+            for cat_name, var_name in category_variable_combis:
+                hist_key = (cat_name, var_name)
                 for i, (config, dataset_dict) in enumerate(inputs.items()):
                     config_inst = self.config_insts[i]
-                    category_inst = config_inst.get_category(self.branch_data.category)
+                    category_inst = config_inst.get_category(cat_name)
 
                     hists_config = {}
 
@@ -238,7 +284,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                         del h_in
 
                     # after merging all processes, sort the histograms by process order and store them
-                    hists[var_name][config_inst] = {
+                    hists[hist_key][config_inst] = {
                         proc_inst: hists_config[proc_inst]
                         for proc_inst in sorted(
                             hists_config.keys(),
@@ -255,33 +301,30 @@ class PlotVariablesBase(_PlotVariablesBase):
                         )
 
                 # update histograms using custom hooks
-                hists[var_name] = self.invoke_hist_hooks(
-                    hists[var_name],
-                    hook_kwargs={
-                        "category_name": self.branch_data.category,
-                        "variable_name": var_name,
-                    },
+                hists[hist_key] = self.invoke_hist_hooks(
+                    hists[hist_key],
+                    hook_kwargs={"category_name": cat_name, "variable_name": var_name},
                 )
 
                 # merge configs
                 if len(self.config_insts) != 1:
                     process_memory = {}
                     merged_hists = {}
-                    for _hists in hists[var_name].values():
+                    for _hists in hists[hist_key].values():
                         for process_inst, h in _hists.items():
                             if process_inst.id in merged_hists:
                                 merged_hists[process_inst.id] += h
                             else:
                                 merged_hists[process_inst.id] = h
                                 process_memory[process_inst.id] = process_inst
-                    hists[var_name] = {process_memory[process_id]: h for process_id, h in merged_hists.items()}
+                    hists[hist_key] = {process_memory[process_id]: h for process_id, h in merged_hists.items()}
                 else:
-                    hists[var_name] = hists[var_name][self.config_inst]
+                    hists[hist_key] = hists[hist_key][self.config_inst]
 
                 # axis selections and reductions
                 _hists = OrderedDict()
-                for process_inst in hists[var_name].keys():
-                    h = hists[var_name][process_inst]
+                for process_inst in hists[hist_key].keys():
+                    h = hists[hist_key][process_inst]
                     # determine expected shifts from intersection of requested shifts and those known for the process
                     process_shifts = (
                         process_shift_map[process_inst.name]
@@ -297,7 +340,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                     h = select_category_bins(h, category_inst, use_leaves=True, prefer_parents=True, reduce=True)
                     # store
                     _hists[process_inst] = h
-                hists[var_name] = _hists
+                hists[hist_key] = _hists
 
             # copy process instances once so that their auxiliary data fields can be used as a storage for
             # process-specific plot parameters later on in plot scripts without affecting the original instances
@@ -308,27 +351,44 @@ class PlotVariablesBase(_PlotVariablesBase):
             ).copy()
             process_map = {proc_inst.name: proc_inst for proc_inst in fake_root.processes.values()}
             fake_root.processes.clear()
-            for var_name, _hists in hists.items():
-                hists[var_name] = {process_map[proc_inst.name]: h for proc_inst, h in _hists.items()}
+            for hist_key, _hists in hists.items():
+                hists[hist_key] = {process_map[proc_inst.name]: h for proc_inst, h in _hists.items()}
 
             # helper to get variable instances per variable name in tuples (split in case of n-d plots)
             get_var_insts = lambda var_name: list(map(self.config_inst.get_variable, self.variable_tuples[var_name]))
 
+            # prepare dynamic plot arguments
+            if self.multi_category:
+                plot_content = {
+                    "hists": {cat_name: hists[(cat_name, variables[0])] for cat_name in categories},
+                    "category_inst": [self.config_inst.get_category(cat_name).copy_shallow() for cat_name in categories],
+                    "variable_insts": get_var_insts(variables[0]),
+                }
+            elif self.multi_variable:
+                plot_content = {
+                    "hists": {var_name: hists[(categories[0], var_name)] for var_name in variables},
+                    "category_inst": self.config_inst.get_category(categories[0]).copy_shallow(),
+                    "variable_insts": {var_name: get_var_insts(var_name) for var_name in variables},
+                }
+            else:
+                plot_content = {
+                    "hists": hists[(categories[0], variables[0])],
+                    "category_inst": self.config_inst.get_category(categories[0]).copy_shallow(),
+                    "variable_insts": get_var_insts(variables[0]),
+                }
+
             # temporarily use a merged luminostiy value, assigned to the first config
             config_inst = self.config_insts[0]
+            if not config_inst.has_aux("lumi_plot_lock"):
+                config_inst.x.lumi_plot_lock = threading.RLock()
             lumi = sum([_config_inst.x.luminosity for _config_inst in self.config_insts])
-            with law.util.patch_object(config_inst.x, "luminosity", lumi):
+
+            with law.util.patch_object(config_inst.x, "luminosity", lumi, lock=config_inst.x.lumi_plot_lock):
                 # call the plot function
                 fig, _ = self.call_plot_func(
                     self.plot_function,
-                    hists=hists if self.multi_variable else hists[variables[0]],
+                    **plot_content,
                     config_inst=config_inst,
-                    category_inst=category_inst.copy_shallow(),
-                    variable_insts=(
-                        {var_name: get_var_insts(var_name) for var_name in variables}
-                        if self.multi_variable
-                        else get_var_insts(variables[0])
-                    ),
                     shift_insts=plot_shifts,
                     **self.get_plot_parameters(),
                 )
@@ -377,8 +437,15 @@ class PlotVariablesBaseSingleShift(
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
 
+        self._check_multi_flags()
+
         parts["processes"] = f"proc_{self.processes_repr}"
-        parts["category"] = f"cat_{self.branch_data.category}"
+
+        if self.multi_category:
+            parts["category"] = f"cats_{self.categories_repr}"
+        else:
+            parts["category"] = f"cat_{self.branch_data.category}"
+
         if self.multi_variable:
             parts["variables"] = f"vars_{self.variables_repr}"
         else:
@@ -519,14 +586,22 @@ class PlotVariablesBaseMultiShifts(
     )
 
     def create_branch_map(self) -> list[DotDict]:
-        keys = ["category"]
-        seqs = [self.categories]
+        self._check_multi_flags()
+
+        keys = []
+        seqs = []
+        if not self.multi_category:
+            keys.append("category")
+            seqs.append(self.categories)
+
         if not self.multi_variable:
             keys.append("variable")
             seqs.append(self.variables)
+
         if not self.combine_shifts:
             seqs.append([source for source in self.shift_sources if source != "nominal"])
             keys.append("shift_source")
+
         return [DotDict(zip(keys, vals)) for vals in itertools.product(*seqs)]
 
     def requires(self):
@@ -562,8 +637,15 @@ class PlotVariablesBaseMultiShifts(
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
 
+        self._check_multi_flags()
+
         parts["processes"] = f"proc_{self.processes_repr}"
-        parts["category"] = f"cat_{self.branch_data.category}"
+
+        if self.multi_category:
+            parts["category"] = f"cats_{self.categories_repr}"
+        else:
+            parts["category"] = f"cat_{self.branch_data.category}"
+
         if self.multi_variable:
             parts["variables"] = f"vars_{self.variables_repr}"
         else:
