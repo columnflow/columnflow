@@ -25,4 +25,4 @@ __credits__ = [
 __contact__ = "https://github.com/columnflow/columnflow"
 __license__ = "BSD-3-Clause"
 __status__ = "Development"
-__version__ = "0.3.0"
+__version__ = "0.3.1"
