@@ -8,7 +8,7 @@ Columnar analysis backed by law and order.
 
 __author__ = "The columnflow team"
 __email__ = "github.riga@icloud.com"
-__copyright__ = "Copyright 2022-2025"
+__copyright__ = "Copyright 2022-2026"
 __credits__ = [
     "Marcel Rieger",
     "Mathis Frahm",
