@@ -645,9 +645,9 @@ def create_category_combinations(
         if not isinstance(_categories, CategoryGroup):
             docs_url = get_docs_url("api", "config_util.html", anchor="columnflow.config_util.CategoryGroup")
             logger.warning_once(
-                "deprecated_category_group_lists",
-                f"using a list to define a sequence of categories for create_category_combinations() is depcreated "
-                f"and will be removed in a future version, please use a CategoryGroup instance instead: {docs_url}",
+                "category_group_lists",
+                f"using a list to define a sequence of categories for create_category_combinations() is discouraged; "
+                f"please use a CategoryGroup instance instead: {docs_url}",
             )
             # create a group assuming (!) it describes a full, valid phasespace partition
             _categories = CategoryGroup(

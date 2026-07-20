@@ -52,18 +52,6 @@ class TopPtWeightFromTheoryConfig:
     })
 
 
-# for backward compatibility
-class TopPtWeightConfig(TopPtWeightFromDataConfig):
-
-    def __init__(self, *args, **kwargs):
-        logger.warning_once(
-            "TopPtWeightConfig is deprecated and will be removed in future versions, please use "
-            "TopPtWeightFromDataConfig instead to keep using the data-based method, or TopPtWeightFromTheoryConfig to "
-            "use the theory-based method",
-        )
-        super().__init__(*args, **kwargs)
-
-
 @producer(
     uses={"gen_top.t.pt"},
     produces={"top_pt_weight{,_up,_down}"},

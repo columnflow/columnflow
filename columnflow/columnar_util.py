@@ -28,7 +28,7 @@ import order as od
 
 from columnflow.util import (
     UNSET, maybe_import, classproperty, DotDict, DerivableMeta, CachedDerivableMeta, Derivable, pattern_matcher,
-    get_source_code, real_path, freeze, get_docs_url,
+    get_source_code, real_path, freeze,
 )
 from columnflow.types import Sequence, Callable, Any, T, Generator, Hashable, TypeAlias, Union, TYPE_CHECKING
 
@@ -1425,8 +1425,7 @@ def flat_np_view(ak_array: ak.Array, axis: int | None = None, copy: bool = False
 def ak_copy(ak_array: ak.Array) -> ak.Array:
     """
     Workaround for ``ak.copy`` which currently fails to copy arrays with coffea nano-style behavior
-    attached to them. As soon as this is functional again, this function should be deprecated and
-    removed.
+    attached to them.
     """
     return layout_ak_array(np.array(ak.flatten(ak_array)), ak_array)
 
@@ -2840,19 +2839,6 @@ class TaskArrayFunction(ArrayFunction, metaclass=TaskArrayFunctionMeta):
         """
         if attr in self.inst_dict:
             return self.inst_dict[attr]
-
-        # extra warnings for a limited period of time to ensure a smooth transition to the new
-        # task array function interface
-        if attr in {"task", "global_shift_inst", "local_shift_inst"}:
-            docs_url1 = get_docs_url("user_guide", "task_array_functions.html")
-            docs_url2 = get_docs_url("user_guide", "02_03_transition.html")
-            logger.warning_once(
-                f"taf_interface_deprected_{attr}",
-                f"direct access to attribute '{attr}' was removed in favor of a) using the 'task' "
-                "instance passed as an argument to most task array function hooks, or b) using the "
-                "correct task array function hook for the specific use case (e.g. pre_init() or "
-                f"post_init() instead of init()); see {docs_url1} and {docs_url2} for more info",
-            )
 
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{attr}'")
 

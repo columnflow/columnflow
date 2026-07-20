@@ -296,19 +296,6 @@ def get_jec_config_default(self: Calibrator) -> JECConfig:
 
     # check for old-style config
     if self.jet_name not in jec_cfg:
-        # if jet collection is `Jet`, issue deprecation warning
-        if self.jet_name == "Jet":
-            logger.warning_once(
-                f"{id(self)}_depr_jec_config",
-                "config aux 'jec' does not contain key for input jet "
-                f"collection '{self.jet_name}'. This may be due to an outdated config. Continuing under the assumption "
-                "that the entire 'jec' entry refers to this jet collection. This assumption will be removed in future "
-                "versions of columnflow, so please adapt the config according to the documentation to remove this "
-                "warning and ensure future compatibility of the code.",
-            )
-            return cast(self.jet_name, jec_cfg)
-
-        # otherwise raise exception
         raise ValueError(f"config aux 'jec' does not contain key for input jet collection '{self.jet_name}'")
 
     return cast(self.jet_name, jec_cfg[self.jet_name])
@@ -854,19 +841,6 @@ def get_jer_config_default(self: Calibrator) -> DotDict:
 
     # check for old-style config
     if self.jet_name not in jer_cfg:
-        # if jet collection is `Jet`, issue deprecation warning
-        if self.jet_name == "Jet":
-            logger.warning_once(
-                f"{id(self)}_depr_jer_config",
-                f"config aux 'jer' does not contain key for input jet collection '{self.jet_name}'. This may be due to "
-                "an outdated config. Continuing under the assumption that the entire 'jer' entry refers to this jet "
-                "collection. This assumption will be removed in future versions of columnflow, so please adapt the "
-                "config according to the documentation to remove this warning and ensure future compatibility of the "
-                "code.",
-            )
-            return cast(self.jet_name, jer_cfg)
-
-        # otherwise raise exception
         raise ValueError(f"config aux 'jer' does not contain key for input jet collection '{self.jet_name}'")
 
     return cast(self.jet_name, jer_cfg[self.jet_name])

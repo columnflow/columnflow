@@ -14,7 +14,7 @@ import yaml
 
 from columnflow.types import Generator, Callable, TextIO, Sequence, Any, Hashable, Type, T
 from columnflow.util import (
-    CachedDerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, get_docs_url, freeze, StrEnum,
+    CachedDerivableMeta, Derivable, DotDict, is_pattern, is_regex, pattern_matcher, freeze, StrEnum,
 )
 
 
@@ -592,9 +592,6 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         # store attributes
         self.config_insts = config_insts or []
 
-        # temporary attributes for as long as we issue deprecation warnings
-        self.__config_inst = None
-
         # model info
         self.model = self.model_spec()
 
@@ -621,28 +618,6 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
     #
     # property access to top-level objects
     #
-
-    # !! to be removed in a future release
-    @property
-    def config_inst(self) -> od.Config:
-        if self.__config_inst:
-            return self.__config_inst
-
-        # trigger a verbose warning in case the deprecated attribute is accessed
-        docs_url = get_docs_url("user_guide", "02_03_transition.html")
-        api_url = get_docs_url("api", "inference", "index.html", anchor="columnflow.inference.InferenceModel")
-        logger.warning_once(
-            "inference_model_deprected_config_inst",
-            "access to attribute 'config_inst' in inference model was removed; use 'config_insts' instead; also, make "
-            "sure to use the new 'config_data' attribute in 'add_category()' for a more fine-grained control over the "
-            f"composition of your inference model categories; see {docs_url} and {api_url} for more info",
-        )
-
-        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute 'config_inst'")
-
-    @config_inst.setter
-    def config_inst(self, config_inst: od.Config) -> None:
-        self.__config_inst = config_inst
 
     @property
     def categories(self) -> DotDict:
