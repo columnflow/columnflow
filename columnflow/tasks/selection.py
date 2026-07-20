@@ -198,6 +198,7 @@ class SelectEvents(_SelectEvents):
                 law.util.map_struct(law.target.file.get_path, inps),
                 source_type=["coffea_root"] + ["awkward_parquet"] * n_calib + [None] * n_ext,
                 read_columns=[read_columns] * (1 + n_calib + n_ext),
+                read_options=self.get_read_options(inps, first_is_nano=True),
                 chunk_size=self.selector_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs within additional columns

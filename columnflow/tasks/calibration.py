@@ -142,6 +142,7 @@ class CalibrateEvents(_CalibrateEvents):
                 law.util.map_struct(law.target.file.get_path, inps),
                 source_type=["coffea_root"] + (len(inps) - 1) * [None],
                 read_columns=len(inps) * [read_columns],
+                read_options=self.get_read_options(inps, first_is_nano=True),
                 chunk_size=self.calibrator_inst.get_min_chunk_size(),
             ):
                 # optional check for overlapping inputs

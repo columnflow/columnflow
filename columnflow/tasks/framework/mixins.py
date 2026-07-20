@@ -2690,6 +2690,24 @@ class ChunkedIOMixin(ConfigTask):
         # eager cleanup
         del handler
 
+    def get_read_options(self, inputs: list[Any], *, first_is_nano: bool = False) -> list[dict[str, Any] | None] | None:
+        """
+        Hook that takes a list of *input* files handled during iteration and returns a list of dictionaries that
+        represent *read_options* per input file. When *first_is_nano* is True, the first input file is an external
+        NanoAOD file that might require different read options.
+        """
+        read_options = [None] * len(inputs)
+        if inputs and first_is_nano and inputs[0].ext() == "root":
+            read_options[0] = self._get_nano_read_options(inputs[0])
+        return read_options
+
+    def _get_nano_read_options(self, target: law.FileSystemFileTarget) -> dict[str, Any] | None:
+        return (
+            func(self, target)
+            if callable(func := self.config_inst.x("get_nano_read_options", None))
+            else None
+        )
+
 
 class HistHookMixin(ConfigTask):
 
