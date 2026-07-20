@@ -756,7 +756,8 @@ def jec_setup(
         keys = []
         for name in names:
             for jet_type in jet_types:
-                assert isinstance(jet_type, (str, tuple))
+                if not isinstance(jet_type, (str, tuple)):
+                    raise TypeError(f"jet_type must be str or tuple, found {type(jet_type)}")
                 keys.append(
                     jme_key.format(name=name, jet_type=jet_type)
                     if isinstance(jet_type, str)
@@ -1035,7 +1036,10 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         jersf[jec_postfix] = run_evaluator("sf", _variable_map)
 
     # jer and jersf keys are now identical to postifxes
-    assert tuple(self.postfixes) == tuple(jer.keys()) == tuple(jersf.keys())
+    if not (tuple(self.postfixes) == tuple(jer.keys()) == tuple(jersf.keys())):
+        raise ValueError(
+            f"postfixes, jer keys and jersf keys do not match: {self.postfixes}, {jer.keys()}, {jersf.keys()}",
+        )
 
     # array with all JER scale factor variations as an additional axis
     # (note: axis needs to be regular for broadcasting to work correctly)

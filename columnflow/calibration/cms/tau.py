@@ -256,7 +256,8 @@ def tec_setup(
     self.tec_corrector = load_correction_set(tau_file)[self.tec_cfg.correction_set]
 
     # check versions
-    assert self.tec_corrector.version in {0, 1, 2}
+    if self.tec_corrector.version not in {0, 1, 2}:
+        raise ValueError(f"unsupported tec corrector version {self.tec_corrector.version}")
 
 
 tec_nominal = tec.derive("tec_nominal", cls_dict={"with_uncertainties": False})

@@ -109,10 +109,6 @@ def plot_cm(
     :param **kwargs: Additional keyword arguments to pass to the function.
 
     :return: Returns the resulting plot and the confusion matrix.
-
-    :raises AssertionError: If both predictions and labels have mismatched shapes, or if *weights*
-        is not *None* and its shape doesn't match *predictions*.
-    :raises AssertionError: If *normalization* is not one of *None*, "row", "column".
     """
     import matplotlib as mpl
     import matplotlib.pyplot as plt

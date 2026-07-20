@@ -79,8 +79,6 @@ def propagate_met(
     :param met_pt1: missing transverse momentum (MET)
     :param met_phi1: azimuthal angle of MET vector
 
-    :raises AssertionError: if arrays (*jet_pt1*, *jet_phi1*) and (*jet_pt2*, *jet_phi2*) have
-        different dimensions.
     :return: updated values of MET vector, i.e. missing transverse momentum and corresponding
         azimuthal angle phi.
     """

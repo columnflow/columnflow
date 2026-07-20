@@ -38,7 +38,8 @@ def draw_stat_error_bands(
     hatch_style: HatchStyles = "black",
     **kwargs,
 ) -> None:
-    assert len(h.axes) == 1
+    if len(h.axes) != 1:
+        raise ValueError("draw_stat_error_bands only supports 1D histograms")
 
     # compute relative statistical errors
     rel_stat_error = h.variances()**0.5 / h.values()
@@ -81,8 +82,10 @@ def draw_syst_error_bands(
 ) -> None:
     import hist
 
-    assert len(h.axes) == 1
-    assert method in ("quadratic_sum", "envelope")
+    if len(h.axes) != 1:
+        raise ValueError("draw_syst_error_bands only supports 1D histograms")
+    if method not in (known_methods := {"quadratic_sum", "envelope"}):
+        raise ValueError(f"method must be one of {known_methods}, not {method}")
 
     nominal_shift, shift_groups = group_shifts(shift_insts)
     if nominal_shift is None:
@@ -232,7 +235,8 @@ def draw_hist(
 ) -> None:
     import hist
 
-    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
+    if error_type not in (known_error_types := {"variance", "poisson_unweighted", "poisson_weighted"}):
+        raise ValueError(f"error_type must be one of {known_error_types}, not {error_type}")
 
     if kwargs.get("color", "") is None:
         # when color is set to None, remove it such that matplotlib automatically chooses a color
@@ -275,7 +279,8 @@ def draw_profile(
     """
     import hist
 
-    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
+    if error_type not in (known_error_types := {"variance", "poisson_unweighted", "poisson_weighted"}):
+        raise ValueError(f"error_type must be one of {known_error_types}, not {error_type}")
 
     if kwargs.get("color", "") is None:
         # when color is set to None, remove it such that matplotlib automatically chooses a color
@@ -307,7 +312,8 @@ def draw_errorbars(
 ) -> None:
     import hist
 
-    assert error_type in {"variance", "poisson_unweighted", "poisson_weighted"}
+    if error_type not in (known_error_types := {"variance", "poisson_unweighted", "poisson_weighted"}):
+        raise ValueError(f"error_type must be one of {known_error_types}, not {error_type}")
 
     values = h.values() / norm
 
@@ -500,10 +506,13 @@ def plot_all(
         if callable(entries_per_col):
             entries_per_col = entries_per_col(ax, handles, labels, n_cols)
         if entries_per_col and n_cols > 1:
-            if isinstance(entries_per_col, (list, tuple)):
-                assert len(entries_per_col) == n_cols
-            else:
+            if not isinstance(entries_per_col, (list, tuple)):
                 entries_per_col = [entries_per_col] * n_cols
+            elif len(entries_per_col) != n_cols:
+                raise ValueError(
+                    f"when provided as a sequence, entries_per_col must have the same length as ncols ({n_cols}), but "
+                    f"got {len(entries_per_col)}",
+                )
             # fill handles and labels with empty entries
             max_entries = max(entries_per_col)
             empty_handle = ax.plot([], label="", linestyle="None")[0]

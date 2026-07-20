@@ -90,7 +90,11 @@ class CreateDatacards(SerializeInferenceModelBase):
                 if not any(d.variable == variable for d in cat_obj.config_data.values()):
                     continue
                 # cross check that all configs use the same variable (should already be guarded by the model validation)
-                assert all(d.variable == variable for d in cat_obj.config_data.values())
+                if not all(d.variable == variable for d in cat_obj.config_data.values()):
+                    raise ValueError(
+                        f"datacard category '{cat_obj.name}' uses different variables for its configs: "
+                        f"{[d.variable for d in cat_obj.config_data.values()]}",
+                    )
 
                 # check which configs contribute to this category
                 config_insts = [

@@ -1050,13 +1050,15 @@ def rebin_equal_width(
     import hist
 
     # get the variable axis from the first histogram
-    assert hists
+    if not hists:
+        raise ValueError("no histograms provided")
     for var_index, var_axis in enumerate(list(hists.values())[0].axes):
         if var_axis.name == axis_name:
             break
     else:
         raise ValueError(f"axis '{axis_name}' not found in histograms")
-    assert isinstance(var_axis, (hist.axis.Variable, hist.axis.Regular))
+    if not isinstance(var_axis, (hist.axis.Variable, hist.axis.Regular)):
+        raise TypeError(f"axis '{axis_name}' is not a Variable or Regular axis, but {type(var_axis)}")
     orig_edges = var_axis.edges
 
     # prepare arguments for the axis copy
