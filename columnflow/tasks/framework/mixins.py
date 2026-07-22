@@ -2278,6 +2278,13 @@ class DatasetsProcessesMixin(ConfigTask):
             processes_orig = processes
             if processes != law.no_value:
                 if processes:
+                    processes = cls.resolve_config_default_and_groups(
+                        param=processes or (RESOLVE_DEFAULT,),
+                        task_params=params,
+                        container=config_inst,
+                        default_str="default_process_group",
+                        groups_str="process_groups",
+                    )
                     processes = cls.find_config_objects(
                         names=processes,
                         container=config_inst,
@@ -2309,6 +2316,13 @@ class DatasetsProcessesMixin(ConfigTask):
             if datasets != law.no_value:
                 datasets_orig = datasets
                 if datasets:
+                    datasets = cls.resolve_config_default_and_groups(
+                        param=datasets or (RESOLVE_DEFAULT,),
+                        task_params=params,
+                        container=config_inst,
+                        default_str="default_dataset_group",
+                        groups_str="dataset_groups",
+                    )
                     datasets = cls.find_config_objects(
                         names=datasets,
                         container=config_inst,
