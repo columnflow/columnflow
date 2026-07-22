@@ -522,11 +522,12 @@ def prepare_style_config(
 
 def prepare_stack_plot_config(
     hists: OrderedDict,
+    shift_insts: Sequence[od.Shift] | None = None,
     shape_norm: bool | None = False,
     hide_stat_errors: bool = False,
     merge_stat_errors: bool = False,
     show_syst_rate_change: bool = False,
-    shift_insts: Sequence[od.Shift] | None = None,
+    ratio_mark_out_of_range: bool = True,
     density: bool = False,
     **kwargs,
 ) -> OrderedDict:
@@ -700,6 +701,7 @@ def prepare_stack_plot_config(
                 "norm": h_mc.values() * data_norm / mc_norm,
                 "error_type": "poisson_unweighted",
                 "density": density,
+                "mark_out_of_range": ratio_mark_out_of_range,
             }
 
         # suppress error bars by overriding `yerr`
