@@ -318,6 +318,7 @@ def draw_errorbars(
     norm: float | Sequence | np.ndarray = 1.0,
     error_type: str | None = "poisson_unweighted",
     density: bool = False,
+    show_zero_bins: bool = True,
     mark_out_of_range: bool = False,
     **kwargs,
 ) -> None:
@@ -334,9 +335,11 @@ def draw_errorbars(
     y = h.values() / norm
 
     # filter non-finite values
-    finite_mask = np.isfinite(y)
-    x = x[finite_mask]
-    y = y[finite_mask]
+    filter_mask = np.isfinite(y)
+    if not show_zero_bins:
+        filter_mask &= y != 0
+    x = x[filter_mask]
+    y = y[filter_mask]
 
     # handle error bars
     yerr = kwargs.pop("yerr", None)
@@ -351,8 +354,8 @@ def draw_errorbars(
         yerr = calculate_stat_error(h, error_type, density=density)
         # normalize yerr to the histogram = error propagation on standard deviation
         yerr = abs(yerr / norm)
-        # filter non-finite values
-        yerr = yerr[:, finite_mask]
+        # filter values
+        yerr = yerr[:, filter_mask]
         # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
         yerr[np.isnan(yerr)] = np.nan
 
@@ -382,7 +385,7 @@ def draw_errorbars(
         mask_lo = y < (y_mid - offset_scale * (y_mid - y_min))
         # plot triangle-up/down markers for high/low values
         marker_kwargs = {
-            "color": "#333333",
+            "color": "#555555",
             "s": (defaults.get("markersize", mpl.rcParams.get("lines.markersize", 6)) * 0.85) ** 2,
             "zorder": 10,
         }

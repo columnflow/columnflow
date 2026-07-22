@@ -701,6 +701,7 @@ def prepare_stack_plot_config(
                 "norm": h_mc.values() * data_norm / mc_norm,
                 "error_type": "poisson_unweighted",
                 "density": density,
+                "show_zero_bins": False,
                 "mark_out_of_range": ratio_mark_out_of_range,
             }
 
