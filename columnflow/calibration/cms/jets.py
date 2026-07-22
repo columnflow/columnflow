@@ -1114,9 +1114,9 @@ def jer(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
         regional_smear_factors = []
         for i, (region_name, region_func) in enumerate(self.jer_cfg.uncertainty_regions.items()):
             region_mask = region_func(events[jet_name])
-            # apply to both variations
-            regional_smear_factors.append(ak.where(region_mask, smear_factors[..., 2 * i + 1], 1.0))
-            regional_smear_factors.append(ak.where(region_mask, smear_factors[..., 2 * i + 2], 1.0))
+            # apply to both variations, defaulting to nominal smear factors
+            regional_smear_factors.append(ak.where(region_mask, smear_factors[..., 2 * i + 1], smear_factors[..., 0]))
+            regional_smear_factors.append(ak.where(region_mask, smear_factors[..., 2 * i + 2], smear_factors[..., 0]))
         # concatenate back
         smear_factors = ak_concatenate_safe(
             [
