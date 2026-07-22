@@ -88,7 +88,7 @@ def plot_variable_stack(
 
     # prepare the plot config
     plot_config = prepare_stack_plot_config(
-        hists,
+        hists=hists,
         shape_norm=shape_norm,
         shift_insts=shift_insts,
         density=density,
@@ -219,7 +219,7 @@ def plot_variable_variants(
         yscale=yscale,
     )
     # plot-function specific changes
-    default_style_config["rax_cfg"]["ylim"] = (0., 1.1)
+    default_style_config["rax_cfg"]["ylim"] = (0.0, 1.1)
     default_style_config["rax_cfg"]["ylabel"] = "Step / Initial"
 
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
@@ -362,7 +362,7 @@ def plot_cutflow(
     hists = hists_merge_cutflow_steps(hists)
 
     # setup plotting config
-    plot_config = prepare_stack_plot_config(hists, shape_norm=shape_norm, **kwargs)
+    plot_config = prepare_stack_plot_config(hists=hists, shape_norm=shape_norm, **kwargs)
 
     if shape_norm:
         # switch normalization to normalizing to `initial step` bin

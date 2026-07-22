@@ -230,12 +230,14 @@ def draw_hist(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
-    error_type: str = "variance",
+    error_type: str | None = "variance",
     **kwargs,
 ) -> None:
     import hist
 
-    if error_type not in (known_error_types := {"variance", "poisson_unweighted", "poisson_weighted"}):
+    if error_type is None:
+        error_type = "none"
+    if error_type not in (known_error_types := {"none", "variance", "poisson_unweighted", "poisson_weighted"}):
         raise ValueError(f"error_type must be one of {known_error_types}, not {error_type}")
 
     if kwargs.get("color", "") is None:
@@ -248,18 +250,20 @@ def draw_hist(
         "histtype": "step",
     }
     defaults.update(kwargs)
-    if "yerr" not in defaults:
+
+    if error_type == "none":
+        defaults.pop("yerr", None)
+    elif defaults.get("yerr") is None:
         if h.storage_type.accumulator is not hist.accumulators.WeightedSum:
             raise TypeError(
-                "Error bars calculation only implemented for histograms with storage type WeightedSum "
-                "either change the Histogram storage_type or set yerr manually",
+                "error bar calculation only implemented for histograms with storage type WeightedSum either change "
+                "the histogram storage_type or set yerr manually",
             )
         yerr = calculate_stat_error(h, error_type)
         # normalize yerr to the histogram = error propagation on standard deviation
         yerr = abs(yerr / norm)
         # replace inf with nan for any bin where norm = 0 and calculate_stat_error returns a non zero value
-        if np.any(np.isinf(yerr)):
-            yerr[np.isinf(yerr)] = np.nan
+        yerr[np.isinf(yerr)] = np.nan
         defaults["yerr"] = yerr
 
     h = h / norm
@@ -271,7 +275,7 @@ def draw_profile(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
-    error_type: str = "variance",
+    error_type: str | None = "variance",
     **kwargs,
 ) -> None:
     """
@@ -279,7 +283,9 @@ def draw_profile(
     """
     import hist
 
-    if error_type not in (known_error_types := {"variance", "poisson_unweighted", "poisson_weighted"}):
+    if error_type is None:
+        error_type = "none"
+    if error_type not in (known_error_types := {"none", "variance", "poisson_unweighted", "poisson_weighted"}):
         raise ValueError(f"error_type must be one of {known_error_types}, not {error_type}")
 
     if kwargs.get("color", "") is None:
@@ -292,13 +298,17 @@ def draw_profile(
         "histtype": "step",
     }
     defaults.update(kwargs)
-    if "yerr" not in defaults:
+
+    if error_type == "none":
+        defaults.pop("yerr", None)
+    elif defaults.get("yerr") is None:
         if h.storage_type.accumulator is not hist.accumulators.WeightedSum:
             raise TypeError(
-                "Error bars calculation only implemented for histograms with storage type WeightedSum "
-                "either change the Histogram storage_type or set yerr manually",
+                "error bar calculation only implemented for histograms with storage type WeightedSum either change the "
+                "histogram storage_type or set yerr manually",
             )
         defaults["yerr"] = calculate_stat_error(h, error_type)
+
     h.plot1d(**defaults)
 
 
@@ -306,13 +316,15 @@ def draw_errorbars(
     ax: plt.Axes,
     h: hist.Hist,
     norm: float | Sequence | np.ndarray = 1.0,
-    error_type: str = "poisson_unweighted",
+    error_type: str | None = "poisson_unweighted",
     density: bool = False,
     **kwargs,
 ) -> None:
     import hist
 
-    if error_type not in (known_error_types := {"variance", "poisson_unweighted", "poisson_weighted"}):
+    if error_type is None:
+        error_type = "none"
+    if error_type not in (known_error_types := {"none", "variance", "poisson_unweighted", "poisson_weighted"}):
         raise ValueError(f"error_type must be one of {known_error_types}, not {error_type}")
 
     values = h.values() / norm
@@ -412,6 +424,22 @@ def plot_all(
         fig, ax = plt.subplots(gridspec_kw=grid_spec, **subplots_cfg)
         axs = (ax,)
 
+    # prepare ratio plot
+    # (it usually has a fixed vertical range, so it can be cofigured before anything is plotted inside)
+    if not skip_ratio:
+        # hard-coded line at 1
+        rax.axhline(y=1.0, linestyle="dashed", color="gray")
+        # apply axis kwargs
+        rax_kwargs = {
+            "ylim": (0.72, 1.28),
+            "ylabel": "Ratio",
+            "xlabel": "Variable",
+            "yscale": "linear",
+            "xticklabelformat": {"style": "sci", "useMathText": True},
+        }
+        rax_kwargs.update(style_config.get("rax_cfg", {}))
+        apply_ax_kwargs(rax, rax_kwargs)
+
     # invoke all plots methods
     plot_methods = {
         func.__name__: func
@@ -462,25 +490,9 @@ def plot_all(
     # apply axis kwargs
     apply_ax_kwargs(ax, ax_kwargs)
 
-    # ratio plot
-    if not skip_ratio:
-        # hard-coded line at 1
-        rax.axhline(y=1.0, linestyle="dashed", color="gray")
-        rax_kwargs = {
-            "ylim": (0.72, 1.28),
-            "ylabel": "Ratio",
-            "xlabel": "Variable",
-            "yscale": "linear",
-            "xticklabelformat": {"style": "sci", "useMathText": True},
-        }
-        rax_kwargs.update(style_config.get("rax_cfg", {}))
-
-        # apply axis kwargs
-        apply_ax_kwargs(rax, rax_kwargs)
-
-        # remove x-label from main axis
-        if "xlabel" in rax_kwargs:
-            ax.set_xlabel("")
+    # remove x label when a ratio plot is shown
+    if not skip_ratio and "xlabel" in rax_kwargs:
+        ax.set_xlabel("")
 
     # label alignment
     fig.align_labels()
