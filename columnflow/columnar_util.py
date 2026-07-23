@@ -1844,25 +1844,27 @@ class ArrayFunction(Derivable):
     # shallow wrapper around an object (a class or instance) and an IOFlag
     IOFlagged = namedtuple("IOFlagged", ["wrapped", "io_flag"])
 
-    # shallow wrapper around any object that returns the object itself in its default call method
-    # given an array function instance (can be easily subclassed to return something else)
+    # shallow wrapper around any object that returns the object itself in its default call method given an array
+    # function instance (can be easily subclassed to return something else)
     class DeferredColumn(object):
+
+        decorate_attr = "__call__"
 
         @classmethod
         def deferred_column(
-            cls: ArrayFunction.DeferredColumn,
+            cls,
             call_func: Callable[[ArrayFunction], Any | set[Any]] | None = None,
-        ) -> ArrayFunction.DeferredColumn | Callable:
+        ) -> type[ArrayFunction.DeferredColumn] | Callable:
             """
-            Subclass factory to be used as a decorator wrapping a *call_func* that will be used as
-            the new ``__call__`` method. Note that the use of ``super()`` inside the decorated
-            method should always be done with arguments (i.e., class and instance).
+            Subclass factory to be used as a decorator wrapping a *call_func* that will be used as the new ``__call__``
+            method (depending on :py:attr:`decorate_attr`). Note that the use of ``super()`` inside the decorated method
+            should always be done with arguments (i.e., class and instance).
             """
             def decorator(
                 call_func: Callable[[ArrayFunction], Any | set[Any]],
-            ) -> ArrayFunction.DeferredColumn:
+            ) -> type[ArrayFunction.DeferredColumn]:
                 cls_dict = {
-                    "__call__": call_func,
+                    cls.decorate_attr: call_func,
                     "__doc__": call_func.__doc__,
                 }
 
@@ -1889,6 +1891,9 @@ class ArrayFunction(Derivable):
                 else set(columns)
             )
 
+        def __repr__(self) -> str:
+            return f"<{self.__class__.__qualname__}.{self.__class__.__name__} at {hex(id(self))}>"
+
         def __call__(self, func: ArrayFunction) -> Any | set[Any]:
             # default implementation
             return self.get()
@@ -1896,6 +1901,34 @@ class ArrayFunction(Derivable):
         def get(self) -> Any | set[Any]:
             # return the first column if there is just one, otherwise all
             return list(self.columns)[0] if len(self.columns) == 1 else self.columns
+
+    class ConditionalColumn(DeferredColumn):
+
+        decorate_attr = "condition"
+
+        def __init__(self, *columns: Any, negated: bool = False) -> None:
+            super().__init__(*columns)
+            self.negated = bool(negated)
+
+        def __repr__(self) -> str:
+            neg_str = " (negated)" if self.negated else ""
+            return f"<{self.__class__.__qualname__}.{self.__class__.__name__}{neg_str} at {hex(id(self))}>"
+
+        def __call__(self, func: ArrayFunction) -> Any | set[Any]:
+            return self.get() if self.condition(func) != self.negated else None
+
+        def __neg__(self) -> ArrayFunction.ConditionalColumn:
+            return self.negate()
+
+        def __invert__(self) -> ArrayFunction.ConditionalColumn:
+            return self.negate()
+
+        def condition(self, func: ArrayFunction) -> bool:
+            # default implementation
+            return True
+
+        def negate(self) -> ArrayFunction.ConditionalColumn:
+            return self.__class__(*self.columns, negated=not self.negated)
 
     @classproperty
     def AUTO(cls) -> IOFlagged:
@@ -2406,32 +2439,26 @@ class ArrayFunction(Derivable):
         return results
 
 
-# shorthand
+# shorthands
 deferred_column = ArrayFunction.DeferredColumn.deferred_column
+conditional_column = ArrayFunction.ConditionalColumn.deferred_column
 
 
-@deferred_column
-def IF_DATA(self: ArrayFunction.DeferredColumn, func: ArrayFunction) -> Any | set[Any]:
-    return self.get() if func.dataset_inst.is_data else None
+@conditional_column
+def IF_DATA(self, func: ArrayFunction) -> bool:
+    return func.dataset_inst.is_data
 
 
-@deferred_column
-def IF_MC(self: ArrayFunction.DeferredColumn, func: ArrayFunction) -> Any | set[Any]:
-    return self.get() if func.dataset_inst.is_mc else None
+@conditional_column
+def IF_MC(self, func: ArrayFunction) -> bool:
+    return func.dataset_inst.is_mc
 
 
-def IF_DATASET_HAS_TAG(*args, negate: bool = False, **kwargs) -> ArrayFunction.DeferredColumn:
-    @deferred_column
-    def deferred(
-        self: ArrayFunction.DeferredColumn,
-        func: ArrayFunction,
-    ) -> Any | set[Any]:
-        return self.get() if func.dataset_inst.has_tag(*args, **kwargs) is not negate else None
-
-    return deferred
-
-
-IF_DATASET_NOT_HAS_TAG = partial(IF_DATASET_HAS_TAG, negate=True)
+def IF_DATASET_HAS_TAG(*args, negate: bool = False, **kwargs) -> ArrayFunction.ConditionalColumn:
+    @conditional_column
+    def condition(self, func: ArrayFunction) -> bool:
+        return func.dataset_inst.has_tag(*args, **kwargs) != bool(negate)
+    return condition
 
 
 def tagged_column(
