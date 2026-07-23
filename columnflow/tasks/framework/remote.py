@@ -374,6 +374,7 @@ class RemoteWorkflowMixin(AnalysisTask):
     skip_destination_info: bool = False
 
     exclude_params_req = {"remote_claw_sandbox"}
+    exclude_params_branch = {"remote_claw_sandbox"}
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

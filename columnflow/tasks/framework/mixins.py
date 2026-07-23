@@ -2619,6 +2619,7 @@ class ChunkedIOMixin(ConfigTask):
         """
         from columnflow.columnar_util import get_ak_routes
 
+        non_finite_routes = []
         for route in get_ak_routes(ak_array):
             # flatten
             flat = ak.flatten(route.apply(ak_array), axis=None)
@@ -2629,7 +2630,13 @@ class ChunkedIOMixin(ConfigTask):
                     continue
             # check finiteness
             if ak.any(~np.isfinite(flat)):
-                raise ValueError(f"found one or more non-finite values in column '{route.column}' of array {ak_array}")
+                non_finite_routes.append(route)
+
+        if non_finite_routes:
+            raise ValueError(
+                f"found non-finite values in {len(non_finite_routes)} column(s) of array {ak_array}:\n  - " +
+                "\n  - ".join(r.column for r in non_finite_routes),
+            )
 
     @classmethod
     def raise_if_overlapping(cls, ak_arrays: Sequence[ak.Array]) -> None:
