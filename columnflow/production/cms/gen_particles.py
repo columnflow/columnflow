@@ -160,8 +160,11 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
         - ``tau_w_children``: list of the decay products from W boson decays from tau lepton decays, with the first
             entry being the down-type quark or charged lepton, the second entry being the up-type quark or neutrino, and
             additional decay products (e.g photons) are appended afterwards
-        - ``z_children``: not yet implemented
-        - ``w_children``: not yet implemented
+        - ``w_children``: list of decay products from W boson decays coming from Higgs bosons, with the first entry
+                being the down-type quark or charged lepton, the second entry being the up-type quark or neutrino, and
+                additional decay products (e.g photons) are appended afterwards
+        - ``z_children``: list of decay products from Z boson decays coming from Higgs bosons, with the first entry
+                being the particle and the second entry being the anti-particle
     """
     # helper to extract unique values
     unique_set = lambda a: set(np.unique(ak.flatten(a, axis=None)))
@@ -187,8 +190,8 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
     if strict:
         h_children = h_children[:, :, [0, 1]]
 
-    # further treatment of tau decays
-    tau_mask = h_children.pdgId[:, :, 0] == 15
+    # h -> tautau -> children
+    tau_mask = abs(h_children.pdgId[:, :, 0]) == 15
     tau = ak.fill_none(h_children[ak.mask(tau_mask, tau_mask)], [], axis=1)
     tau_children = tau.distinctChildrenDeep[tau.distinctChildrenDeep.hasFlags("isFirstCopy", "isTauDecayProduct")]
     tau_children = ak.drop_none(tau_children)
@@ -221,8 +224,20 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
         axis=2,
     )
 
+    # h -> ww -> children
+    w_mask = abs(h_children.pdgId[:, :, 0]) == 24
+    w = ak.fill_none(h_children[ak.mask(w_mask, w_mask)], [], axis=1)
+    w_children = w.distinctChildrenDeep[w.distinctChildrenDeep.hasFlags("fromHardProcess", "isFirstCopy")]
+    w_children = ak.drop_none(w_children)
+
+    # h -> zz -> children
+    z_mask = abs(h_children.pdgId[:, :, 0]) == 23
+    z = ak.fill_none(h_children[ak.mask(z_mask, z_mask)], [], axis=1)
+    z_children = z.distinctChildrenDeep[z.distinctChildrenDeep.hasFlags("fromHardProcess", "isFirstCopy")]
+    z_children = ak.drop_none(z_children)
+
     # children for decays other than taus are not yet implemented, so show a warning in case they are found
-    unhandled_ids = unique_set(abs(h_children.pdgId)) - set(range(1, 6 + 1)) - set(range(11, 16 + 1))
+    unhandled_ids = unique_set(abs(h_children.pdgId)) - set(range(1, 6 + 1)) - set(range(11, 16 + 1)) - {23, 24}
     if unhandled_ids:
         logger.warning_once(
             f"gen_higgs_undhandled_children_{'_'.join(map(str, sorted(unhandled_ids)))}",
@@ -237,8 +252,8 @@ def gen_higgs_lookup(self: Producer, events: ak.Array, strict: bool = True, **kw
             "h_children": transform_gen_part(h_children, depth_limit=3),
             "tau_children": transform_gen_part(tau_nuw, depth_limit=4),
             "tau_w_children": transform_gen_part(tau_w_children, depth_limit=4),
-            # "z_children": None,  # not yet implemented
-            # "w_children": None,  # not yet implemented
+            "w_children": transform_gen_part(w_children, depth_limit=4),
+            "z_children": transform_gen_part(z_children, depth_limit=4),
         },
         depth_limit=1,
     )
