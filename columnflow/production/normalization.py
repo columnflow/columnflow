@@ -87,18 +87,9 @@ def get_br_from_inclusive_datasets(
             if str(process_inst.id) in dstats["sum_mc_weight_per_process"]:
                 process_datasets[process_inst].add(self.config_inst.get_dataset(dataset_name))
 
-    # step 2: per dataset, collect all "lowest level" processes that are contained in them
-    dataset_processes = collections.defaultdict(set)
-    for dataset_name in dataset_selection_stats:
-        dataset_inst = self.config_inst.get_dataset(dataset_name)
-        dataset_process_inst = dataset_inst.processes.get_first()
-        for process_inst in process_insts:
-            if process_inst == dataset_process_inst or dataset_process_inst.has_process(process_inst, deep=True):
-                dataset_processes[dataset_inst].add(process_inst)
-
-    # step 3: per process, structure the assigned datasets and corresponding processes in DAGs, from more inclusive down
+    # step 2: per process, structure the assigned datasets and corresponding processes in DAGs, from more inclusive down
     #         to more exclusive phase spaces; usually each DAG can contain multiple paths to compute the BR of a single
-    #         process; this is selected and resolved in step 4
+    #         process; this is selected and resolved in step 3
     @dataclasses.dataclass
     class Node:
         process_inst: od.Process
@@ -129,7 +120,15 @@ def get_br_from_inclusive_datasets(
 
     process_dags = {}
     for process_inst, dataset_insts in process_datasets.items():
-        # first, per dataset, remember all sub (more exclusive) datasets
+        # if there is only a single dataset, we can just use it as the root of the DAG
+        if len(dataset_insts) == 1:
+            process_dags[process_inst] = Node(
+                process_inst=self.inclusive_process,
+                dataset_inst=next(iter(dataset_insts)),
+                next={Node(process_inst=process_inst)},
+            )
+            continue
+        # per dataset, remember all sub (more exclusive) datasets
         # (the O(n^2) is not necessarily optimal, but we are dealing with very small numbers here, thus acceptable)
         sub_datasets = {}
         for d_incl, d_excl in itertools.permutations(dataset_insts, 2):
@@ -157,7 +156,7 @@ def get_br_from_inclusive_datasets(
             node.next.add(nodes[process_inst])
         process_dags[process_inst] = dag
 
-    # step 4: per process, compute the branching ratio for each possible path in the DAG, while keeping track of the
+    # step 3: per process, compute the branching ratio for each possible path in the DAG, while keeping track of the
     #         statistical precision of each combination, evaluated based on the raw number of events; then pick the
     #         most precise path; again, there should usually be just a single path, but multiple ones are possible when
     #         datasets have complex overlap
@@ -253,12 +252,18 @@ def get_br_from_inclusive_datasets(
         header = ["process name", "process id", "branching ratio", "uncertainty (%)"]
         rows = [
             [
-                process_inst.name, process_inst.id, process_brs_debug[process_inst][0],
+                process_inst.name,
+                process_inst.id,
+                process_brs_debug[process_inst][0],
                 f"{process_brs_debug[process_inst][1] * 100:.4f}",
             ]
             for process_inst in sorted(process_brs_debug)
         ]
-        logger.info(f"extracted branching ratios from process occurrence in datasets:\n{tabulate(rows, header)}")
+        br_sum = sum(br for (br, _) in process_brs_debug.values())
+        logger.info(
+            f"extracted branching ratios from process occurrence in datasets:\n{tabulate(rows, header)}"
+            f"\n-> sum of branching ratios: {br_sum}",
+        )
 
     return process_brs
 
@@ -366,6 +371,8 @@ def normalization_weights_init(self: Producer, **kwargs) -> None:
     else:
         self.inclusive_dataset = self.dataset_inst
         self.required_datasets = [self.dataset_inst]
+
+    self.inclusive_process = self.inclusive_dataset.processes.get_first()
 
 
 @normalization_weights.requires
