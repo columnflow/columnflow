@@ -2589,13 +2589,13 @@ class ChunkedIOMixin(ConfigTask):
     check_finite_output = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, checks whether output arrays only contain finite values before "
-        "writing to them to file",
+        description="when True, checks whether output arrays only contain finite values before writing to them to "
+        "file; default: False",
     )
     check_overlapping_inputs = luigi.BoolParameter(
         default=False,
         significant=False,
-        description="when True, checks whether columns if input arrays overlap in at least one field",
+        description="when True, checks whether columns if input arrays overlap in at least one field; default: False",
     )
 
     # number of events per row group in the merged file

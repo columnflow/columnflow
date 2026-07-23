@@ -622,17 +622,18 @@ class DatacardWriter(object):
 
             # warn in case of flow content
             if cat_obj.flow_strategy in {FlowStrategy.warn, FlowStrategy.move}:
+                move_msg = "; will be moved to first/last bin" if cat_obj.flow_strategy == FlowStrategy.move else ""
                 if underflow[0]:
                     logger.warning_once(
                         f"underflow_warn_{self.inference_model_inst.cls_name}_{cat_obj.name}_{name}",
                         f"underflow content detected in category '{cat_obj.name}' for histogram "
-                        f"'{name}' ({underflow[0] / view.value.sum() * 100:.1f}% of integral)",
+                        f"'{name}' ({underflow[0] / view.value.sum() * 100:.1f}% of integral){move_msg}",
                     )
                 if overflow[0]:
                     logger.warning_once(
                         f"overflow_warn_{self.inference_model_inst.cls_name}_{cat_obj.name}_{name}",
                         f"overflow content detected in category '{cat_obj.name}' for histogram "
-                        f"'{name}' ({overflow[0] / view.value.sum() * 100:.1f}% of integral)",
+                        f"'{name}' ({overflow[0] / view.value.sum() * 100:.1f}% of integral){move_msg}",
                     )
 
             # stop here in case of warn-only
