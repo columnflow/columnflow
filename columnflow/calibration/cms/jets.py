@@ -6,6 +6,7 @@ Jet energy corrections and jet resolution smearing.
 
 from __future__ import annotations
 
+import operator
 import dataclasses
 import functools
 
@@ -149,9 +150,17 @@ class BJECConfig(TAFConfig):
         # for PNet regressed jets
         BJECConfig(
             jet_types=("AK4PFPuppiPNetRegressionPlusNeutrino", "AK4PFPuppiPNetRegression"),
-            regr_factors=("PNetRegPtRawCorrNeutrino", "PNetRegPtRawCorr"),
+            regr_factors=(["PNetRegPtRawCorr", "PNetRegPtRawCorrNeutrino"], "PNetRegPtRawCorr"),
             bjet_selection=(lambda events: events.Jet.btagPNetB > 0.245),
             bjet_selection_columns={"btagPNetB"},
+        )
+
+        # for UParT regressed jets
+        BJECConfig(
+            jet_types=("AK4PFPuppiUParTRegressionPlusNeutrino", "AK4PFPuppiUParTRegression"),
+            regr_factors=("UParTAK4RegPtRawCorrNeutrino", "UParTAK4RegPtRawCorr"),
+            bjet_selection=(lambda events: events.Jet.btagUParTAK4B > 0.1272),
+            bjet_selection_columns={"btagUParTAK4B"},
         )
 
     Resources:
@@ -161,8 +170,8 @@ class BJECConfig(TAFConfig):
 
     # tagged and untagged jet types in correction set names
     jet_types: tuple[str, str]
-    # regression factors to be applied to tagged and untagged jets
-    regr_factors: tuple[str, str]
+    # regression factors to be applied to tagged and untagged jets (product is used when a list is given)
+    regr_factors: tuple[str | list[str], str | list[str]]
     # function to create a mask to select bjets among all jets
     bjet_selection: Callable[[ak.Array], ak.array | np.ndarray]
     # jet columns needed by bjet_selection
@@ -408,11 +417,20 @@ def jec(
         regr_factor = ak.ones_like(events[jet_name].pt, dtype=np.float32)
     else:
         bjet_mask = self.bjec_cfg.bjet_selection(events)
-        regr_factor = ak.where(
-            bjet_mask,
-            events[jet_name][self.bjec_cfg.regr_factors[0]],
-            events[jet_name][self.bjec_cfg.regr_factors[1]],
+        regr_factor_tagged = functools.reduce(
+            operator.mul,
+            [Route(f).apply(events[jet_name]) for f in law.util.make_list(self.bjec_cfg.regr_factors[0])],
+            1.0,
         )
+        regr_factor_untagged = functools.reduce(
+            operator.mul,
+            [Route(f).apply(events[jet_name]) for f in law.util.make_list(self.bjec_cfg.regr_factors[1])],
+            1.0,
+        )
+        regr_factor = ak.where(bjet_mask, regr_factor_tagged, regr_factor_untagged)
+        # when the b-tagger did not run (usually marked by a negative score), the regr factor is 0 or negative too,
+        # so just consider these jets as non-tagged and use a regr factor of 1
+        regr_factor = ak.where(regr_factor > 0, regr_factor, 1.0)
 
     # calculate uncorrected pt, mass
     events = set_ak_column_f32(
@@ -424,6 +442,13 @@ def jec(
         events,
         f"{jet_name}.mass_raw",
         events[jet_name].mass * (1 - events[jet_name].rawFactor) * regr_factor,
+    )
+
+    # obtain rho, which might be located at different routes, depending on the nano version
+    rho = (
+        events.fixedGridRhoFastjetAll
+        if "fixedGridRhoFastjetAll" in events.fields
+        else events.Rho.fixedGridRhoFastjetAll
     )
 
     def correct_jets(*, pt, eta, phi, area, rho, run, evaluator_key="jec"):
@@ -461,13 +486,6 @@ def jec(
             full_correction = full_correction * correction
 
         return full_correction
-
-    # obtain rho, which might be located at different routes, depending on the nano version
-    rho = (
-        events.fixedGridRhoFastjetAll
-        if "fixedGridRhoFastjetAll" in events.fields
-        else events.Rho.fixedGridRhoFastjetAll
-    )
 
     # correct jets with only a subset of correction levels
     # (for calculating TypeI MET correction)
@@ -612,7 +630,7 @@ def jec_init(self: Calibrator, **kwargs) -> None:
 
     # add columns needed for bjet regression if needed
     if self.bjec_cfg is not None:
-        self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.regr_factors)}}}")
+        self.uses.add(f"{self.jet_name}.{{{','.join(law.util.flatten(self.bjec_cfg.regr_factors))}}}")
         self.uses.add(f"{self.jet_name}.{{{','.join(self.bjec_cfg.bjet_selection_columns)}}}")
 
     # register produced jet columns
