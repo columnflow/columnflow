@@ -547,6 +547,21 @@ def jec(
             events[self.raw_met_name].pt,
             events[self.raw_met_name].phi,
         )
+        # in extremely rare cases (esp. in data), the raw MET pt or phi might be inf, causing the propagated MET to be
+        # non-finite as well, in which case we use the default MET values
+        bad_met = ~np.isfinite(met_pt) | ~np.isfinite(met_phi)
+        if ak.any(bad_met):
+            # fail above half a permille
+            bad_met_msg = (
+                f"found {ak.sum(bad_met)} out of {len(events)} event(s) ({100 * ak.mean(bad_met):.3f}%) with "
+                f"non-finite {self.raw_met_name} values"
+            )
+            if ak.mean(bad_met) > 0.0005:  # half a per-mille
+                raise Exception(bad_met_msg)
+            logger.warning(f"{bad_met_msg}, falling back to {self.met_name} values")
+            met_pt = ak.where(bad_met, events[self.met_name].pt, met_pt)
+            met_phi = ak.where(bad_met, events[self.met_name].phi, met_phi)
+        # store values
         events = set_ak_column_f32(events, f"{self.met_name}.pt", met_pt)
         events = set_ak_column_f32(events, f"{self.met_name}.phi", met_phi)
 
