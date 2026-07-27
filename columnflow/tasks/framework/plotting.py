@@ -28,6 +28,7 @@ class PlotBase(ConfigTask):
     file_types = law.CSVParameter(
         default=("pdf",),
         significant=True,
+        brace_expand=True,
         description="comma-separated list of file extensions to produce; default: pdf",
     )
     plot_suffix = luigi.Parameter(
@@ -47,12 +48,13 @@ class PlotBase(ConfigTask):
         description="parameter to set a list of custom plotting parameters; format: "
         "'option1=val1,option2=val2,...'",
     )
-    custom_style_config = luigi.Parameter(
-        default=RESOLVE_DEFAULT,
+    custom_style_config = law.CSVParameter(
+        default=(RESOLVE_DEFAULT,),
         significant=False,
-        description="parameter to overwrite the *style_config* that is passed to the plot function"
-        "via a dictionary in the `custom_style_config_groups` auxiliary in the config; "
-        "defaults to the `default_custom_style_config` aux field",
+        brace_expand=True,
+        description="parameter to overwrite the *style_config* that is passed to the plot function via a dictionary in "
+        "the `custom_style_config_groups` auxiliary in the config; supports multiple comma-separated values; defaults "
+        "to the `default_custom_style_config` aux field",
     )
     skip_legend = law.OptionalBoolParameter(
         default=None,
@@ -263,19 +265,28 @@ class PlotBase(ConfigTask):
         for key, value in general_settings.items():
             kwargs.setdefault(key, value)
 
-        # resolve custom_style_config
-        custom_style_config = kwargs.get("custom_style_config", None)
-        if custom_style_config == RESOLVE_DEFAULT:
-            custom_style_config = config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
+        # start building the style config with custom adjustments when a dictionary is given
+        style_config = kwargs.get("style_config") or {}
+        if not isinstance(style_config, dict):
+            self.logger.warning("style_config passed to update_plot_kwargs is not a dictionary, ignoring custom styles")
+        else:
+            # resolve custom_style_config
+            custom_style_config = kwargs.get("custom_style_config")
+            if custom_style_config in {RESOLVE_DEFAULT, (RESOLVE_DEFAULT,)}:
+                custom_style_config = config_inst.x("default_custom_style_config", RESOLVE_DEFAULT)
+            custom_style_config = law.util.make_tuple(custom_style_config) if custom_style_config else ()
 
-        groups = config_inst.x("custom_style_config_groups", {})
-        if isinstance(custom_style_config, str) and custom_style_config in groups.keys():
-            custom_style_config = groups[custom_style_config]
+            # loop over custom styles, look them up in the config, and merge them into style_config
+            groups = config_inst.x("custom_style_config_groups", {})
+            for _custom_style_config in custom_style_config[::-1]:
+                if _custom_style_config not in groups:
+                    raise ValueError(
+                        f"custom_style_config '{_custom_style_config}' not found in custom_style_config_groups of "
+                        f"config '{config_inst.name}'",
+                    )
+                style_config = law.util.merge_dicts(style_config, groups[_custom_style_config], deep=True)
 
-        # update style_config
-        style_config = kwargs.get("style_config", {})
-        if isinstance(custom_style_config, dict) and isinstance(style_config, dict):
-            style_config = law.util.merge_dicts(style_config, custom_style_config, deep=True)
+            # update style_config in kwargs with the merged style_config
             kwargs["style_config"] = style_config
 
         # update other defaults
