@@ -323,7 +323,10 @@ def remove_negative_contributions(hists: dict[Hashable, hist.Hist]) -> dict[Hash
     _hists = hists.copy()
     for proc_inst, h in hists.items():
         h = h.copy()
-        h.view().value[h.view().value < 0] = 0
+        view = h.view(flow=True)
+        neg_mask = view.value < 0
+        view.value[neg_mask] = 0.0
+        view.variance[neg_mask] = 0.0
         _hists[proc_inst] = h
     return _hists
 
