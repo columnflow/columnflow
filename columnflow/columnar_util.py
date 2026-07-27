@@ -12,6 +12,7 @@ import os
 import sys
 import re
 import math
+import copy
 import time
 import enum
 import uuid
@@ -1347,7 +1348,7 @@ def attach_coffea_behavior(
     # update or reduce collection info
     _collections = default_coffea_collections
     if isinstance(collections, dict):
-        _collections = _collections.copy()
+        _collections = copy.deepcopy(_collections)
         _collections.update(collections)
     elif isinstance(collections, (list, tuple)):
         _collections = {
@@ -3286,11 +3287,11 @@ class ChunkedParquetReader(object):
 
         # store attributes
         self.path = path
-        self.open_options = open_options.copy() if open_options else {}
+        self.open_options = copy.deepcopy(open_options) if open_options else {}
 
         # open and store meta data with updated open options
         # (when closing the reader, this attribute is set to None)
-        meta_options = open_options.copy()
+        meta_options = copy.deepcopy(open_options)
         meta_options.pop("row_groups", None)
         meta_options.pop("ignore_metadata", None)
         meta_options.pop("columns", None)
@@ -3683,7 +3684,7 @@ class ChunkedIOHandler(object):
         these. When a new file is opened, it receives *open_options*. Passing *read_columns* has no effect.
         """
         # default open options
-        open_options = open_options.copy() if open_options else {}
+        open_options = copy.deepcopy(open_options) if open_options else {}
         open_options["object_cache"] = None
         open_options["array_cache"] = None
         open_options.setdefault("decompression_executor", None)
@@ -3742,7 +3743,7 @@ class ChunkedIOHandler(object):
         already present, added as field ``filter_name`` to *read_options*.
         """
         # default read options
-        read_options = read_options.copy() if read_options else {}
+        read_options = copy.deepcopy(read_options) if read_options else {}
         read_options["array_cache"] = None
         read_options.pop("how", None)
 
@@ -3836,7 +3837,7 @@ class ChunkedIOHandler(object):
             raise Exception(f"'{source}' cannot be opened as awkward_parquet")
 
         # default open options
-        open_options = open_options.copy() if open_options else {}
+        open_options = copy.deepcopy(open_options) if open_options else {}
 
         # inject read_columns
         if read_columns and "columns" not in open_options:
