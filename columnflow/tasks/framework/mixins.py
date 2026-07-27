@@ -2729,6 +2729,15 @@ class ChunkedIOMixin(ConfigTask):
             else None
         )
 
+    def adjust_chunks(self, chunks: list[ak.Array | np.ndarray]) -> list[ak.Array | np.ndarray]:
+        """
+        Hook that takes a list of *chunks* handled during iteration and returns an adjusted or amended list of chunks.
+        The default implementation returns the chunks unchanged.
+        """
+        if callable(adjust_func := self.config_inst.x("adjust_nano_chunks", None)):
+            chunks = adjust_func(self, chunks)
+        return chunks
+
 
 class HistHookMixin(ConfigTask):
 

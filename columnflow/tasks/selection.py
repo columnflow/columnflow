@@ -201,6 +201,10 @@ class SelectEvents(_SelectEvents):
                 read_options=self.get_read_options(inps, first_is_nano=True),
                 chunk_size=self.selector_inst.get_min_chunk_size(),
             ):
+                # adjust if necessary
+                if callable(self.adjust_chunks):
+                    events, *cols = self.adjust_chunks([events, *cols])
+
                 # optional check for overlapping inputs within additional columns
                 if self.check_overlapping_inputs:
                     self.raise_if_overlapping(list(cols))
