@@ -124,7 +124,10 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
             events = set_ak_column(events, f"{self.collection_name}.energyErr_smear_uncorrected", coll.energyErr)
 
         # compute random variables in the shape of the collection once
-        if self.egm_tool:
+        if ak.all(ak.num(coll, axis=1) == 0):
+            # use a dummy value if there are no electrons in the event chunk, which would fail broadcastings below
+            rnd = 1.0
+        elif self.egm_tool:
             # use the random generator from the tools
             rnd_tool = self.egm_tool["egm_random_generator"]
             rnd_variable_map = {
