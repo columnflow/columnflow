@@ -78,7 +78,7 @@ def plot_variable_stack(
     if print_yields:
         print("visible yields:")
         for proc_inst, h in hists.items():
-            print(f"  {proc_inst.name}: {remove_residual_axis_single(h, 'shift').sum().value}")
+            print(f"  {proc_inst.name}: {remove_residual_axis_single(h, 'shift', select_value='nominal').sum().value}")
         print("")
 
     # density scaling per bin
