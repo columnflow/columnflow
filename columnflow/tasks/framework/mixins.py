@@ -2686,7 +2686,7 @@ class ChunkedIOMixin(ConfigTask):
         # iterate in the handler context
         with handler:
             self.chunked_io = handler
-            msg = f"iterate through {handler.n_entries:_} events in {handler.n_chunks} chunks ..."
+            msg = f"iterate through {handler.n_entries_filtered:_} events in {handler.n_chunks} chunks ..."
             try:
                 # measure runtimes excluding IO
                 loop_durations = []
@@ -2711,11 +2711,29 @@ class ChunkedIOMixin(ConfigTask):
         # eager cleanup
         del handler
 
-    def get_read_options(self, inputs: list[Any], *, first_is_nano: bool = False) -> list[dict[str, Any] | None] | None:
+    def get_open_options(
+        self,
+        inputs: list[Any],
+        *,
+        first_is_nano: bool = False,
+    ) -> list[dict[str, Any] | None] | None:
+        """
+        Hook that takes a list of *input* files handled during iteration and returns a list of dictionaries that
+        represent *open_options* per input file. When *first_is_nano* is True, the first input file is an external
+        NanoAOD file.
+        """
+        return len(inputs) * [None]
+
+    def get_read_options(
+        self,
+        inputs: list[Any],
+        *,
+        first_is_nano: bool = False,
+    ) -> list[dict[str, Any] | None] | None:
         """
         Hook that takes a list of *input* files handled during iteration and returns a list of dictionaries that
         represent *read_options* per input file. When *first_is_nano* is True, the first input file is an external
-        NanoAOD file that might require different read options.
+        NanoAOD file.
         """
         read_options = [None] * len(inputs)
         if inputs and first_is_nano and inputs[0].ext() == "root":
@@ -2728,6 +2746,36 @@ class ChunkedIOMixin(ConfigTask):
             if callable(func := self.config_inst.x("get_nano_read_options", None))
             else None
         )
+
+    def get_filter_configs(
+        self,
+        inputs: list[Any],
+        *,
+        first_is_nano: bool = False,
+    ) -> list[ChunkedIOHandler.FilterConfig | None] | None:
+        """
+        Hook that takes a list of *input* files handled during iteration and returns a list of
+        :py:func:`ChunkedIOHandler.FilterConfig` instances that are passed to the :py:class:`ChunkedIOHandler` for
+        filtering chunks. When *first_is_nano* is True, the first input file is an external NanoAOD file.
+        """
+        filter_configs = [None] * len(inputs)
+        if inputs and first_is_nano and inputs[0].ext() == "root":
+            filter_configs[0] = self._get_nano_filter_config(inputs[0])
+        return filter_configs
+
+    def _get_nano_filter_config(self, target: law.FileSystemFileTarget) -> ChunkedIOHandler.FilterConfig | None:
+        if (nano_filter_config := self.config_inst.x("nano_filter_config", None)) is None:
+            return None
+
+        if not isinstance(nano_filter_config, ChunkedIOHandler.FilterConfig):
+            try:
+                nano_filter_config = ChunkedIOHandler.FilterConfig(*nano_filter_config)
+            except TypeError as e:
+                raise TypeError(
+                    f"invalid 'nano_filter_config' for {self.config_mode()} config task {self!r}: {e}",
+                ) from e
+
+        return nano_filter_config
 
     def adjust_chunks(self, chunks: list[ak.Array | np.ndarray]) -> list[ak.Array | np.ndarray]:
         """

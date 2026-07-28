@@ -197,8 +197,10 @@ class SelectEvents(_SelectEvents):
             for (events, *cols), pos in self.iter_chunked_io(
                 law.util.map_struct(law.target.file.get_path, inps),
                 source_type=["coffea_root"] + ["awkward_parquet"] * n_calib + [None] * n_ext,
-                read_columns=[read_columns] * (1 + n_calib + n_ext),
+                open_options=self.get_open_options(inps, first_is_nano=True),
                 read_options=self.get_read_options(inps, first_is_nano=True),
+                read_columns=[read_columns] * (1 + n_calib + n_ext),
+                filter_config=self.get_filter_configs(inps, first_is_nano=True),
                 chunk_size=self.selector_inst.get_min_chunk_size(),
             ):
                 # adjust if necessary

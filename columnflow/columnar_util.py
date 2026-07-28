@@ -1469,7 +1469,9 @@ def slice_across_chunks(
     :return: The concatenated array of all loaded chunks.
     """
     if len(slice_funcs) != len(sizes):
-        raise ValueError(f"slice_funcs and sizes must have the same length, but got {len(slice_funcs)} and {len(sizes)}")
+        raise ValueError(
+            f"slice_funcs and sizes must have the same length, but got {len(slice_funcs)} and {len(sizes)}",
+        )
 
     # collect arrays according to chunk ranges
     arrays = []
@@ -3494,6 +3496,12 @@ class ChunkedIOHandler(object):
         ["index", "entry_start", "entry_stop", "max_chunk_size", "n_chunks"],
     )
 
+    # filter config container
+    FilterConfig = namedtuple(
+        "FilterConfig",
+        ["filter_func", "read_columns"],
+    )
+
     # read result container
     ReadResult = namedtuple(
         "ReadResult",
@@ -3513,6 +3521,7 @@ class ChunkedIOHandler(object):
         open_options: dict | Sequence[dict] | None = None,
         read_options: dict | Sequence[dict] | None = None,
         read_columns: set | Sequence[set] | None = None,
+        filter_config: FilterConfig | Sequence[FilterConfig] | None = None,
         iter_message: str = "handling chunk {pos.index}",
         debug: bool = law.config.get_expanded_bool("analysis", "chunked_io_debug", False),
     ):
@@ -3550,6 +3559,7 @@ class ChunkedIOHandler(object):
         open_options = _check_arg("open_options", open_options)
         read_options = _check_arg("read_options", read_options)
         read_columns = _check_arg("read_columns", read_columns)
+        filter_config = _check_arg("filter_config", filter_config)
 
         # store input attributes
         self.source_list = list(source) if self.is_multi else [source]
@@ -3557,13 +3567,15 @@ class ChunkedIOHandler(object):
         self.open_options_list = list(open_options) if self.is_multi else [open_options]
         self.read_options_list = list(read_options) if self.is_multi else [read_options]
         self.read_columns_list = list(read_columns) if self.is_multi else [read_columns]
+        self.filter_config_list = list(filter_config) if self.is_multi else [filter_config]
         self.chunk_size = chunk_size
         self.pool_size = max(pool_size, 1)
         self.iter_message = iter_message
 
         # attributes that are set in open(), close() or __iter__()
         self.source_objects = []
-        self.n_entries = None
+        self.n_entries_total = None
+        self.n_entries_filtered = None
         self.task_queue = TaskQueue()
         self.pool_cls = multiprocessing.pool.ThreadPool
         self.pool = None
@@ -3676,9 +3688,12 @@ class ChunkedIOHandler(object):
         *,
         open_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
-    ) -> tuple[uproot.TTree | list[uproot.TTree], int]:
+        filter_config: FilterConfig | None = None,
+    ) -> tuple[uproot.TTree | list[uproot.TTree], int, int]:
         """
-        Opens one or multiple uproot trees from root files at *source* and returns a 2-tuple *(tree(s), entries)*.
+        Opens one or multiple uproot trees from root files at *source* and returns a 3-tuple
+        *(tree(s), total entries, filtered entries)*.
+
         *source* can be the path of the file, an already opened, readable uproot file (assuming the tree is called
         "Events"), an uproot tree, a 2-tuple whose second item defines the name of the tree to be loaded, or a list of
         these. When a new file is opened, it receives *open_options*. Passing *read_columns* has no effect.
@@ -3706,14 +3721,27 @@ class ChunkedIOHandler(object):
                 raise Exception(f"'{source}' cannot be opened as uproot_root")
             return tree
 
+        # helper to attach and return number of potentially filtered entries of a tree
+        def get_n_entries_filtered(tree: uproot.TTree) -> int:
+            if filter_config:
+                routes = law.util.make_unique(map(Route, law.util.make_list(filter_config.read_columns)))
+                events = tree.arrays([route.nano_column for route in routes])
+                mask = filter_config.filter_func(events)
+                n_entries = int(ak.sum(mask))
+            else:
+                n_entries = tree.num_entries
+            tree._cf_num_entries_filtered = n_entries
+            return n_entries
+
         # convert source to list to treat cases identically
         is_multi = isinstance(source, list)
         if not source:
             raise Exception(f"'{source}' cannot be opened as uproot_root")
         trees = list(map(detect_tree, law.util.make_list(source)))
         n_entries = sum(tree.num_entries for tree in trees)
+        n_entries_filtered = sum(map(get_n_entries_filtered, trees))
 
-        return (trees if is_multi else trees[0], n_entries)
+        return (trees if is_multi else trees[0], n_entries, n_entries_filtered)
 
     @classmethod
     def close_uproot_root(
@@ -3736,27 +3764,32 @@ class ChunkedIOHandler(object):
         *,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
+        filter_config: FilterConfig | None = None,
     ) -> ak.Array:
         """
         Given one or multiple uproot TTrees *source_object*, returns an awkward array chunk referred to by *chunk_pos*.
-        *read_options* are passed to ``uproot.TTree.arrays``. *read_columns* are converted to strings and, if not
-        already present, added as field ``filter_name`` to *read_options*.
+        *read_options* are passed to ``uproot.TTree.arrays``. *read_columns* are converted to strings and added to the
+        field ``filter_name`` in *read_options*.
         """
         # default read options
         read_options = copy.deepcopy(read_options) if read_options else {}
         read_options["array_cache"] = None
         read_options.pop("how", None)
 
-        # inject read_columns
-        if read_columns and "filter_name" not in read_options:
-            routes = list(map(Route, read_columns))
-            filter_name = [r.string_nano_column for r in routes]
+        # inject filter names
+        filter_name = set(read_options.pop("filter_name", None) or ())
+        read_columns = set(read_columns or ())
+        if filter_config:
+            read_columns.update(law.util.make_set(filter_config.read_columns))
+        if read_columns:
+            routes = set(map(Route, read_columns))
+            filter_name.update(r.string_nano_column for r in routes)
             # add names prefixed with an 'n' to the list of columns to read
             # (needed to construct the nested list structure of jagged columns)
-            maybe_jagged = {r[0] for r in routes if len(r) > 1}
-            filter_name.extend(f"n{f}" for f in maybe_jagged)
-            # add to read options
-            read_options["filter_name"] = filter_name
+            filter_name.update(f"n{r[0]}" for r in routes if len(r) > 1)
+        # add back to read options
+        if filter_name:
+            read_options["filter_name"] = list(filter_name)
 
         # helper to read from a single tree
         def load(tree, entry_start, entry_stop):
@@ -3770,6 +3803,11 @@ class ChunkedIOHandler(object):
         else:
             chunk = load(source_object, chunk_pos.entry_start, chunk_pos.entry_stop)
 
+        # apply filtering after loading
+        if filter_config:
+            mask = filter_config.filter_func(chunk)
+            chunk = ak.to_packed(chunk[mask])
+
         return chunk
 
     @classmethod
@@ -3779,11 +3817,17 @@ class ChunkedIOHandler(object):
         *,
         open_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
-    ) -> tuple[tuple[uproot.ReadOnlyDirectory | list[uproot.ReadOnlyDirectory], str], int]:
+        filter_config: FilterConfig | None = None,
+    ) -> tuple[tuple[uproot.ReadOnlyDirectory | list[uproot.ReadOnlyDirectory], str], int, int]:
         """
         Same as :py:meth:`open_uproot_root`.
         """
-        return cls.open_uproot_root(source, open_options=open_options, read_columns=read_columns)
+        return cls.open_uproot_root(
+            source=source,
+            open_options=open_options,
+            read_columns=read_columns,
+            filter_config=filter_config,
+        )
 
     @classmethod
     def close_coffea_root(
@@ -3803,6 +3847,7 @@ class ChunkedIOHandler(object):
         *,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
+        filter_config: FilterConfig | None = None,
     ) -> ak.Array:
         """
         Same as :py:meth:`read_uproot_root`, but attaches coffea's nano schema to the returned array.
@@ -3812,6 +3857,7 @@ class ChunkedIOHandler(object):
             chunk_pos=chunk_pos,
             read_options=read_options,
             read_columns=read_columns,
+            filter_config=filter_config,
         )
 
         # attach nano schema
@@ -3825,16 +3871,24 @@ class ChunkedIOHandler(object):
         source: str,
         open_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
-    ) -> tuple[ChunkedParquetReader, int]:
+        filter_config: FilterConfig | None = None,
+    ) -> tuple[ChunkedParquetReader, int, int]:
         """
         Opens a parquet file saved at *source*, loads the content as chunks of an awkward array wrapped by a
-        :py:class:`ChunkedParquetReader`, and returns a 2-tuple *(reader, length)*.
+        :py:class:`ChunkedParquetReader`, and returns a 3-tuple *(reader, total entries, filtered entries)*.
 
         *open_options* and *chunk_size* are forwarded accordingly. *read_columns* are converted to strings and, if not
-        already present, added as field ``columns`` to *open_options*.
+        already present, added as field ``columns`` to *open_options*. Passing *filter_config* has no effect.
         """
         if not isinstance(source, str):
             raise Exception(f"'{source}' cannot be opened as awkward_parquet")
+
+        # show warning when filter config is given
+        if filter_config:
+            logger.warning_once(
+                f"{cls.__name__}_open_awkward_parquet_got_filter_config",
+                f"{cls.__name__}: filter_config is not supported for 'awkward_parquet', got '{filter_config}'",
+            )
 
         # default open options
         open_options = copy.deepcopy(open_options) if open_options else {}
@@ -3846,8 +3900,9 @@ class ChunkedIOHandler(object):
 
         # load the array wrapper
         reader = ChunkedParquetReader(source, open_options)
+        n_entries = len(reader)
 
-        return (reader, len(reader))
+        return (reader, n_entries, n_entries)
 
     @classmethod
     def close_awkward_parquet(
@@ -3866,11 +3921,19 @@ class ChunkedIOHandler(object):
         chunk_pos: ChunkedIOHandler.ChunkPosition,
         read_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
+        filter_config: FilterConfig | None = None,
     ) -> ak.Array:
         """
         Given a :py:class:`ChunkedParquetReader` *source_object*, returns the chunk referred to by *chunk_pos* as a
         full copy loaded into memory. Passing neither *read_options* nor *read_columns* has an effect.
         """
+        # show warning when filter config is given
+        if filter_config:
+            logger.warning_once(
+                f"{cls.__name__}_open_awkward_parquet_got_filter_config",
+                f"{cls.__name__}: filter_config is not supported for 'awkward_parquet', got '{filter_config}'",
+            )
+
         # get the materialized ak array for that chunk
         return source_object.materialize(
             chunk_index=chunk_pos.index,
@@ -3880,15 +3943,20 @@ class ChunkedIOHandler(object):
         )
 
     @property
+    def n_entries(self) -> int | None:
+        # backwards compatibility
+        return self.n_entries_filtered
+
+    @property
     def n_chunks(self) -> int:
         """
         Returns the number of chunks this instance will iterate over based on the number of entries
-        :py:attr:`n_entries` and the configured :py:attr:`chunk_size`. In case :py:attr:`n_entries`
+        :py:attr:`n_entries_filtered` and the configured :py:attr:`chunk_size`. In case :py:attr:`n_entries_filtered`
         was not initialzed yet (via :py:meth:`open`), an *AttributeError* is raised.
         """
-        if self.n_entries is None:
+        if self.n_entries_filtered is None:
             raise AttributeError("cannot determine number of chunks before open()")
-        return int(math.ceil(self.n_entries / self.chunk_size))
+        return int(math.ceil(self.n_entries_filtered / self.chunk_size))
 
     @property
     def closed(self) -> bool:
@@ -3908,27 +3976,33 @@ class ChunkedIOHandler(object):
 
         # reset some attributes
         del self.source_objects[:]
-        self.n_entries = None
+        self.n_entries_total = None
+        self.n_entries_filtered = None
 
         # open all sources and make sure they have the same number of entries
-        for i, (source, source_handler, open_options, read_columns) in enumerate(zip(
+        for i, (source, source_handler, open_options, read_columns, filter_config) in enumerate(zip(
             self.source_list,
             self.source_handlers,
             self.open_options_list,
             self.read_columns_list,
+            self.filter_config_list,
         )):
             # open the source
-            obj, n = source_handler.open(
+            obj, n_total, n_filtered = source_handler.open(
                 source,
                 open_options=open_options,
                 read_columns=(sorted(read_columns) if read_columns else read_columns),
+                filter_config=filter_config,
             )
             # check entries
             if i == 0:
-                self.n_entries = n
-            elif n != self.n_entries:
+                self.n_entries_total = n_total
+                self.n_entries_filtered = n_filtered
+            elif n_filtered != self.n_entries_filtered:
+                filter_str = "" if self.n_entries_filtered == self.n_entries_total else "(filtered) "
                 raise ValueError(
-                    f"number of entries of source {i} '{source}' does not match first source",
+                    f"number of {filter_str}entries of source {i} '{source}' ({n_filtered}) does not match that of "
+                    f"first source ({self.n_entries_filtered})",
                 )
             # save the source object
             self.source_objects.append(obj)
@@ -3973,16 +4047,18 @@ class ChunkedIOHandler(object):
                 obj,
                 read_options=read_options,
                 read_columns=(sorted(read_columns) if read_columns else read_columns),
+                filter_config=filter_config,
             )
-            for obj, source_handler, read_options, read_columns in zip(
+            for obj, source_handler, read_options, read_columns, filter_config in zip(
                 self.source_objects,
                 self.source_handlers,
                 self.read_options_list,
                 self.read_columns_list,
+                self.filter_config_list,
             )
         ]
 
-        # lightweight callabe that wraps all read funcs and comines their return values
+        # lightweight callabe that wraps all read funcs and combines their return values
         def read(chunk_pos):
             chunks = []
             durations = []
@@ -4002,7 +4078,7 @@ class ChunkedIOHandler(object):
 
         # create a list of all chunk positions
         chunk_positions = [
-            self.create_chunk_position(self.n_entries, self.chunk_size, chunk_index)
+            self.create_chunk_position(self.n_entries_total, self.chunk_size, chunk_index)
             for chunk_index in range(max(self.n_chunks, 1))
         ]
 

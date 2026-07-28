@@ -201,8 +201,10 @@ class ReduceEvents(_ReduceEvents):
             for (events, sel, *cols), pos in self.iter_chunked_io(
                 law.util.map_struct(law.target.file.get_path, inps),
                 source_type=["coffea_root"] + (len(inps) - 1) * ["awkward_parquet"],
-                read_columns=[read_columns, read_sel_columns] + (len(inps) - 2) * [read_columns],
+                open_options=self.get_open_options(inps, first_is_nano=True),
                 read_options=self.get_read_options(inps, first_is_nano=True),
+                read_columns=[read_columns, read_sel_columns] + (len(inps) - 2) * [read_columns],
+                filter_config=self.get_filter_configs(inps, first_is_nano=True),
                 chunk_size=self.reducer_inst.get_min_chunk_size(),
             ):
                 # adjust if necessary
