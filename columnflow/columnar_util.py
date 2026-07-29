@@ -1449,54 +1449,6 @@ def ak_concatenate_safe(arrays: Sequence[ak.Array], *args, **kwargs) -> ak.Array
     return ak.concatenate(list(map(ak.to_packed, arrays)), *args, **kwargs)
 
 
-def slice_across_chunks(
-    slice_funcs: Sequence[Callable[[int, int], ak.Array | np.ndarray]],
-    sizes: Sequence[int],
-    entry_start: int | None = None,
-    entry_stop: int | None = None,
-) -> ak.Array | np.ndarray:
-    """
-    Loads multiple array chunks, concatenates them and returns the result. Each chunk is loaded by its own slicing
-    function in *slice_funcs* which receives the start and stop entry of the chunk to load. The total sizes of the
-    chunks are given in *sizes* and used for internal range calculation. By default, the full range of all chunks is
-    loaded, but this can be limited by setting *entry_start* and *entry_stop* to the global start and stop entry to
-    load, respectively.
-
-    :param slice_funcs: The slicing/loading function that provide chunks.
-    :param sizes: The total sizes per chunks for internal range calculation.
-    :param entry_start: The global start entry to load. Defaults to the start of the first chunk.
-    :param entry_stop: The global stop entry to load. Defaults to the end of the last chunk.
-    :return: The concatenated array of all loaded chunks.
-    """
-    if len(slice_funcs) != len(sizes):
-        raise ValueError(
-            f"slice_funcs and sizes must have the same length, but got {len(slice_funcs)} and {len(sizes)}",
-        )
-
-    # collect arrays according to chunk ranges
-    arrays = []
-    chunk_ranges = law.util.chunk_slice_ranges(sizes, entry_start, entry_stop)
-    for r, slice_func in zip(chunk_ranges, slice_funcs):
-        if r is not None:
-            start, stop = r
-            arrays.append(slice_func(start, stop))
-
-    if not arrays:
-        raise ValueError(f"no array chunks loaded, ranges were {chunk_ranges}")
-
-    # check if and how to concatenate
-    if len(arrays) == 1:
-        array = arrays[0]
-    elif any(isinstance(arr, ak.Array) for arr in arrays):
-        # at least one array is awkward, so concatenate safely
-        array = ak_concatenate_safe(arrays, axis=0)
-    else:
-        array = np.concatenate(arrays, axis=0)
-    del arrays
-
-    return array
-
-
 class ArraySource(dict):
     """
     Wrapper around a mapping from column name to arrays, and implementing the minimal interface to be used as an array
@@ -3413,6 +3365,54 @@ class ChunkedParquetReader(object):
         return arr
 
 
+def slice_across_chunks(
+    slice_funcs: Sequence[Callable[[int, int], ak.Array | np.ndarray]],
+    sizes: Sequence[int],
+    entry_start: int | None = None,
+    entry_stop: int | None = None,
+) -> ak.Array | np.ndarray:
+    """
+    Loads multiple array chunks, concatenates them and returns the result. Each chunk is loaded by its own slicing
+    function in *slice_funcs* which receives the start and stop entry of the chunk to load. The total sizes of the
+    chunks are given in *sizes* and used for internal range calculation. By default, the full range of all chunks is
+    loaded, but this can be limited by setting *entry_start* and *entry_stop* to the global start and stop entry to
+    load, respectively.
+
+    :param slice_funcs: The slicing/loading function that provide chunks.
+    :param sizes: The total sizes per chunks for internal range calculation.
+    :param entry_start: The global start entry to load. Defaults to the start of the first chunk.
+    :param entry_stop: The global stop entry to load. Defaults to the end of the last chunk.
+    :return: The concatenated array of all loaded chunks.
+    """
+    if len(slice_funcs) != len(sizes):
+        raise ValueError(
+            f"slice_funcs and sizes must have the same length, but got {len(slice_funcs)} and {len(sizes)}",
+        )
+
+    # collect arrays according to chunk ranges
+    arrays = []
+    chunk_ranges = law.util.chunk_slice_ranges(sizes, entry_start, entry_stop)
+    for r, slice_func in zip(chunk_ranges, slice_funcs):
+        if r is not None:
+            start, stop = r
+            arrays.append(slice_func(start, stop))
+
+    if not arrays:
+        raise ValueError(f"no array chunks loaded, ranges were {chunk_ranges}")
+
+    # check if and how to concatenate
+    if len(arrays) == 1:
+        array = arrays[0]
+    elif any(isinstance(arr, ak.Array) for arr in arrays):
+        # at least one array is awkward, so concatenate safely
+        array = ak_concatenate_safe(arrays, axis=0)
+    else:
+        array = np.concatenate(arrays, axis=0)
+    del arrays
+
+    return array
+
+
 # alias to summarize possible root handler input types for read_*_root methods below
 RootHandlerInput: TypeAlias = Union[
     str,
@@ -3524,7 +3524,7 @@ class ChunkedIOHandler(object):
         filter_config: FilterConfig | Sequence[FilterConfig] | None = None,
         iter_message: str = "handling chunk {pos.index}",
         debug: bool = law.config.get_expanded_bool("analysis", "chunked_io_debug", False),
-    ):
+    ) -> None:
         super().__init__()
 
         # multiple inputs?
@@ -3544,14 +3544,11 @@ class ChunkedIOHandler(object):
                 if len(value) != self.n_sources:
                     if len(value) != 1:
                         raise Exception(
-                            f"length of {name} should match length of source ({self.n_sources}), "
-                            f"but got {len(value)}",
+                            f"length of {name} should match length of source ({self.n_sources}), but got {len(value)}",
                         )
                     value *= self.n_sources
             elif is_multi(value):
-                raise Exception(
-                    f"when source is not a sequence, {name} should neither, but got '{value}'",
-                )
+                raise Exception(f"when source is not a sequence, {name} should neither, but got '{value}'")
             return value
 
         # check args
@@ -3574,6 +3571,7 @@ class ChunkedIOHandler(object):
 
         # attributes that are set in open(), close() or __iter__()
         self.source_objects = []
+        self.chunk_positions: list[list[ChunkedIOHandler.ChunkPosition]] = []
         self.n_entries_total = None
         self.n_entries_filtered = None
         self.task_queue = TaskQueue()
@@ -3582,9 +3580,7 @@ class ChunkedIOHandler(object):
 
         # debug settings
         if debug:
-            logger.info(
-                f"{self.__class__.__name__} set to debug mode, using in-thread pool with size 1",
-            )
+            logger.info(f"{self.__class__.__name__} set to debug mode, using in-thread pool with size 1")
             self.pool_size = 1
             self.pool_cls = NoThreadPool
 
@@ -3600,19 +3596,39 @@ class ChunkedIOHandler(object):
         n_entries: int,
         chunk_size: int,
         chunk_index: int,
+        filter_mask: np.ndarray | None = None,
     ) -> ChunkPosition:
         """
         Creates and returns a :py:attr:`ChunkPosition` object based on the total number of entries
         *n_entries*, the maximum *chunk_size*, and the index of the chunk *chunk_index*.
         """
-        # determine the start of stop of this chunk
-        if n_entries == 0:
-            entry_start = 0
-            entry_stop = 0
-            n_chunks = 0
-        else:
+        # defaults
+        entry_start = 0
+        entry_stop = 0
+        n_chunks = 0
+
+        if n_entries > 0:
+            # compute start and stop indices
             entry_start = chunk_index * chunk_size
             entry_stop = min((chunk_index + 1) * chunk_size, n_entries)
+
+            # apply to indices of filter mask if given
+            if filter_mask is not None:
+                # prepare indices
+                if filter_mask.dtype == bool:
+                    if len(filter_mask) != n_entries:
+                        raise Exception(
+                            f"length of filter_mask ({len(filter_mask)}) does not match n_entries ({n_entries})",
+                        )
+                    filter_indices = np.where(filter_mask)[0]
+                else:
+                    filter_indices = filter_mask
+                # evaluate indices
+                entry_start = filter_indices[entry_start]
+                entry_stop = filter_indices[entry_stop] if entry_stop < len(filter_indices) else n_entries
+                n_entries = len(filter_indices)
+
+            # final number of chunks
             n_chunks = int(math.ceil(n_entries / chunk_size))
 
         return cls.ChunkPosition(chunk_index, entry_start, entry_stop, chunk_size, n_chunks)
@@ -3689,10 +3705,10 @@ class ChunkedIOHandler(object):
         open_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
         filter_config: FilterConfig | None = None,
-    ) -> tuple[uproot.TTree | list[uproot.TTree], int, int]:
+    ) -> tuple[uproot.TTree | list[uproot.TTree], int, np.ndarray | None]:
         """
         Opens one or multiple uproot trees from root files at *source* and returns a 3-tuple
-        *(tree(s), total entries, filtered entries)*.
+        *(tree(s), total entries, filter mask or None)*.
 
         *source* can be the path of the file, an already opened, readable uproot file (assuming the tree is called
         "Events"), an uproot tree, a 2-tuple whose second item defines the name of the tree to be loaded, or a list of
@@ -3721,27 +3737,27 @@ class ChunkedIOHandler(object):
                 raise Exception(f"'{source}' cannot be opened as uproot_root")
             return tree
 
-        # helper to attach and return number of potentially filtered entries of a tree
-        def get_n_entries_filtered(tree: uproot.TTree) -> int:
-            if filter_config:
-                routes = law.util.make_unique(map(Route, law.util.make_list(filter_config.read_columns)))
-                events = tree.arrays([route.nano_column for route in routes])
-                mask = filter_config.filter_func(events)
-                n_entries = int(ak.sum(mask))
-            else:
-                n_entries = tree.num_entries
-            tree._cf_num_entries_filtered = n_entries
-            return n_entries
-
         # convert source to list to treat cases identically
         is_multi = isinstance(source, list)
         if not source:
             raise Exception(f"'{source}' cannot be opened as uproot_root")
         trees = list(map(detect_tree, law.util.make_list(source)))
         n_entries = sum(tree.num_entries for tree in trees)
-        n_entries_filtered = sum(map(get_n_entries_filtered, trees))
 
-        return (trees if is_multi else trees[0], n_entries, n_entries_filtered)
+        # compute and attach filter masks
+        filter_mask = None
+        if filter_config:
+            routes = law.util.make_unique(map(Route, law.util.make_list(filter_config.read_columns)))
+            columns = [route.nano_column for route in routes]
+            masks = []
+            for tree in trees:
+                arrays = tree.arrays(columns)
+                mask = np.asarray(filter_config.filter_func(arrays), dtype=bool)
+                tree._cf_filter_mask = mask
+                masks.append(mask)
+            filter_mask = np.concatenate(masks, axis=0)
+
+        return (trees if is_multi else trees[0], n_entries, filter_mask)
 
     @classmethod
     def close_uproot_root(
@@ -3752,6 +3768,12 @@ class ChunkedIOHandler(object):
         Closes the file that contains the TTree *source_object*.
         """
         for tree in law.util.make_list(source_object):
+            # drop temporary, cf related attributes
+            for attr in dir(tree):
+                if attr.startswith("_cf_"):
+                    delattr(tree, attr)
+
+            # close the underlying file
             f = getattr(tree, "file", None)
             if f is not None:
                 f.close()
@@ -3791,22 +3813,21 @@ class ChunkedIOHandler(object):
         if filter_name:
             read_options["filter_name"] = list(filter_name)
 
-        # helper to read from a single tree
+        # helper to read from a single tree, optionally filtering the result
         def load(tree, entry_start, entry_stop):
-            return tree.arrays(entry_start=entry_start, entry_stop=entry_stop, **read_options)
+            chunk = tree.arrays(entry_start=entry_start, entry_stop=entry_stop, **read_options)
+            if filter_config:
+                if (mask := getattr(tree, "_cf_filter_mask", None)) is None:
+                    mask = filter_config.filter_func(chunk)
+                    tree._cf_filter_mask = mask
+                chunk = ak.to_packed(chunk[mask[entry_start:entry_stop]])
+            return chunk
 
-        # distinguish multi and single source cases
-        if isinstance(source_object, list):
-            tree_sizes = [tree.num_entries for tree in source_object]
-            slice_funcs = [partial(load, tree) for tree in source_object]
-            chunk = slice_across_chunks(slice_funcs, tree_sizes, chunk_pos.entry_start, chunk_pos.entry_stop)
-        else:
-            chunk = load(source_object, chunk_pos.entry_start, chunk_pos.entry_stop)
-
-        # apply filtering after loading
-        if filter_config:
-            mask = filter_config.filter_func(chunk)
-            chunk = ak.to_packed(chunk[mask])
+        # load the chunk, optionally across multiple trees
+        trees = law.util.make_list(source_object)
+        tree_sizes = [tree.num_entries for tree in trees]
+        slice_funcs = [partial(load, tree) for tree in trees]
+        chunk = slice_across_chunks(slice_funcs, tree_sizes, chunk_pos.entry_start, chunk_pos.entry_stop)
 
         return chunk
 
@@ -3818,7 +3839,7 @@ class ChunkedIOHandler(object):
         open_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
         filter_config: FilterConfig | None = None,
-    ) -> tuple[tuple[uproot.ReadOnlyDirectory | list[uproot.ReadOnlyDirectory], str], int, int]:
+    ) -> tuple[tuple[uproot.ReadOnlyDirectory | list[uproot.ReadOnlyDirectory], str], int, np.ndarray | None]:
         """
         Same as :py:meth:`open_uproot_root`.
         """
@@ -3872,10 +3893,10 @@ class ChunkedIOHandler(object):
         open_options: dict | None = None,
         read_columns: set[str | Route] | None = None,
         filter_config: FilterConfig | None = None,
-    ) -> tuple[ChunkedParquetReader, int, int]:
+    ) -> tuple[ChunkedParquetReader, int, np.ndarray | None]:
         """
         Opens a parquet file saved at *source*, loads the content as chunks of an awkward array wrapped by a
-        :py:class:`ChunkedParquetReader`, and returns a 3-tuple *(reader, total entries, filtered entries)*.
+        :py:class:`ChunkedParquetReader`, and returns a 3-tuple *(reader, total entries, filter mask or None)*.
 
         *open_options* and *chunk_size* are forwarded accordingly. *read_columns* are converted to strings and, if not
         already present, added as field ``columns`` to *open_options*. Passing *filter_config* has no effect.
@@ -3900,9 +3921,8 @@ class ChunkedIOHandler(object):
 
         # load the array wrapper
         reader = ChunkedParquetReader(source, open_options)
-        n_entries = len(reader)
 
-        return (reader, n_entries, n_entries)
+        return (reader, len(reader), None)
 
     @classmethod
     def close_awkward_parquet(
@@ -3963,7 +3983,7 @@ class ChunkedIOHandler(object):
         """
         Returns whether the instance is closed for reading.
         """
-        return len(self.source_objects) != self.n_sources
+        return not self.n_sources or len(self.source_objects) != self.n_sources
 
     def open(self) -> None:
         """
@@ -3976,11 +3996,12 @@ class ChunkedIOHandler(object):
 
         # reset some attributes
         del self.source_objects[:]
+        del self.chunk_positions[:]
         self.n_entries_total = None
         self.n_entries_filtered = None
 
         # open all sources and make sure they have the same number of entries
-        for i, (source, source_handler, open_options, read_columns, filter_config) in enumerate(zip(
+        for source_index, (source, source_handler, open_options, read_columns, filter_config) in enumerate(zip(
             self.source_list,
             self.source_handlers,
             self.open_options_list,
@@ -3988,24 +4009,42 @@ class ChunkedIOHandler(object):
             self.filter_config_list,
         )):
             # open the source
-            obj, n_total, n_filtered = source_handler.open(
+            obj, n_total, filter_mask = source_handler.open(
                 source,
                 open_options=open_options,
                 read_columns=(sorted(read_columns) if read_columns else read_columns),
                 filter_config=filter_config,
             )
+            if filter_mask is None:
+                n_filtered = n_total
+            else:
+                filter_mask = np.asarray(filter_mask, dtype=bool)
+                n_filtered = int(filter_mask.sum())
+
             # check entries
-            if i == 0:
+            if source_index == 0:
                 self.n_entries_total = n_total
                 self.n_entries_filtered = n_filtered
             elif n_filtered != self.n_entries_filtered:
                 filter_str = "" if self.n_entries_filtered == self.n_entries_total else "(filtered) "
                 raise ValueError(
-                    f"number of {filter_str}entries of source {i} '{source}' ({n_filtered}) does not match that of "
-                    f"first source ({self.n_entries_filtered})",
+                    f"number of {filter_str}entries of source {source_index} '{source}' ({n_filtered:_}) does not "
+                    f"match that of source 0 ({self.n_entries_filtered:_})",
                 )
+
             # save the source object
             self.source_objects.append(obj)
+
+            # compute chunk positions for that source
+            self.chunk_positions.append([
+                self.create_chunk_position(
+                    n_entries=self.n_entries_total,
+                    chunk_size=self.chunk_size,
+                    chunk_index=chunk_index,
+                    filter_mask=None if filter_mask is None else np.where(filter_mask)[0],
+                )
+                for chunk_index in range(max(self.n_chunks, 1))
+            ])
 
             logger_perf.debug(f"opening {source} of type {source_handler.type} for reading")
 
@@ -4022,8 +4061,11 @@ class ChunkedIOHandler(object):
         for (obj, source_handler) in zip(self.source_objects, self.source_handlers):
             source_handler.close(obj)
 
-        # delete the file cache
+        # clear some attributes
         del self.source_objects[:]
+        del self.chunk_positions[:]
+        self.n_entries_total = None
+        self.n_entries_filtered = None
 
     def queue(self, *args, **kwargs) -> None:
         """
@@ -4039,6 +4081,14 @@ class ChunkedIOHandler(object):
         """
         if self.closed:
             raise Exception(f"cannot iterate through closed {self.__class__.__name__}")
+
+        # check that all chunk position lists have the same length
+        for source_index, chunk_positions in enumerate(self.chunk_positions):
+            if len(chunk_positions) != self.n_chunks:
+                raise Exception(
+                    f"found {len(chunk_positions)} chunk position(s) for source {source_index}, but expected "
+                    f"{self.n_chunks}",
+                )
 
         # create a list of read functions
         read_funcs = [
@@ -4059,32 +4109,37 @@ class ChunkedIOHandler(object):
         ]
 
         # lightweight callabe that wraps all read funcs and combines their return values
-        def read(chunk_pos):
+        def read(chunk_index: int) -> ChunkedIOHandler.ReadResult:
             chunks = []
             durations = []
             t1 = time.perf_counter()
-            for read_func in read_funcs:
-                chunks.append(read_func(chunk_pos))
+            chunk_size = None
+            for source_index, read_func in enumerate(read_funcs):
+                chunk = read_func(self.chunk_positions[source_index][chunk_index])
+                if source_index == 0:
+                    chunk_size = len(chunk)
+                elif len(chunk) != chunk_size:
+                    raise ValueError(
+                        f"number of entries in chunk {chunk_index} of source {source_index} ({len(chunk):_}) does not "
+                        f"match that of source 0 ({chunk_size:_})",
+                    )
+                chunks.append(chunk)
                 durations.append(time.perf_counter() - t1)
 
             duration = law.util.human_duration(seconds=sum(durations))
             durations = [f"{s:.1f}" for s in durations]
             logger_perf.debug(
-                f"reading of chunk {chunk_pos.index} from {len(durations)} file(s) took {duration} "
+                f"reading of chunk {chunk_index} from {len(durations)} file(s) took {duration} "
                 f"({'+'.join(durations)}s)",
             )
 
+            # return a read result with the chunk position of the first source
+            chunk_pos = self.chunk_positions[0][chunk_index]
             return self.ReadResult((chunks if self.is_multi else chunks[0]), chunk_pos)
 
-        # create a list of all chunk positions
-        chunk_positions = [
-            self.create_chunk_position(self.n_entries_total, self.chunk_size, chunk_index)
-            for chunk_index in range(max(self.n_chunks, 1))
-        ]
-
         # fill the list of tasks the pool has to work through
-        for chunk_pos in chunk_positions:
-            self.task_queue.add(read, (chunk_pos,), priority=-1)
+        for chunk_index in range(self.n_chunks):
+            self.task_queue.add(read, (chunk_index,), priority=-1)
 
         # strategy: setup the pool and manually keep it filled up to pool_size and do not insert all
         # chunks right away as this could swamp the memory if processing is slower than IO

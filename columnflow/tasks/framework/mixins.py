@@ -2686,7 +2686,12 @@ class ChunkedIOMixin(ConfigTask):
         # iterate in the handler context
         with handler:
             self.chunked_io = handler
-            msg = f"iterate through {handler.n_entries_filtered:_} events in {handler.n_chunks} chunks ..."
+            filter_msg = (
+                ""
+                if handler.n_entries_filtered == handler.n_entries_total
+                else f" (filtered out of {handler.n_entries_total:_})"
+            )
+            msg = f"iterate through {handler.n_entries_filtered:_}{filter_msg} events in {handler.n_chunks} chunks ..."
             try:
                 # measure runtimes excluding IO
                 loop_durations = []
