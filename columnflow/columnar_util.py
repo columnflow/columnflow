@@ -4036,12 +4036,13 @@ class ChunkedIOHandler(object):
             self.source_objects.append(obj)
 
             # compute chunk positions for that source
+            filter_indices = None if filter_mask is None else np.where(filter_mask)[0]
             self.chunk_positions.append([
                 self.create_chunk_position(
                     n_entries=self.n_entries_total,
                     chunk_size=self.chunk_size,
                     chunk_index=chunk_index,
-                    filter_mask=None if filter_mask is None else np.where(filter_mask)[0],
+                    filter_mask=filter_indices,
                 )
                 for chunk_index in range(max(self.n_chunks, 1))
             ])
