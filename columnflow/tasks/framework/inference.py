@@ -24,15 +24,8 @@ if TYPE_CHECKING:
     hist = maybe_import("hist")
 
 
-class SerializeInferenceModelBase(
-    CalibratorClassesMixin,
-    SelectorClassMixin,
-    ReducerClassMixin,
-    ProducerClassesMixin,
-    MLModelsMixin,
-    HistProducerClassMixin,
+class InferenceModelUser(
     InferenceModelMixin,
-    HistHookMixin,
     law.LocalWorkflow,
     RemoteWorkflow,
 ):
@@ -190,14 +183,38 @@ class SerializeInferenceModelBase(
 
         return config_data
 
+
+class _SerializeInferenceModelBase(
+    CalibratorClassesMixin,
+    SelectorClassMixin,
+    ReducerClassMixin,
+    ProducerClassesMixin,
+    MLModelsMixin,
+    HistProducerClassMixin,
+    HistHookMixin,
+    InferenceModelUser,
+):
+    """
+    Base classes for :py:class:`SerializeInferenceModelBase`.
+    """
+
+
+class SerializeInferenceModelBase(_SerializeInferenceModelBase):
+
+    # upstream requirements
+    reqs = Requirements(
+        RemoteWorkflow.reqs,
+        MergeShiftedHistograms=MergeShiftedHistograms,
+    )
+
     def create_branch_map(self):
         # dummy branch map
         return {0: None}
 
-    def _hist_requirement(self, **kwargs):
+    def requires_histogram(self, **kwargs):
         return self.reqs.MergeShiftedHistograms.req_different_branching(self, **kwargs)
 
-    def _hist_requirements(self, **kwargs):
+    def requires_histograms(self, **kwargs):
         # gather data from inference model to define requirements in the structure
         # config_name -> dataset_name -> MergeHistogramsTask
         reqs = {}
@@ -212,7 +229,7 @@ class SerializeInferenceModelBase(
                     )
             # mc datasets
             for dataset_name in sorted(data["mc_datasets"]):
-                reqs[config_inst.name][dataset_name] = self._hist_requirement(
+                reqs[config_inst.name][dataset_name] = self.requires_histogram(
                     config=config_inst.name,
                     dataset=dataset_name,
                     shift_sources=("nominal",) + tuple(sorted(data["mc_datasets"][dataset_name]["shift_sources"])),
@@ -222,7 +239,7 @@ class SerializeInferenceModelBase(
 
             # data datasets, no shift sources so not chunked
             for dataset_name in sorted(data["data_datasets"]):
-                reqs[config_inst.name][dataset_name] = self._hist_requirement(
+                reqs[config_inst.name][dataset_name] = self.requires_histogram(
                     config=config_inst.name,
                     dataset=dataset_name,
                     shift_sources=("nominal",),
@@ -234,11 +251,11 @@ class SerializeInferenceModelBase(
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
-        reqs["merged_hists"] = self._hist_requirements()
+        reqs["merged_hists"] = self.requires_histograms()
         return reqs
 
     def requires(self):
-        return self._hist_requirements(branch=-1, workflow="local")
+        return self.requires_histograms(branch=-1, workflow="local")
 
     def load_process_hists(
         self,
