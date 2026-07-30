@@ -11,7 +11,7 @@ import luigi
 
 from columnflow.types import Any, Callable
 from columnflow.tasks.framework.base import ConfigTask, RESOLVE_DEFAULT
-from columnflow.tasks.framework.mixins import VariablesMixin, DatasetsProcessesMixin
+from columnflow.tasks.framework.mixins import VariablesMixin
 from columnflow.tasks.framework.parameters import SettingsParameter, MultiSettingsParameter
 from columnflow.util import DotDict, dict_add_strict, ipython_shell
 
@@ -347,6 +347,34 @@ class PlotBase1D(PlotBase):
         return params
 
 
+class PlotBase1DWithErrorBands(PlotBase1D):
+
+    legend_title = luigi.Parameter(
+        default=law.NO_STR,
+        significant=False,
+        description="sets the title of the legend; when empty and only one process is present in the plot, the "
+        "process' label is used; empty default",
+    )
+    merge_stat_errors = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="whether to merge stat error bands into the combined shift error; default: None",
+    )
+    show_syst_rate_change = law.OptionalBoolParameter(
+        default=None,
+        significant=False,
+        description="whether to show rate changing effects of systematics on the stack in the legend; default: None",
+    )
+
+    def get_plot_parameters(self):
+        # convert parameters to usable values during plotting
+        params = super().get_plot_parameters()
+        dict_add_strict(params, "legend_title", None if self.legend_title == law.NO_STR else self.legend_title)
+        dict_add_strict(params, "merge_stat_errors", self.merge_stat_errors)
+        dict_add_strict(params, "show_syst_rate_change", self.show_syst_rate_change)
+        return params
+
+
 class PlotBase2D(PlotBase):
     """
     Base class for plotting tasks creating 2-dimensional plots.
@@ -428,9 +456,7 @@ class PlotBase2D(PlotBase):
 
 
 class ProcessPlotSettingMixin(
-    # TODO: could add back DatasetsProcessesMixin
     PlotBase,
-    DatasetsProcessesMixin,
 ):
     """
     Mixin class for tasks creating plots where contributions of different processes are shown.
@@ -477,10 +503,8 @@ class ProcessPlotSettingMixin(
         return params
 
     def get_plot_parameters(self) -> DotDict:
-        # convert parameters to usable values during plotting
         params = super().get_plot_parameters()
         dict_add_strict(params, "process_settings", self.process_settings)
-
         return params
 
 

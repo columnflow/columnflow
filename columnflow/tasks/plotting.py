@@ -4,6 +4,8 @@
 Tasks to plot different types of histograms.
 """
 
+from __future__ import annotations
+
 import itertools
 import functools
 import threading
@@ -17,19 +19,28 @@ import order as od
 from columnflow.tasks.framework.base import Requirements, ShiftTask
 from columnflow.tasks.framework.mixins import (
     CalibratorClassesMixin, SelectorClassMixin, ReducerClassMixin, ProducerClassesMixin, HistProducerClassMixin,
-    CategoriesMixin, ShiftSourcesMixin, HistHookMixin, MLModelsMixin,
+    DatasetsProcessesMixin, CategoriesMixin, ShiftSourcesMixin, HistHookMixin, MLModelsMixin,
 )
 from columnflow.tasks.framework.plotting import (
-    PlotBase, PlotBase1D, PlotBase2D, ProcessPlotSettingMixin, VariablePlotSettingMixin,
+    PlotBase, PlotBase1D, PlotBase2D, PlotBase1DWithErrorBands, ProcessPlotSettingMixin, VariablePlotSettingMixin,
 )
 from columnflow.tasks.framework.decorators import view_output_plots
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeHistograms, MergeShiftedHistograms
 from columnflow.plotting import check_multi_variable_support, check_multi_category_support
-from columnflow.util import DotDict, dev_sandbox, dict_add_strict
+from columnflow.util import DotDict, dev_sandbox, maybe_import
 from columnflow.hist_util import add_missing_shifts, sum_hists, select_category_bins
 from columnflow.config_util import get_shift_from_configs, expand_shift_sources
-from columnflow.types import Any
+from columnflow.types import TYPE_CHECKING, TypeAlias, Any
+
+if TYPE_CHECKING:
+    hist = maybe_import("hist")
+
+
+# type aliases for more verbose type hints
+CatVarPair: TypeAlias = tuple[str, str]
+ProcHists: TypeAlias = dict[od.Process, "hist.Hist"]
+HistDicts: TypeAlias = dict[CatVarPair, dict[od.Config, ProcHists]]
 
 
 class _PlotVariablesBase(
@@ -52,6 +63,14 @@ class _PlotVariablesBase(
 
 
 class PlotVariablesBase(_PlotVariablesBase):
+    """
+    Base class for all variable plots.
+
+    Note that instances of this class require attributes ``datatsets`` and ``processes`` which are not defined yet. In
+    most cases, this is achieved by simply inheriting from :py:class:`DatasetsProcessesMixin`. However, this is not
+    done by default to allow other tasks to define these attributes in different ways (e.g. dynamically, depending on
+    other configurations).
+    """
 
     multi_variable = luigi.BoolParameter(
         default=False,
@@ -190,6 +209,10 @@ class PlotVariablesBase(_PlotVariablesBase):
     def get_plot_shifts(self):
         ...
 
+    def update_hists(self, hists: HistDicts) -> HistDicts:
+        # hook to update histograms right before plotting
+        return hists
+
     @property
     def config_inst(self):
         return self.config_insts[0]
@@ -280,14 +303,11 @@ class PlotVariablesBase(_PlotVariablesBase):
         config_process_map, process_shift_map = self.get_config_process_map()
 
         # read histograms per variable name, config and process
-        hists: dict[tuple[str, str], dict[od.Config, dict[od.Process, hist.Hist]]] = {
-            tpl: {}
-            for tpl in category_variable_combis
-        }
+        hists: HistDicts = {tpl: {} for tpl in category_variable_combis}
         with self.publish_step(f"plotting {','.join(variables)} in {','.join(categories)}"):
             inputs = self.input() or self.workflow_input().merged_hists
             for cat_name, var_name in category_variable_combis:
-                hist_key = (cat_name, var_name)
+                hist_key: CatVarPair = (cat_name, var_name)
                 for i, (config, dataset_dict) in enumerate(inputs.items()):
                     config_inst = self.config_insts[i]
                     category_inst = config_inst.get_category(cat_name)
@@ -336,7 +356,7 @@ class PlotVariablesBase(_PlotVariablesBase):
                         del h_in
 
                     # after merging all processes, sort the histograms by process order and store them
-                    hists[hist_key][config_inst] = {
+                    hists[hist_key][config_inst]: ProcHists = {
                         proc_inst: hists_config[proc_inst]
                         for proc_inst in sorted(
                             hists_config.keys(),
@@ -406,6 +426,9 @@ class PlotVariablesBase(_PlotVariablesBase):
             for hist_key, _hists in hists.items():
                 hists[hist_key] = {process_map[proc_inst.name]: h for proc_inst, h in _hists.items()}
 
+            # update histograms before being passed to plot function
+            hists = self.update_hists(hists)
+
             # helper to get variable instances per variable name in tuples (split in case of n-d plots)
             get_var_insts = lambda var_name: list(map(self.config_inst.get_variable, self.variable_tuples[var_name]))
 
@@ -452,6 +475,7 @@ class PlotVariablesBase(_PlotVariablesBase):
 
 class PlotVariablesBaseSingleShift(
     ShiftTask,
+    DatasetsProcessesMixin,
     PlotVariablesBase,
 ):
     # use the MergeHistograms task to trigger upstream TaskArrayFunction initialization
@@ -475,10 +499,8 @@ class PlotVariablesBaseSingleShift(
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-
         if "shift" in parts:
             parts.insert_before("datasets", "shift", parts.pop("shift"))
-
         return parts
 
     def get_plot_shifts(self):
@@ -559,40 +581,10 @@ class PlotVariablesPerProcess2D(
         }
 
 
-class PlotVariablesBaseWithErrorBands(
-    PlotVariablesBase,
-):
-    legend_title = luigi.Parameter(
-        default=law.NO_STR,
-        significant=False,
-        description="sets the title of the legend; when empty and only one process is present in the plot, the "
-        "process' label is used; empty default",
-    )
-    merge_stat_errors = law.OptionalBoolParameter(
-        default=None,
-        significant=False,
-        description="whether to merge stat error bands into the combined shift error; default: None",
-    )
-    show_syst_rate_change = law.OptionalBoolParameter(
-        default=None,
-        significant=False,
-        description="whether to show rate changing effects of systematics on the stack in the legend; default: None",
-    )
-
-    exclude_index = True
-
-    def get_plot_parameters(self):
-        # convert parameters to usable values during plotting
-        params = super().get_plot_parameters()
-        dict_add_strict(params, "legend_title", None if self.legend_title == law.NO_STR else self.legend_title)
-        dict_add_strict(params, "merge_stat_errors", self.merge_stat_errors)
-        dict_add_strict(params, "show_syst_rate_change", self.show_syst_rate_change)
-        return params
-
-
 class PlotVariablesBaseMultiShifts(
     ShiftSourcesMixin,
-    PlotVariablesBaseWithErrorBands,
+    DatasetsProcessesMixin,
+    PlotVariablesBase,
 ):
     # always ensure the nominal shift is present in shift sources
     enforce_nominal_shift_source = True
@@ -635,6 +627,12 @@ class PlotVariablesBaseMultiShifts(
 
         return branch_values
 
+    def store_parts(self) -> law.util.InsertableDict:
+        parts = super().store_parts()
+        if "shift_sources" in parts:
+            parts.insert_before("datasets", "shift_sources", parts.pop("shift_sources"))
+        return parts
+
     def plot_parts(self) -> law.util.InsertableDict:
         parts = super().plot_parts()
 
@@ -661,7 +659,7 @@ class PlotVariablesBaseMultiShifts(
 
 
 class PlotShiftedVariables1D(
-    PlotBase1D,
+    PlotBase1DWithErrorBands,
     PlotVariablesBaseMultiShifts,
 ):
     plot_function = PlotBase.plot_function.copy(
@@ -671,7 +669,7 @@ class PlotShiftedVariables1D(
 
 
 class PlotShiftedVariablesPerShift1D(
-    PlotBase1D,
+    PlotBase1DWithErrorBands,
     PlotVariablesBaseMultiShifts,
 ):
     # this tasks creates one plot per shift
@@ -704,7 +702,9 @@ class PlotShiftedVariablesPerConfig1D(
         }
 
 
-class PlotShiftedVariablesPerShiftAndProcess1D(law.WrapperTask):
+class PlotShiftedVariablesPerShiftAndProcess1D(
+    law.WrapperTask,
+):
 
     # upstream requirements
     reqs = Requirements(
