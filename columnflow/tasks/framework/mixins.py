@@ -2044,9 +2044,9 @@ class CategoriesMixin(ConfigTask):
 
     categories = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated category names or patterns to select; can also be the key of a mapping defined in "
-        "'category_groups' auxiliary data of the config; when empty, uses the auxiliary data enty 'default_categories' "
-        "when set; empty default",
+        description="comma-separated category names or patterns to select; can also contain keys of a mapping defined "
+        "in 'category_groups' auxiliary data of the config; when empty or 'DEFAULT', uses the auxiliary data entry "
+        "'default_categories'; default: DEFAULT",
         brace_expand=True,
         parse_empty=True,
     )
@@ -2068,15 +2068,18 @@ class CategoriesMixin(ConfigTask):
                 categories = tuple(cls.default_categories)
 
             # additional resolution and expansion requires a config
+            categories_lookup = categories
             if (container := cls._get_config_container(params)):
-                # when still empty, get the config default
+                # resolve config defaults
                 categories = cls.resolve_config_default(
-                    param=params.get("categories"),
+                    param=categories,
                     task_params=params,
                     container=container,
                     default_str="default_categories",
                     multi_strategy="union",
                 )
+                if categories:
+                    categories_lookup = categories
                 # resolve them
                 categories = cls.find_config_objects(
                     names=categories,
@@ -2089,7 +2092,7 @@ class CategoriesMixin(ConfigTask):
 
             # complain when no categories were found
             if not categories and not cls.allow_empty_categories:
-                raise ValueError(f"no categories found matching {params['categories']}")
+                raise ValueError(f"no categories found matching '{categories_lookup}'")
 
             # sort them
             if cls.sort_categories:
@@ -2117,16 +2120,15 @@ class VariablesMixin(ConfigTask):
 
     variables = law.CSVParameter(
         default=(RESOLVE_DEFAULT,),
-        description="comma-separated variable names or patterns to select; can also be the key of a mapping defined in "
-        "the 'variable_group' auxiliary data of the config; when empty, uses all variables of the config; empty "
-        "default",
+        description="comma-separated variable names or patterns to select; can also contain keys of a mapping defined "
+        "in 'variable_groups' auxiliary data of the config; when empty or 'DEFAULT', uses the auxiliary data entry "
+        "'default_variables'; default: DEFAULT",
         brace_expand=True,
         parse_empty=True,
     )
 
     default_variables = None
     allow_empty_variables = False
-    allow_missing_variables = False
 
     @classmethod
     def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -2138,22 +2140,23 @@ class VariablesMixin(ConfigTask):
         # resolve variables
         if (variables := params.get("variables", law.no_value)) != law.no_value:
             # when empty, use the ones defined on class level
-            if variables == (RESOLVE_DEFAULT,):
-                variables = ()
-            if variables == () and cls.default_variables:
-                variables = law.util.make_tuple(cls.default_variables)
+            if variables in ((), (RESOLVE_DEFAULT,)) and cls.default_variables:
+                variables = tuple(cls.default_variables)
 
             # additional resolution and expansion requires a config
+            variables_lookup = variables
             if (container := cls._get_config_container(params)):
-                # when still empty, get the config default
+                # resolve config defaults
                 variables = cls.resolve_config_default_and_groups(
-                    param=params.get("variables"),
+                    param=variables,
                     task_params=params,
                     container=container,
                     default_str="default_variables",
                     groups_str="variable_groups",
                     multi_strategy="union",
                 )
+                if variables:
+                    variables_lookup = variables
                 # since there can be multi-dimensional variables, resolve each part separately
                 resolved_variables = []
                 for variable in variables:
@@ -2171,9 +2174,9 @@ class VariablesMixin(ConfigTask):
                     resolved_variables.extend(map(cls.join_multi_variable, itertools.product(*resolved_parts)))
                 variables = law.util.make_unique(resolved_variables)
 
-            # when still empty, complaion or fallback to using all known variables
-            if not variables and not cls.allow_missing_variables:
-                raise ValueError(f"no variables found matching '{','.join(params['variables'])}'")
+            # complain when no variables were found
+            if not variables and not cls.allow_empty_variables:
+                raise ValueError(f"no variables found matching '{variables_lookup}'")
 
             params["variables"] = tuple(variables)
 

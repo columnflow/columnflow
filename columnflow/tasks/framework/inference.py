@@ -16,9 +16,10 @@ from columnflow.tasks.framework.mixins import (
 )
 from columnflow.tasks.framework.remote import RemoteWorkflow
 from columnflow.tasks.histograms import MergeShiftedHistograms
+from columnflow.inference import InferenceModel
 from columnflow.config_util import get_datasets_from_process
 from columnflow.util import dev_sandbox, DotDict, maybe_import
-from columnflow.types import TYPE_CHECKING
+from columnflow.types import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     hist = maybe_import("hist")
@@ -39,6 +40,23 @@ class InferenceModelUser(
         RemoteWorkflow.reqs,
         MergeShiftedHistograms=MergeShiftedHistograms,
     )
+
+    _combined_config_data_attr = "_workflow_cached_combined_config_data"
+    _transfer_params_to_inst = [_combined_config_data_attr]
+
+    @classmethod
+    def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
+        params = super().resolve_param_values_post_init(params)
+
+        # add combined config data to params
+        if (
+            not params.get(cls._combined_config_data_attr) and
+            (config_insts := params.get("config_insts")) and
+            (inference_model_inst := params.get("inference_model_inst"))
+        ):
+            params[cls._combined_config_data_attr] = cls._combined_config_data(config_insts, inference_model_inst)
+
+        return params
 
     @classmethod
     def get_mc_datasets(cls, config_inst: od.Config, proc_obj: DotDict) -> list[str]:
@@ -100,8 +118,12 @@ class InferenceModelUser(
             )
         ]
 
-    @law.workflow_property(cache=True)
-    def combined_config_data(self) -> dict[od.ConfigInst, dict[str, dict | set]]:
+    @classmethod
+    def _combined_config_data(
+        cls,
+        config_insts: list[od.Config],
+        inference_model_inst: InferenceModel,
+    ) -> DotDict[od.ConfigInst, dict[str, dict | set]]:
         # prepare data extracted from the inference model
         config_data = {
             config_inst: {
@@ -114,17 +136,17 @@ class InferenceModelUser(
                 # per mc dataset name, the set of shift sources and the names processes to be extracted from them
                 "mc_datasets": {},
             }
-            for config_inst in self.config_insts
+            for config_inst in config_insts
         }
 
         # iterate over all model categories
-        for cat_obj in self.inference_model_inst.categories:
+        for cat_obj in inference_model_inst.categories:
             # keep track of per-category information across configs for consistency checks
             variables = set()
             categories = set()
 
             # iterate over configs relevant for this category
-            config_insts = [config_inst for config_inst in self.config_insts if config_inst.name in cat_obj.config_data]
+            config_insts = [config_inst for config_inst in config_insts if config_inst.name in cat_obj.config_data]
             for config_inst in config_insts:
                 data = config_data[config_inst]
 
@@ -136,12 +158,12 @@ class InferenceModelUser(
                 #   - data in that category is not faked from mc processes, or
                 #   - at least one process object is dynamic (that usually means data-driven)
                 if not cat_obj.data_from_processes or any(proc_obj.is_dynamic for proc_obj in cat_obj.processes):
-                    data["data_datasets"].update(self.get_data_datasets(config_inst, cat_obj))
+                    data["data_datasets"].update(cls.get_data_datasets(config_inst, cat_obj))
 
                 # mc datasets over all process objects
                 #   - the process is not dynamic
                 for proc_obj in cat_obj.processes:
-                    mc_datasets = self.get_mc_datasets(config_inst, proc_obj)
+                    mc_datasets = cls.get_mc_datasets(config_inst, proc_obj)
                     for dataset_name in mc_datasets:
                         if dataset_name not in data["mc_datasets"]:
                             data["mc_datasets"][dataset_name] = {
@@ -181,7 +203,15 @@ class InferenceModelUser(
                     f"{', '.join(c.name for c in config_insts)}: {categories}",
                 )
 
-        return config_data
+        return DotDict.wrap(config_data)
+
+    @law.workflow_property(cache=True)
+    def combined_config_data(self) -> DotDict[od.ConfigInst, dict[str, dict | set]]:
+        return self._combined_config_data(self.config_insts, self.inference_model_inst)
+
+    def req_branch(self, branch: int, **kwargs) -> InferenceModelUser:
+        kwargs.setdefault(self._combined_config_data_attr, self.combined_config_data)
+        return super().req_branch(branch, **kwargs)
 
 
 class _SerializeInferenceModelBase(

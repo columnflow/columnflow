@@ -674,7 +674,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
                     _param = _container.x(default_str, None)
                     # allow default to be a function, taking task parameters as input
                     if isinstance(_param, Callable):
-                        _param = _param(cls, _container, task_params)
+                        _param = _param(task_cls=cls, container=_container, task_params=task_params)
                     # handle empty values and return type
                     if not return_single_value:
                         _param = () if _param is None else law.util.make_tuple(_param)

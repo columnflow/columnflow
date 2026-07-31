@@ -566,7 +566,7 @@ def pattern_matcher(pattern: Sequence[str] | str, mode: Callable = any) -> Calla
         matcher("123bar")     # -> False
         matcher("foo123bar")  # -> True
     """
-    if isinstance(pattern, (list, tuple, set)):
+    if isinstance(pattern, (list, tuple, set)) or law.util.is_lazy_iterable(pattern):
         matchers = [pattern_matcher(p) for p in pattern]
         return lambda s: mode(matcher(s) for matcher in matchers)
 
