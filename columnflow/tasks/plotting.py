@@ -9,7 +9,7 @@ from __future__ import annotations
 import itertools
 import functools
 import threading
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from abc import abstractmethod
 
 import law
@@ -40,7 +40,9 @@ if TYPE_CHECKING:
 # type aliases for more verbose type hints
 CatVarPair: TypeAlias = tuple[str, str]
 ProcHists: TypeAlias = dict[od.Process, "hist.Hist"]
-HistDicts: TypeAlias = dict[CatVarPair, dict[od.Config, ProcHists]]
+ConfigHists: TypeAlias = dict[od.Config, ProcHists]
+HistDicts: TypeAlias = dict[CatVarPair, ConfigHists]
+MergedHistDicts: TypeAlias = dict[CatVarPair, ProcHists]
 
 
 class _PlotVariablesBase(
@@ -211,7 +213,28 @@ class PlotVariablesBase(_PlotVariablesBase):
     def get_plot_shifts(self):
         ...
 
-    def update_hists(self, hists: HistDicts) -> HistDicts:
+    def update_hists_after_hooks(
+        self,
+        hists: ConfigHists,
+        category_name: str,
+        variable_name: str,
+    ) -> ConfigHists:
+        # hook to update histograms right after hist hooks have been applied
+        return hists
+
+    def update_hists_before_config_merging(
+        self,
+        hists: ConfigHists,
+        category_name: str,
+        variable_name: str,
+    ) -> ConfigHists:
+        # hook to update histograms right before merging across different config instances
+        return hists
+
+    def update_hists_before_plotting(
+        self,
+        hists: MergedHistDicts,
+    ) -> MergedHistDicts:
         # hook to update histograms right before plotting
         return hists
 
@@ -380,6 +403,39 @@ class PlotVariablesBase(_PlotVariablesBase):
                     hook_kwargs={"category_name": cat_name, "variable_name": var_name},
                 )
 
+                # update histograms after hooks
+                hists[hist_key] = self.update_hists_after_hooks(
+                    hists=hists[hist_key],
+                    category_name=cat_name,
+                    variable_name=var_name,
+                )
+
+                # axis selections and reductions
+                for config_inst, proc_hists in hists[hist_key].items():
+                    for process_inst, h in proc_hists.items():
+                        # determine expected shifts from intersection of requested shifts and those known for the process
+                        process_shifts = (
+                            process_shift_map[process_inst.name]
+                            if process_inst.name in process_shift_map
+                            else {"nominal"}
+                        )
+                        expected_shifts = (process_shifts & plot_shift_names) or (process_shifts & {"nominal"})
+                        if not expected_shifts:
+                            raise Exception(f"no shifts to plot found for process {process_inst.name}")
+                        # select shifts
+                        h = h[{"shift": [hist.loc(s_name) for s_name in expected_shifts if s_name in h.axes["shift"]]}]
+                        # select and reduce categories
+                        h = select_category_bins(h, category_inst, use_leaves=True, prefer_parents=True, reduce=True)
+                        # replace
+                        proc_hists[process_inst] = h
+
+                # update histograms before config merging
+                hists[hist_key] = self.update_hists_before_config_merging(
+                    hists=hists[hist_key],
+                    category_name=cat_name,
+                    variable_name=var_name,
+                )
+
                 # merge configs
                 if len(self.config_insts) != 1:
                     process_memory = {}
@@ -395,26 +451,8 @@ class PlotVariablesBase(_PlotVariablesBase):
                 else:
                     hists[hist_key] = hists[hist_key][self.config_inst]
 
-                # axis selections and reductions
-                _hists = OrderedDict()
-                for process_inst in hists[hist_key].keys():
-                    h = hists[hist_key][process_inst]
-                    # determine expected shifts from intersection of requested shifts and those known for the process
-                    process_shifts = (
-                        process_shift_map[process_inst.name]
-                        if process_inst.name in process_shift_map
-                        else {"nominal"}
-                    )
-                    expected_shifts = (process_shifts & plot_shift_names) or (process_shifts & {"nominal"})
-                    if not expected_shifts:
-                        raise Exception(f"no shifts to plot found for process {process_inst.name}")
-                    # select shifts
-                    h = h[{"shift": [hist.loc(s_name) for s_name in expected_shifts if s_name in h.axes["shift"]]}]
-                    # select and reduce categories
-                    h = select_category_bins(h, category_inst, use_leaves=True, prefer_parents=True, reduce=True)
-                    # store
-                    _hists[process_inst] = h
-                hists[hist_key] = _hists
+            # update histograms before being passed to plot function
+            hists = self.update_hists_before_plotting(hists)
 
             # copy process instances once so that their auxiliary data fields can be used as a storage for
             # process-specific plot parameters later on in plot scripts without affecting the original instances
@@ -427,9 +465,6 @@ class PlotVariablesBase(_PlotVariablesBase):
             fake_root.processes.clear()
             for hist_key, _hists in hists.items():
                 hists[hist_key] = {process_map[proc_inst.name]: h for proc_inst, h in _hists.items()}
-
-            # update histograms before being passed to plot function
-            hists = self.update_hists(hists)
 
             # helper to get variable instances per variable name in tuples (split in case of n-d plots)
             get_var_insts = lambda var_name: list(map(self.config_inst.get_variable, self.variable_tuples[var_name]))
