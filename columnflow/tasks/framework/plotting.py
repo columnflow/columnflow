@@ -81,7 +81,9 @@ class PlotBase(ConfigTask):
         "exceeds a certain threshold; defaults to the `default_blinding_threshold` aux field of "
         "the config",
     )
+
     exclude_params_remote_workflow = {"debug_plot"}
+    exclude_params_hash = {"general_settings"}
 
     @classmethod
     def resolve_param_values(cls, params):
@@ -472,6 +474,8 @@ class ProcessPlotSettingMixin(
         brace_expand=True,
     )
 
+    exclude_params_hash = {"process_settings"}
+
     @classmethod
     def resolve_param_values(cls, params):
         params = super().resolve_param_values(params)
@@ -525,6 +529,8 @@ class VariablePlotSettingMixin(
         "default: value of the 'default_variable_settings' if defined, else empty default",
         brace_expand=True,
     )
+
+    exclude_params_hash = {"variable_settings"}
 
     @classmethod
     def resolve_param_values(cls, params):

@@ -143,6 +143,7 @@ class CalibratorMixin(ArrayFunctionInstanceMixin, CalibratorClassMixin):
     exclude_params_repr = {"calibrator_inst"}
     exclude_params_sandbox = {"calibrator_inst"}
     exclude_params_remote_workflow = {"calibrator_inst"}
+    exclude_params_hash = {"calibrator_inst"}
 
     # decides whether the task itself invokes the calibrator
     invokes_calibrator = False
@@ -346,6 +347,7 @@ class CalibratorsMixin(ArrayFunctionInstanceMixin, CalibratorClassesMixin):
     exclude_params_repr = {"calibrator_insts"}
     exclude_params_sandbox = {"calibrator_insts"}
     exclude_params_remote_workflow = {"calibrator_insts"}
+    exclude_params_hash = {"calibrator_insts"}
 
     @classmethod
     def get_calibrator_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -555,6 +557,7 @@ class SelectorMixin(ArrayFunctionInstanceMixin, SelectorClassMixin):
     exclude_params_repr = {"selector_inst"}
     exclude_params_sandbox = {"selector_inst"}
     exclude_params_remote_workflow = {"selector_inst"}
+    exclude_params_hash = {"selector_inst"}
 
     # decides whether the task itself invokes the selector
     invokes_selector = False
@@ -766,6 +769,7 @@ class ReducerMixin(ArrayFunctionInstanceMixin, ReducerClassMixin):
     exclude_params_repr = {"reducer_inst"}
     exclude_params_sandbox = {"reducer_inst"}
     exclude_params_remote_workflow = {"reducer_inst"}
+    exclude_params_hash = {"reducer_inst"}
 
     # decides whether the task itself invokes the reducer
     invokes_reducer = False
@@ -966,6 +970,7 @@ class ProducerMixin(ArrayFunctionInstanceMixin, ProducerClassMixin):
     exclude_params_repr = {"producer_inst"}
     exclude_params_sandbox = {"producer_inst"}
     exclude_params_remote_workflow = {"producer_inst"}
+    exclude_params_hash = {"producer_inst"}
 
     # decides whether the task itself invokes the producer
     invokes_producer = False
@@ -1169,6 +1174,7 @@ class ProducersMixin(ArrayFunctionInstanceMixin, ProducerClassesMixin):
     exclude_params_repr = {"producer_insts"}
     exclude_params_sandbox = {"producer_insts"}
     exclude_params_remote_workflow = {"producer_insts"}
+    exclude_params_hash = {"producer_insts"}
 
     @classmethod
     def get_producer_dict(cls, params: dict[str, Any]) -> dict[str, Any]:
@@ -1284,6 +1290,7 @@ class MLModelMixinBase(ConfigTask):
     exclude_params_repr = {"ml_model_inst"}
     exclude_params_sandbox = {"ml_model_inst"}
     exclude_params_remote_workflow = {"ml_model_inst"}
+    exclude_params_hash = {"ml_model_inst"}
     exclude_params_repr_empty = {"ml_model"}
 
     @property
@@ -1554,6 +1561,7 @@ class PreparationProducerMixin(ArrayFunctionInstanceMixin, MLModelMixin):
     exclude_params_repr = {"preparation_producer_inst"}
     exclude_params_sandbox = {"preparation_producer_inst"}
     exclude_params_remote_workflow = {"preparation_producer_inst"}
+    exclude_params_hash = {"preparation_producer_inst"}
 
     @classmethod
     def invokes_preparation_producer(cls, params) -> bool:
@@ -1816,6 +1824,7 @@ class HistProducerMixin(ArrayFunctionInstanceMixin, HistProducerClassMixin):
     exclude_params_repr = {"hist_producer_inst"}
     exclude_params_sandbox = {"hist_producer_inst"}
     exclude_params_remote_workflow = {"hist_producer_inst"}
+    exclude_params_hash = {"hist_producer_inst"}
 
     # decides whether the task itself invokes the hist_producer
     invokes_hist_producer = False
@@ -1972,6 +1981,7 @@ class InferenceModelMixin(InferenceModelClassMixin):
     exclude_params_repr = {"inference_model_inst"}
     exclude_params_sandbox = {"inference_model_inst"}
     exclude_params_remote_workflow = {"inference_model_inst"}
+    exclude_params_hash = {"inference_model_inst"}
 
     @classmethod
     def build_inference_model_inst(

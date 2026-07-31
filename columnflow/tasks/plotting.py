@@ -174,7 +174,8 @@ class PlotVariablesBase(_PlotVariablesBase):
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
-        parts.insert_before("version", "datasets", f"datasets_{self.datasets_repr}")
+        if (datasets_repr := self.datasets_repr):
+            parts.insert_before("version", "datasets", f"datasets_{datasets_repr}")
         return parts
 
     def plot_parts(self) -> law.util.InsertableDict:
@@ -182,7 +183,8 @@ class PlotVariablesBase(_PlotVariablesBase):
 
         self._check_multi_flags()
 
-        parts["processes"] = f"proc_{self.processes_repr}"
+        if (processes_repr := self.processes_repr):
+            parts["processes"] = f"proc_{processes_repr}"
 
         if self.multi_category:
             parts["category"] = f"cats_{self.categories_repr}"

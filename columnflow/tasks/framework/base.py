@@ -1176,6 +1176,7 @@ class ConfigTask(AnalysisTask):
     exclude_params_remote_workflow = {"known_shifts"}
     exclude_params_index = {"known_shifts"}
     exclude_params_repr = {"known_shifts"}
+    exclude_params_hash = {"known_shifts"}
 
     # the field in the store parts behind which the new part is inserted
     # added here for subclasses that typically refer to the store part added by _this_ class
