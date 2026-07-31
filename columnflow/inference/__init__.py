@@ -312,8 +312,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
 
     class YamlDumper(yaml.SafeDumper):
         """
-        YAML dumper for statistical inference models with ammended representers to serialize
-        internal, structured objects as safe, standard objects.
+        YAML dumper for statistical inference models with ammended representers to serialize internal, structured
+        objects as safe, standard objects.
         """
 
         @classmethod
@@ -350,9 +350,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         **kwargs,
     ) -> Type[T] | Callable:
         """
-        Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional
-        *bases* and attaching the decorated function to it as ``init_func``. All additional *kwargs*
-        are added as class members of the new subclass.
+        Decorator for creating a new :py:class:`InferenceModel` subclass with additional, optional *bases* and attaching
+        the decorated function to it as ``init_func``. All additional *kwargs* are added as class members of the new
+        subclass.
 
         :param func: The function to be decorated and attached as ``init_func``.
         :param bases: Optional tuple of base classes for the new subclass.
@@ -372,8 +372,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
     @classmethod
     def used_datasets(cls, config_inst: od.Config) -> list[str]:
         """
-        Used datasets for which the `upstream_task_cls.resolve_instances` will be called.
-        Defaults to the default dataset.
+        Used datasets for which the `upstream_task_cls.resolve_instances` will be called. Defaults to the default
+        dataset.
         """
         return [default_dataset]
 
@@ -403,8 +403,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         rate_precision: int = 5,
     ) -> DotDict:
         """
-        Returns a dictionary representing a category (interchangeably called bin or channel in other
-        tools), forwarding all arguments.
+        Returns a dictionary representing a category (interchangeably called bin or channel in other tools), forwarding
+        all arguments.
 
         :param name: The name of the category in the model.
         :param config_data: Dictionary mapping names of :py:class:`order.Config` objects to dictionaries following the
@@ -601,8 +601,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
 
     def to_yaml(self, stream: TextIO | None = None) -> str | None:
         """
-        Writes the content of the :py:attr:`model` into a file-like object *stream* when given, and
-        returns a string representation otherwise.
+        Writes the content of the :py:attr:`model` into a file-like object *stream* when given, and returns a string
+        representation otherwise.
 
         :param stream: A file-like object to write the model content into.
         :returns: A string representation of the model content if *stream* is not provided.
@@ -638,9 +638,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         match_mode: Callable = any,
     ) -> list[DotDict | str]:
         """
-        Returns a list of categories whose name match *category*. *category* can be a string, a
-        pattern, or sequence of them. When *only_names* is *True*, only names of categories are
-        returned rather than structured dictionaries.
+        Returns a list of categories whose name match *category*. *category* can be a string, a pattern, or sequence of
+        them. When *only_names* is *True*, only names of categories are returned rather than structured dictionaries.
 
         :param category: A string, pattern, or sequence of them to match category names.
         :param only_names: A boolean flag to return only names of categories if set to *True*.
@@ -666,10 +665,10 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         silent: bool = False,
     ) -> DotDict | str | None:
         """
-        Returns a single category whose name matches *category*. *category* can be a string, a
-        pattern, or sequence of them. An exception is raised if no or more than one category is
-        found, unless *silent* is *True* in which case *None* is returned. When *only_name* is
-        *True*, only the name of the category is returned rather than a structured dictionary.
+        Returns a single category whose name matches *category*. *category* can be a string, a pattern, or sequence of
+        them. An exception is raised if no or more than one category is found, unless *silent* is *True* in which case
+        *None* is returned. When *only_name* is *True*, only the name of the category is returned rather than a
+        structured dictionary.
 
         :param category: A string, pattern, or sequence of them to match category names.
         :param only_name: A boolean flag to return only the name of the category if set to *True*.
@@ -702,8 +701,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         match_mode: Callable = any,
     ) -> bool:
         """
-        Returns *True* if a category whose name matches *category* is existing, and *False*
-        otherwise. *category* can be a string, a pattern, or sequence of them.
+        Returns *True* if a category whose name matches *category* is existing, and *False* otherwise. *category* can be
+        a string, a pattern, or sequence of them.
 
         :param category: A string, pattern, or sequence of them to match category names.
         :param match_mode: Either ``any`` or ``all`` to control the category matching behavior (see
@@ -718,9 +717,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
 
     def add_category(self, *args, **kwargs) -> None:
         """
-        Adds a new category with all *args* and *kwargs* used to create the structured category
-        dictionary via :py:meth:`category_spec`. If a category with the same name already exists, an
-        exception is raised.
+        Adds a new category with all *args* and *kwargs* used to create the structured category dictionary via
+        :py:meth:`category_spec`. If a category with the same name already exists, an exception is raised.
 
         :raises ValueError: If a category with the same name already exists.
         """
@@ -779,12 +777,12 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         category_match_mode: Callable = any,
     ) -> dict[str, DotDict | str] | list[str]:
         """
-        Returns a dictionary of processes whose names match *process*, mapped to the name of the
-        category they belong to. Categories can optionally be filtered through *category*. Both
-        *process* and *category* can be a string, a pattern, or sequence of them.
+        Returns a dictionary of processes whose names match *process*, mapped to the name of the category they belong
+        to. Categories can optionally be filtered through *category*. Both *process* and *category* can be a string, a
+        pattern, or sequence of them.
 
-        When *only_names* is *True*, only names of processes are returned rather than structured
-        dictionaries. When *flat* is *True*, a flat, unique list of process names is returned.
+        When *only_names* is *True*, only names of processes are returned rather than structured dictionaries. When
+        *flat* is *True*, a flat, unique list of process names is returned.
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to filter categories.
@@ -837,13 +835,12 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         silent: bool = False,
     ) -> DotDict | str | None:
         """
-        Returns a single process whose name matches *process*, and optionally, whose category's
-        name matches *category*. Both *process* and *category* can be a string, a pattern, or
-        sequence of them.
+        Returns a single process whose name matches *process*, and optionally, whose category's name matches *category*.
+        Both *process* and *category* can be a string, a pattern, or sequence of them.
 
-        An exception is raised if no or more than one process is found, unless *silent* is *True*
-        in which case *None* is returned. When *only_name* is *True*, only the name of the
-        process is returned rather than a structured dictionary.
+        An exception is raised if no or more than one process is found, unless *silent* is *True* in which case *None*
+        is returned. When *only_name* is *True*, only the name of the process is returned rather than a structured
+        dictionary.
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
@@ -904,9 +901,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         category_match_mode: Callable = any,
     ) -> bool:
         """
-        Returns *True* if a process whose name matches *process*, and optionally whose category's
-        name matches *category*, exists, and *False* otherwise. Both *process* and *category* can
-        be a string, a pattern, or sequence of them.
+        Returns *True* if a process whose name matches *process*, and optionally whose category's name matches
+        *category*, exists, and *False* otherwise. Both *process* and *category* can be a string, a pattern, or sequence
+        of them.
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
@@ -938,12 +935,12 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         **kwargs,
     ) -> None:
         """
-        Adds a new process to all categories whose names match *category*, with all *args* and
-        *kwargs* used to create the structured process dictionary via :py:meth:`process_spec`.
-        *category* can be a string, a pattern, or sequence of them.
+        Adds a new process to all categories whose names match *category*, with all *args* and *kwargs* used to create
+        the structured process dictionary via :py:meth:`process_spec`. *category* can be a string, a pattern, or
+        sequence of them.
 
-        If a process with the same name already exists in one of the categories, an exception is
-        raised unless *silent* is *True*.
+        If a process with the same name already exists in one of the categories, an exception is raised unless *silent*
+        is *True*.
 
         :param args: Positional arguments used to create the process.
         :param category: A string, pattern, or sequence of them to match category names.
@@ -986,9 +983,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         category_match_mode: Callable = any,
     ) -> bool:
         """
-        Removes one or more processes whose names match *process*, and optionally whose category's
-        name matches *category*. Both *process* and *category* can be a string, a pattern, or
-        sequence of them. Returns *True* if at least one process was removed, and *False* otherwise.
+        Removes one or more processes whose names match *process*, and optionally whose category's name matches
+        *category*. Both *process* and *category* can be a string, a pattern, or sequence of them. Returns *True* if at
+        least one process was removed, and *False* otherwise.
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
@@ -1038,13 +1035,12 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         flat: bool = False,
     ) -> dict[str, dict[str, DotDict | str]] | list[str]:
         """
-        Returns a dictionary of parameters whose names match *parameter*, mapped twice to the name
-        of the category and the name of the process they belong to. Categories and processes can
-        optionally be filtered through *category* and *process*. All three, *parameter*, *process*
-        and *category* can be a string, a pattern, or sequence of them.
+        Returns a dictionary of parameters whose names match *parameter*, mapped twice to the name of the category and
+        the name of the process they belong to. Categories and processes can optionally be filtered through *category*
+        and *process*. All three, *parameter*, *process* and *category* can be a string, a pattern, or sequence of them.
 
-        When *only_names* is *True*, only names of parameters are returned rather than structured
-        dictionaries. When *flat* is *True*, a flat, unique list of parameter names is returned.
+        When *only_names* is *True*, only names of parameters are returned rather than structured dictionaries. When
+        *flat* is *True*, a flat, unique list of parameter names is returned.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
@@ -1115,13 +1111,13 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         silent: bool = False,
     ) -> DotDict | str | None:
         """
-        Returns a single parameter whose name matches *parameter*, and optionally, whose category's
-        and process' name matches *category* and *process*. All three, *parameter*, *process* and
-        *category* can be a string, a pattern, or sequence of them.
+        Returns a single parameter whose name matches *parameter*, and optionally, whose category's and process' name
+        matches *category* and *process*. All three, *parameter*, *process* and *category* can be a string, a pattern,
+        or sequence of them.
 
-        An exception is raised if no or more than one parameter is found, unless *silent* is *True*
-        in which case *None* is returned. When *only_name* is *True*, only the name of the parameter
-        is returned rather than a structured dictionary.
+        An exception is raised if no or more than one parameter is found, unless *silent* is *True* in which case *None*
+        is returned. When *only_name* is *True*, only the name of the parameter is returned rather than a structured
+        dictionary.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
@@ -1202,10 +1198,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         process_match_mode: Callable = any,
     ) -> bool:
         """
-        Returns *True* if a parameter whose name matches *parameter*, and optionally whose
-        category's and process' name match *category* and *process*, exists, and *False*
-        otherwise. All three, *parameter*, *process* and *category* can be a string, a pattern,
-        or sequence of them.
+        Returns *True* if a parameter whose name matches *parameter*, and optionally whose category's and process' name
+        match *category* and *process*, exists, and *False* otherwise. All three, *parameter*, *process* and *category*
+        can be a string, a pattern, or sequence of them.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
@@ -1311,9 +1306,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         process_match_mode: Callable = any,
     ) -> bool:
         """
-        Removes one or more parameters whose names match *parameter*, and optionally whose
-        category's and process' name match *category* and *process*. All three, *parameter*,
-        *process* and *category* can be a string, a pattern, or sequence of them.
+        Removes one or more parameters whose names match *parameter*, and optionally whose category's and process' name
+        match *category* and *process*. All three, *parameter*, *process* and *category* can be a string, a pattern, or
+        sequence of them.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
@@ -1368,11 +1363,10 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         only_names: bool = False,
     ) -> list[DotDict | str]:
         """
-        Returns a list of parameter groups whose names match *group*. *group* can be a string, a
-        pattern, or sequence of them.
+        Returns a list of parameter groups whose names match *group*. *group* can be a string, a pattern, or sequence of
+        them.
 
-        When *only_names* is *True*, only names of parameter groups are returned rather than
-        structured dictionaries.
+        When *only_names* is *True*, only names of parameter groups are returned rather than structured dictionaries.
 
         :param group: A string, pattern, or sequence of them to match group names.
         :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
@@ -1397,12 +1391,11 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         only_name: bool = False,
     ) -> DotDict | str:
         """
-        Returns a single parameter group whose name matches *group*. *group* can be a string, a
-        pattern, or sequence of them.
+        Returns a single parameter group whose name matches *group*. *group* can be a string, a pattern, or sequence of
+        them.
 
-        An exception is raised in case no or more than one parameter group is found. When
-        *only_name* is *True*, only the name of the parameter group is returned rather than a
-        structured dictionary.
+        An exception is raised in case no or more than one parameter group is found. When *only_name* is *True*, only
+        the name of the parameter group is returned rather than a structured dictionary.
 
         :param group: A string, pattern, or sequence of them to match group names.
         :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
@@ -1430,8 +1423,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         match_mode: Callable = any,
     ) -> bool:
         """
-        Returns *True* if a parameter group whose name matches *group* exists, and *False*
-        otherwise. *group* can be a string, a pattern, or sequence of them.
+        Returns *True* if a parameter group whose name matches *group* exists, and *False* otherwise. *group* can be a
+        string, a pattern, or sequence of them.
 
         :param group: A string, pattern, or sequence of them to match group names.
         :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
@@ -1446,9 +1439,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
 
     def add_parameter_group(self, *args, **kwargs) -> None:
         """
-        Adds a new parameter group with all *args* and *kwargs* used to create the structured
-        parameter group dictionary via :py:meth:`parameter_group_spec`. If a group with the same
-        name already exists, an exception is raised.
+        Adds a new parameter group with all *args* and *kwargs* used to create the structured parameter group dictionary
+        via :py:meth:`parameter_group_spec`. If a group with the same name already exists, an exception is raised.
 
         :param args: Positional arguments used to create the parameter group.
         :param kwargs: Keyword arguments used to create the parameter group.
@@ -1469,9 +1461,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         match_mode: Callable = any,
     ) -> bool:
         """
-        Removes one or more parameter groups whose names match *group*. *group* can be a string, a
-        pattern, or sequence of them. Returns *True* if at least one group was removed, and *False*
-        otherwise.
+        Removes one or more parameter groups whose names match *group*. *group* can be a string, a pattern, or sequence
+        of them. Returns *True* if at least one group was removed, and *False* otherwise.
 
         :param group: A string, pattern, or sequence of them to match group names.
         :param match_mode: Either ``any`` or ``all`` to control the parameter group matching behavior (see
@@ -1500,11 +1491,10 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         parameter_match_mode: Callable = any,
     ) -> bool:
         """
-        Adds a parameter named *parameter* to one or multiple parameter groups whose names match
-        *group*. *group* can be a string, a pattern, or sequence of them. When *parameter* is a
-        pattern or regular expression, all previously added, matching parameters are added.
-        Otherwise, *parameter* is added as is. If a parameter was added to at least one group,
-        *True* is returned and *False* otherwise.
+        Adds a parameter named *parameter* to one or multiple parameter groups whose names match *group*. *group* can be
+        a string, a pattern, or sequence of them. When *parameter* is a pattern or regular expression, all previously
+        added, matching parameters are added. Otherwise, *parameter* is added as is. If a parameter was added to at
+        least one group, *True* is returned and *False* otherwise.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param group: A string, pattern, or sequence of them to match group names.
@@ -1549,9 +1539,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         parameter_match_mode: Callable = any,
     ) -> bool:
         """
-        Removes all parameters matching *parameter* from parameter groups whose names match *group*.
-        Both *parameter* and *group* can be a string, a pattern, or sequence of them. Returns *True*
-        if at least one parameter was removed, and *False* otherwise.
+        Removes all parameters matching *parameter* from parameter groups whose names match *group*. Both *parameter*
+        and *group* can be a string, a pattern, or sequence of them. Returns *True* if at least one parameter was
+        removed, and *False* otherwise.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param group: A string, pattern, or sequence of them to match group names.
@@ -1593,8 +1583,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         match_mode: Callable = any,
     ) -> list[str]:
         """
-        Returns a flat list of category names that contain processes matching *process*. *process*
-        can be a string, a pattern, or sequence of them.
+        Returns a flat list of category names that contain processes matching *process*. *process* can be a string, a
+        pattern, or sequence of them.
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param match_mode: Either ``any`` or ``all`` to control the process matching behavior (see
@@ -1616,9 +1606,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         flat: bool = True,
     ) -> list[str] | dict[str, list[str]]:
         """
-        Returns a dictionary of names of processes that contain a parameter whose names match
-        *parameter*, mapped to category names. Categories can optionally be filtered through
-        *category*. Both *parameter* and *category* can be a string, a pattern, or sequence of them.
+        Returns a dictionary of names of processes that contain a parameter whose names match *parameter*, mapped to
+        category names. Categories can optionally be filtered through *category*. Both *parameter* and *category* can be
+        a string, a pattern, or sequence of them.
 
         When *flat* is *True*, a flat, unique list of process names is returned.
 
@@ -1664,9 +1654,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         flat: bool = True,
     ) -> list[str] | dict[str, list[str]]:
         """
-        Returns a dictionary of category names mapping to process names that contain parameters
-        whose names match *parameter*. Processes can optionally be filtered through *process*. Both
-        *parameter* and *process* can be a string, a pattern, or sequence of them.
+        Returns a dictionary of category names mapping to process names that contain parameters whose names match
+        *parameter*. Processes can optionally be filtered through *process*. Both *parameter* and *process* can be a
+        string, a pattern, or sequence of them.
 
         When *flat* is *True*, a flat, unique list of category names is returned.
 
@@ -1709,8 +1699,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         match_mode: Callable = any,
     ) -> list[str]:
         """
-        Returns a list of names of parameter groups that contain a parameter whose name matches
-        *parameter*. *parameter* can be a string, a pattern, or sequence of them.
+        Returns a list of names of parameter groups that contain a parameter whose name matches *parameter*. *parameter*
+        can be a string, a pattern, or sequence of them.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param match_mode: Either ``any`` or ``all`` to control the parameter matching behavior (see
@@ -1737,8 +1727,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
     ) -> None:
         """
         Cleans the internal model structure by removing empty and dangling objects by calling
-        :py:meth:`remove_empty_categories`, :py:meth:`remove_dangling_parameters_from_groups`
-        (receiving *keep_parameters*), and :py:meth:`remove_empty_parameter_groups` in that order.
+        :py:meth:`remove_empty_categories`, :py:meth:`remove_dangling_parameters_from_groups` (receiving
+        *keep_parameters*), and :py:meth:`remove_empty_parameter_groups` in that order.
 
         :param keep_parameters: A string, pattern, or sequence of them to specify parameters to keep.
         """
@@ -1804,9 +1794,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         category_match_mode: Callable = any,
     ) -> Generator[tuple[DotDict, DotDict], None, None]:
         """
-        Generator that iteratively yields all processes whose names match *process*, optionally
-        in all categories whose names match *category*. The yielded value is a 2-tuple containing
-        the category name and the process object.
+        Generator that iteratively yields all processes whose names match *process*, optionally in all categories whose
+        names match *category*. The yielded value is a 2-tuple containing the category name and the process object.
 
         :param process: A string, pattern, or sequence of them to match process names.
         :param category: A string, pattern, or sequence of them to match category names.
@@ -1836,9 +1825,9 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         process_match_mode: Callable = any,
     ) -> Generator[tuple[DotDict, DotDict, DotDict], None, None]:
         """
-        Generator that iteratively yields all parameters whose names match *parameter*, optionally
-        in all processes and categories whose names match *process* and *category*. The yielded
-        value is a 3-tuple containing the category name, the process name, and the parameter object.
+        Generator that iteratively yields all parameters whose names match *parameter*, optionally in all processes and
+        categories whose names match *process* and *category*. The yielded value is a 3-tuple containing the category
+        name, the process name, and the parameter object.
 
         :param parameter: A string, pattern, or sequence of them to match parameter names.
         :param process: A string, pattern, or sequence of them to match process names.
@@ -1877,8 +1866,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         category_match_mode: Callable = any,
     ) -> bool:
         """
-        Sets the scale attribute of all processes whose names match *process*, optionally in all
-        categories whose names match *category*, to *scale*.
+        Sets the scale attribute of all processes whose names match *process*, optionally in all categories whose names
+        match *category*, to *scale*.
 
         :param scale: The scale value to set for the matching processes.
         :param process: A string, pattern, or sequence of them to match process names.
