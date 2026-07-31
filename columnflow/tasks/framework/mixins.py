@@ -25,7 +25,7 @@ from columnflow.histogramming import HistProducer
 from columnflow.ml import MLModel
 from columnflow.inference import InferenceModel
 from columnflow.columnar_util import Route, ColumnCollection, ChunkedIOHandler, TaskArrayFunction
-from columnflow.config_util import expand_shift_sources
+from columnflow.config_util import expand_shift_sources, reduce_to_shift_sources
 from columnflow.util import maybe_import, DotDict, get_docs_url, get_code_url
 from columnflow.types import Callable
 
@@ -2445,13 +2445,21 @@ class DatasetsProcessesMixin(ConfigTask):
 
         super().get_known_shifts(params, shifts)
 
+    @classmethod
+    def _datasets_repr(cls, datasets: Sequence[str]) -> str:
+        return cls._multi_sequence_repr(datasets, sort=True)
+
     @property
     def datasets_repr(self) -> str:
-        return self._multi_sequence_repr(self.datasets, sort=True)
+        return self._datasets_repr(self.datasets)
+
+    @classmethod
+    def _processes_repr(cls, processes: Sequence[str]) -> str:
+        return cls._multi_sequence_repr(processes, sort=True)
 
     @property
     def processes_repr(self) -> str:
-        return self._multi_sequence_repr(self.processes, sort=True)
+        return self._processes_repr(self.processes)
 
 
 class ShiftSourcesMixin(ConfigTask):
@@ -2501,18 +2509,13 @@ class ShiftSourcesMixin(ConfigTask):
             # convert back to sources and validate
             sources = []
             if shifts:
-                sources = cls.reduce_shifts(shifts)
+                sources = reduce_to_shift_sources(shifts)
 
-                # reduce shifts based on known shifts
-                if "known_shifts" not in params:
+                # reduce shifts based on known ones
+                if (known_shifts := params.get("known_shifts")) is None:
                     raise ValueError("known_shifts must be set before resolving shift sources")
-                sources = [
-                    source for source in sources
-                    if (
-                        source == "nominal" or
-                        (f"{source}_up" in params["known_shifts"] and f"{source}_down" in params["known_shifts"])
-                    )
-                ]
+                is_known = lambda s: f"{s}_{od.Shift.UP}" in known_shifts and f"{s}_{od.Shift.DOWN}" in known_shifts
+                sources = [source for source in sources if source == "nominal" or is_known(source)]
 
             # complain when no sources were found
             if not sources and not cls.allow_empty_shift_sources:
@@ -2526,10 +2529,6 @@ class ShiftSourcesMixin(ConfigTask):
             params["shift_sources"] = tuple(sources)
 
         return params
-
-    @classmethod
-    def reduce_shifts(cls, shifts: Sequence[str] | set[str]) -> list[str]:
-        return list(set(od.Shift.split_name(shift)[0] for shift in shifts))
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)

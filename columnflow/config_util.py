@@ -390,13 +390,11 @@ def group_shifts(
     return nominal, dict(grouped)
 
 
-def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
+def expand_shift_sources(shifts: Sequence[str | od.Shift] | set[str | od.Shift]) -> list[str]:
     """
     Given a sequence *shifts* containing either shift names (``<source>_<direction>``) or shift
     sources, the latter ones are expanded with both possible directions and returned in a common
-    list.
-
-    Example:
+    list. Example:
 
     .. code-block:: python
 
@@ -405,6 +403,8 @@ def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
     """
     _shifts = []
     for shift in shifts:
+        if isinstance(shift, od.Shift):
+            shift = shift.name
         if shift == od.Shift.NOMINAL:
             _shifts.append(shift)
         else:
@@ -417,6 +417,32 @@ def expand_shift_sources(shifts: Sequence[str] | set[str]) -> list[str]:
                 _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.DOWN}"])
 
     return law.util.make_unique(_shifts)
+
+
+def reduce_to_shift_sources(shifts: Sequence[str | od.Shift] | set[str | od.Shift]) -> list[od.Shift]:
+    """
+    Given a sequence *shifts* containing either shift names (``<source>_<direction>``) or shift sources, names of these
+    shifts are reduced to their source names and returned in a list. Example:
+
+    .. code-block:: python
+
+        reduce_to_shift_sources(["jes", "jer_up", "jer_down", "nominal"])
+        # -> ["jes", "jer", "nominal"]
+    """
+    sources = []
+    for shift in shifts:
+        if isinstance(shift, od.Shift):
+            shift = shift.name
+        if shift == od.Shift.NOMINAL:
+            sources.append(shift)
+        else:
+            try:
+                source, _ = od.Shift.split_name(shift)
+                sources.append(source)
+            except ValueError:
+                sources.append(shift)
+
+    return law.util.make_unique(sources)
 
 
 class CategoryIDCache(PersistentCache):

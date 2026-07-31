@@ -447,7 +447,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         object_cls: od.UniqueObjectMeta,
         groups_str: str | None = None,
         accept_patterns: bool = True,
-        deep: bool = False,
+        deep: bool | None = None,
         strict: bool = False,
         multi_strategy: str = "first",
     ) -> list[str] | dict[od.UniqueObject, list[str]]:
@@ -514,6 +514,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             return first
 
         # prepare value caching
+        has_deep_lookup = object_cls in container._deep_child_classes
+        deep = True if deep is None and has_deep_lookup else deep
         singular = object_cls.cls_name_singular
         plural = object_cls.cls_name_plural
         _cache: dict[str, set[str]] = {}
@@ -529,8 +531,8 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         def has_obj(name: str) -> bool:
             if "has_obj_func" not in _cache:
                 kwargs = {}
-                if object_cls in container._deep_child_classes:
-                    kwargs["deep"] = deep
+                if has_deep_lookup:
+                    kwargs["deep"] = bool(deep)
                 _cache["has_obj_func"] = functools.partial(getattr(container, f"has_{singular}"), **kwargs)
             return _cache["has_obj_func"](name)
 
@@ -1409,7 +1411,7 @@ class ConfigTask(AnalysisTask):
     @classmethod
     def _multi_sequence_repr(
         cls,
-        values: Sequence[str] | Sequence[Sequence[str]],
+        values: Sequence[str] | set[str] | Sequence[Sequence[str] | set[str]],
         sort: bool = False,
     ) -> str:
         """
@@ -1431,15 +1433,21 @@ class ConfigTask(AnalysisTask):
         maybe_sort = (lambda vals: sorted(vals)) if sort else (lambda vals: vals)
 
         # helper to perform the single representation, assuming already sorted values
-        def single_repr(values: Sequence[str]) -> str:
+        def single_repr(values: Sequence[str] | set[str]) -> str:
             if not values:
                 return None
+            if isinstance(values, set):
+                values = sorted(values)
             if len(values) == 1:
                 return values[0]
             return f"{len(values)}_{law.util.create_hash(values)}"
 
+        # cast sets
+        if isinstance(values, set):
+            values = sorted(values)
+
         # single case
-        if not isinstance(values[0], (list, tuple)):
+        if not isinstance(values[0], (list, tuple, set)):
             return single_repr(maybe_sort(values))
         # multi case with a single sequence
         if len(values) == 1:
