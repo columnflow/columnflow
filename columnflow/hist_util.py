@@ -619,7 +619,7 @@ def insert_axis_values(
     h: hist.Hist,
     axis_name: str,
     axis_value: Any,
-    values: np.ndarray,
+    values: np.ndarray | hist.Hist,
     variances: np.ndarray | None = None,
 ) -> None:
     """
@@ -628,11 +628,21 @@ def insert_axis_values(
     :param h: The histogram to insert values into.
     :param axis_name: The name of the axis to insert values for.
     :param axis_value: The value of the axis to insert values for.
-    :param values: The values to insert.
-    :param variances: The variances to insert. If *None*, no variances are inserted.
+    :param values: The values to insert. Can be an array or a histogram.
+    :param variances: The variances to insert. If *None* and *values* is a histogram, its variances are used.
+        Otherwise, no variances are inserted.
     """
+    import hist
+
+    # if values is a histogram, extract actual values and variances
+    hist_has_variances = "variance" in h.view().dtype.names
+    if isinstance(values, hist.Hist):
+        if variances is None and hist_has_variances:
+            variances = values.view().variance
+        values = values.view().value
+
     # check if variances are provided and can be inserted
-    if "variance" not in h.view().dtype.names and variances is not None:
+    if variances is not None and not hist_has_variances:
         raise ValueError("histogram does not store variances (weights), but variances were provided for insertion")
 
     # get the axis and it's index
