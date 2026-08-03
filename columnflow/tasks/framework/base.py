@@ -501,9 +501,11 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             if multi_strategy == "first":
                 return all_object_names[container[0]]
             if multi_strategy == "union":
-                return list(set.union(*map(set, all_object_names.values())))
+                return law.util.make_unique(law.util.flatten(all_object_names.values()))
             if multi_strategy == "intersection":
-                return list(set.intersection(*map(set, all_object_names.values())))
+                all_names = law.util.make_unique(law.util.flatten(all_object_names.values()))
+                intersection = set.intersection(*map(set, all_object_names.values()))
+                return sorted(intersection, key=all_names.index)
             # "same", so check that values are identical
             first = all_object_names[container[0]]
             if not all(all_object_names[c] == first for c in container[1:]):
