@@ -678,8 +678,8 @@ def prepare_stack_plot_config(
                 "show_rate_change": show_syst_rate_change,
             },
             "ratio_kwargs": {
-                "syst_hists": mc_syst_hists,
-                "shift_insts": shift_insts,
+                "syst_hists": _mc_syst_hists,
+                "shift_insts": _shift_insts,
                 "norm": h_mc.values(),
                 "hatch_style": hatch_style,
             },
