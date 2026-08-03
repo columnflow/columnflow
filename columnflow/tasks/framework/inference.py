@@ -42,7 +42,7 @@ class InferenceModelUser(
     )
 
     _combined_config_data_attr = "_workflow_cached_combined_config_data"
-    _transfer_params_to_inst = [_combined_config_data_attr]
+    transfer_params_to_inst = {_combined_config_data_attr}
 
     @classmethod
     def resolve_param_values_post_init(cls, params: dict[str, Any]) -> dict[str, Any]:
