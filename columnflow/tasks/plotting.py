@@ -238,6 +238,14 @@ class PlotVariablesBase(_PlotVariablesBase):
         # hook to update histograms right before plotting
         return hists
 
+    def update_shifts_before_plotting(
+        self,
+        shifts: list[od.Shift],
+        hists: MergedHistDicts,
+    ) -> list[od.Shift]:
+        # hook to update shifts right before plotting
+        return shifts
+
     @property
     def config_inst(self):
         return self.config_insts[0]
@@ -451,8 +459,9 @@ class PlotVariablesBase(_PlotVariablesBase):
                 else:
                     hists[hist_key] = hists[hist_key][self.config_inst]
 
-            # update histograms before being passed to plot function
+            # update histograms and shifts before being passed to plot function
             hists = self.update_hists_before_plotting(hists)
+            plot_shifts = self.update_shifts_before_plotting(plot_shifts, hists)
 
             # copy process instances once so that their auxiliary data fields can be used as a storage for
             # process-specific plot parameters later on in plot scripts without affecting the original instances
@@ -652,17 +661,17 @@ class PlotVariablesBaseMultiShifts(
         return self.reqs.MergeShiftedHistograms.req_different_branching(self, **kwargs)
 
     def create_branch_map(self) -> list[DotDict]:
-        branch_values = super().create_branch_map()
+        branch_data = super().create_branch_map()
 
         if not self.combine_shifts:
-            branch_values = [
+            branch_data = [
                 {**d, "shift_source": source}
-                for d in branch_values
+                for d in branch_data
                 for source in self.shift_sources
                 if source != "nominal"
             ]
 
-        return branch_values
+        return branch_data
 
     def store_parts(self) -> law.util.InsertableDict:
         parts = super().store_parts()
