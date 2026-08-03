@@ -9,7 +9,7 @@ from __future__ import annotations
 import itertools
 import functools
 import threading
-from collections import defaultdict
+import collections
 from abc import abstractmethod
 
 import law
@@ -264,7 +264,7 @@ class PlotVariablesBase(_PlotVariablesBase):
         reqs = self.requires() or self.as_workflow().requires().merged_hists
 
         config_process_map = {config_inst: {} for config_inst in self.config_insts}
-        process_shift_map = defaultdict(set)
+        process_shift_map = collections.defaultdict(set)
 
         for i, config_inst in enumerate(self.config_insts):
             process_insts = [config_inst.get_process(p) for p in self.processes[i]]

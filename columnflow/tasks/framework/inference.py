@@ -133,7 +133,7 @@ class InferenceModelUser(
                 "categories": set(),
                 # plain set of names of real data datasets
                 "data_datasets": set(),
-                # per mc dataset name, the set of shift sources and the names processes to be extracted from them
+                # per mc dataset name, the set of shift sources and the names of processes to be extracted from them
                 "mc_datasets": {},
             }
             for config_inst in config_insts
@@ -160,7 +160,7 @@ class InferenceModelUser(
                 if not cat_obj.data_from_processes or any(proc_obj.is_dynamic for proc_obj in cat_obj.processes):
                     data["data_datasets"].update(cls.get_data_datasets(config_inst, cat_obj))
 
-                # mc datasets over all process objects
+                # mc datasets over all process objects, but only if
                 #   - the process is not dynamic
                 for proc_obj in cat_obj.processes:
                     mc_datasets = cls.get_mc_datasets(config_inst, proc_obj)
