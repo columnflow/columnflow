@@ -19,19 +19,25 @@ ak = maybe_import("awkward")
 
 logger = law.logger.get_logger(__name__)
 
-_keep_gen_part_fields = ["pt", "eta", "phi", "mass", "pdgId"]
+_keep_gen_part_fields = {
+    "pt": np.float32,
+    "eta": np.float32,
+    "phi": np.float32,
+    "mass": np.float32,
+    "pdgId": np.int32,
+}
 
 
 # helper to transform generator particles by dropping / adding fields
 def transform_gen_part(gen_parts: ak.Array, *, depth_limit: int, optional: bool = False) -> ak.Array:
     # reduce down to relevant fields
     arr = {}
-    for f in _keep_gen_part_fields:
+    for f, dtype in _keep_gen_part_fields.items():
         if optional:
             if (v := getattr(gen_parts, f, UNSET)) is not UNSET:
-                arr[f] = v
+                arr[f] = ak.values_astype(v, dtype)
         else:
-            arr[f] = getattr(gen_parts, f)
+            arr[f] = ak.values_astype(getattr(gen_parts, f), dtype)
     arr = ak.zip(arr, depth_limit=depth_limit)
 
     # remove parameters and add Lorentz vector behavior

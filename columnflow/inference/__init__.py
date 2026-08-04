@@ -12,6 +12,7 @@ import law
 import order as od
 import yaml
 
+from columnflow.inference.parameter import ParameterType
 from columnflow.inference.transformation import ParameterTransformation, ParameterTransformations
 from columnflow.types import Generator, Callable, TextIO, Sequence, Any, Hashable, Type, T
 from columnflow.util import (
@@ -22,46 +23,6 @@ from columnflow.util import (
 logger = law.logger.get_logger(__name__)
 
 default_dataset = law.config.get_expanded("analysis", "default_dataset")
-
-
-class ParameterType(StrEnum):
-    """
-    Parameter type flag.
-
-    :cvar rate_gauss: Gaussian rate parameter.
-    :cvar rate_uniform: Uniform rate parameter.
-    :cvar rate_unconstrained: Unconstrained rate parameter.
-    :cvar shape: Shape parameter.
-    """
-
-    rate_gauss = "rate_gauss"
-    rate_uniform = "rate_uniform"
-    rate_unconstrained = "rate_unconstrained"
-    shape = "shape"
-
-    @property
-    def is_rate(self) -> bool:
-        """
-        Checks if the parameter type is a rate type.
-
-        :returns: *True* if the parameter type is a rate type, *False* otherwise.
-        """
-        return self in {
-            self.rate_gauss,
-            self.rate_uniform,
-            self.rate_unconstrained,
-        }
-
-    @property
-    def is_shape(self) -> bool:
-        """
-        Checks if the parameter type is a shape type.
-
-        :returns: *True* if the parameter type is a shape type, *False* otherwise.
-        """
-        return self in {
-            self.shape,
-        }
 
 
 class FlowStrategy(StrEnum):
@@ -370,19 +331,31 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         Returns a dictionary representing a (nuisance) parameter, forwarding all arguments.
 
         :param name: The name of the parameter in the model.
-        :param type: A :py:class:`ParameterType` instance describing the type of this parameter.
+        :param type: A :py:class:`ParameterType` instance describing the initial (!) type of this parameter. Note that
+            *transformations* might change the type of the parameter.
         :param transformations: A sequence of :py:class:`ParameterTransformation` instances describing transformations
             to be applied to the effect of this parameter.
         :param config_data: Dictionary mapping names of :py:class:`order.Config` objects to dictionaries following the
             :py:meth:`parameter_config_spec` that wrap settings like corresponding shift source in that config.
         :param effect: An arbitrary object describing the effect of the parameter (e.g. float for symmetric rate
-            effects, 2-tuple for down/up variation, etc).
+            effects, 2-tuple for down/up variation, etc). Note that *transformations* might change the effect of the
+            parameter, or even remove it completely (e.g. when the type is converted to :py:attr:`ParameterType.shape`).
         :param effect_precision: The precision of reported effects.
         :returns: A dictionary representing the parameter.
         """
+        # complain when type is shape but a non-trivial effect was given
+        _type = type if isinstance(type, ParameterType) else ParameterType[type]
+        if type.is_shape:
+            if effect not in {None, 1}:
+                raise ValueError(
+                    f"parameter '{name}' has type '{_type}' but a non-trivial effect ({effect}) was given, which is "
+                    "not supported",
+                )
+            effect = None
+
         return DotDict([
             ("name", str(name)),
-            ("type", type if isinstance(type, ParameterType) else ParameterType[type]),
+            ("type", _type),
             ("transformations", ParameterTransformations(transformations)),
             ("config_data", (
                 {k: cls.parameter_config_spec(**v) for k, v in config_data.items()}
