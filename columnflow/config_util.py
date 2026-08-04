@@ -390,7 +390,10 @@ def group_shifts(
     return nominal, dict(grouped)
 
 
-def expand_shift_sources(shifts: Sequence[str | od.Shift] | set[str | od.Shift]) -> list[str]:
+def expand_shift_sources(
+    shifts: Sequence[str | od.Shift] | set[str | od.Shift],
+    down_first: bool = False,
+) -> list[str]:
     """
     Given a sequence *shifts* containing either shift names (``<source>_<direction>``) or shift
     sources, the latter ones are expanded with both possible directions and returned in a common
@@ -402,7 +405,7 @@ def expand_shift_sources(shifts: Sequence[str | od.Shift] | set[str | od.Shift])
         # -> ["jes_up", "jes_down", "jer_up", "nominal"]
     """
     _shifts = []
-    for shift in shifts:
+    for shift in law.util.make_list(shifts):
         if isinstance(shift, od.Shift):
             shift = shift.name
         if shift == od.Shift.NOMINAL:
@@ -414,7 +417,7 @@ def expand_shift_sources(shifts: Sequence[str | od.Shift] | set[str | od.Shift])
             except ValueError as e:
                 if not isinstance(shift, str):
                     raise e
-                _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.DOWN}"])
+                _shifts.extend([f"{shift}_{od.Shift.UP}", f"{shift}_{od.Shift.DOWN}"][::(-1 if down_first else 1)])
 
     return law.util.make_unique(_shifts)
 
