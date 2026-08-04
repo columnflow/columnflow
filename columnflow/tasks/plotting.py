@@ -499,30 +499,9 @@ class PlotVariablesBase(_PlotVariablesBase):
                 else:
                     hists[hist_key] = hists[hist_key][self.config_inst]
 
-                # axis selections and reductions
-                _hists = OrderedDict()
-                for process_inst in hists[hist_key].keys():
-                    h = hists[hist_key][process_inst]
-
-                    # determine expected shifts from intersection of requested shifts and those known for the process
-                    process_shifts = (
-                        process_shift_map[process_inst.name]
-                        if process_inst.name in process_shift_map
-                        else {"nominal"}
-                    )
-                    expected_shifts = (process_shifts & plot_shift_names) or (process_shifts & {"nominal"})
-                    if not expected_shifts:
-                        raise Exception(f"no shifts to plot found for process {process_inst.name}")
-
-                    # select shifts
-                    h = h[{"shift": [hist.loc(s_name) for s_name in expected_shifts if s_name in h.axes["shift"]]}]
-
-                    # select and reduce categories
-                    h = select_category_bins(h, category_inst, use_leaves=True, prefer_parents=True, reduce=True)
-
-                    # store
-                    _hists[process_inst] = h
-                hists[hist_key] = _hists
+                # update histograms and shifts before being passed to plot function
+                hists = self.update_hists_before_plotting(hists)
+                plot_shifts = self.update_shifts_before_plotting(plot_shifts, hists)
 
             # copy process instances once so that their auxiliary data fields can be used as a storage for
             # process-specific plot parameters later on in plot scripts without affecting the original instances

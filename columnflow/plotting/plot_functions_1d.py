@@ -191,7 +191,7 @@ def plot_variable_variants(
     hists = remove_residual_axis(hists, "shift")
 
     variable_inst = variable_insts[0]
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
     if kwargs.get("remove_negative", None):
         hists = remove_negative_contributions(hists)
     if density:
@@ -203,6 +203,7 @@ def plot_variable_variants(
     selector_step_labels = config_inst.x("selector_step_labels", {})
 
     # add hists
+    
     for label, h in hists.items():
         norm = sum(h.values()) if shape_norm else 1
         plot_config[f"hist_{label}"] = plot_cfg = {
