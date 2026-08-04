@@ -621,6 +621,7 @@ def insert_axis_values(
     axis_value: Any,
     values: np.ndarray | hist.Hist,
     variances: np.ndarray | None = None,
+    flow: bool | None = None,
 ) -> None:
     """
     Inserts (in-place) values and optionally variances into a histogram *h* for a given *axis_name* and *axis_value*.
@@ -631,15 +632,21 @@ def insert_axis_values(
     :param values: The values to insert. Can be an array or a histogram.
     :param variances: The variances to insert. If *None* and *values* is a histogram, its variances are used.
         Otherwise, no variances are inserted.
+    :param flow: Whether to use flow bins when inserting values. If *True*, the length of inserted values should fit
+        accordingly. When *None*, the default is *True* in case *values* is a histogram and *False* otherwise.
     """
     import hist
 
     # if values is a histogram, extract actual values and variances
     hist_has_variances = "variance" in h.view().dtype.names
     if isinstance(values, hist.Hist):
+        if flow is None:
+            flow = True
         if variances is None and hist_has_variances:
-            variances = values.view().variance
-        values = values.view().value
+            variances = values.view(flow=flow).variance
+        values = values.view(flow=flow).value
+    elif flow is None:
+        flow = False
 
     # check if variances are provided and can be inserted
     if variances is not None and not hist_has_variances:
@@ -666,7 +673,7 @@ def insert_axis_values(
     )
 
     # insert values
-    view = h.view()
+    view = h.view(flow=flow)
     view.value[insert_at] = values
     if variances is not None:
         view.variance[insert_at] = variances
