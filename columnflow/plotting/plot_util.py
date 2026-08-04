@@ -531,6 +531,9 @@ def prepare_stack_plot_config(
     merge_stat_errors: bool = False,
     show_syst_rate_change: bool = False,
     ratio_mark_out_of_range: bool = True,
+    stat_error_label: str = "MC stat. unc.",
+    syst_error_label: str = "MC syst. unc.",
+    combined_error_label: str = "MC syst. + stat. unc.",
     density: bool = False,
     **kwargs,
 ) -> OrderedDict:
@@ -631,7 +634,7 @@ def prepare_stack_plot_config(
             "hist": h_mc,
             "kwargs": {
                 "norm": mc_norm,
-                "label": "MC stat. unc.",
+                "label": stat_error_label,
                 "hatch_style": "black",
             },
             "ratio_kwargs": {
@@ -647,7 +650,7 @@ def prepare_stack_plot_config(
         # when merging stat and syst errors, add a fake shift inst and extend shift axes of histograms to include it
         _shift_insts = shift_insts
         _mc_syst_hists = mc_syst_hists
-        label = "MC syst. unc."
+        label = syst_error_label
         hatch_style = "green_backwards"
         if merge_stat_errors:
             _shift_insts = [
@@ -663,7 +666,7 @@ def prepare_stack_plot_config(
                 insert_axis_values(h, "shift", "mc_stat_up", nom_view.value + stat_err)
                 insert_axis_values(h, "shift", "mc_stat_down", nom_view.value - stat_err)
                 _mc_syst_hists.append(h)
-            label = "MC unc."
+            label = combined_error_label
             hatch_style = "black"
         # add plot config
         plot_config["mc_syst_unc"] = {

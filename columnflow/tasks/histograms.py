@@ -205,7 +205,7 @@ class CreateHistograms(_CreateHistograms):
                 {variable_inst.expression}
                 if isinstance(variable_inst.expression, str)
                 else set()
-            ) | set(
+            ) | law.util.make_set(
                 # read requested input columns if defined
                 variable_inst.x("inputs", []),
             ))
