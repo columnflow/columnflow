@@ -272,4 +272,3 @@ class ParameterTransformations(tuple):
         :returns: *True* if any transformation changes the nominal histogram, *False* otherwise.
         """
         return any(t.changes_nominal for t in self)
-
