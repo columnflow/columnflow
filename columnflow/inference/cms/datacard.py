@@ -70,6 +70,7 @@ class DatacardWriter(object):
             Configurable via *asymmetrize_if_large_threshold*.
         - :py:attr:`ParameterTransformation.normalize`: Normalizes shape variations such that their integrals match that
             of the nominal shape.
+        - :py:attr:`ParameterTransformation.centralize`: # TODO: not yet implemented
         - :py:attr:`ParameterTransformation.envelope`: Takes the bin-wise maximum in each direction of the up and down
             variations of shape-type parameters and constructs new shapes.
         - :py:attr:`ParameterTransformation.envelope_if_one_sided`: Same as above, but only in bins where up and down
@@ -406,11 +407,6 @@ class DatacardWriter(object):
                                 # skip one-sided effects
                                 continue
                             effect = tuple(((2.0 - e) if i == flip_index else e) for i, e in enumerate(effect))
-
-                        else:
-                            raise ValueError(
-                                f"unsupported transormation '{trafo}' for rate-type parameter '{param_name}'",
-                            )
 
                 elif param_obj.type.is_shape:
                     # apply transformations one by one
@@ -766,6 +762,7 @@ class DatacardWriter(object):
                             if param_obj.transformations[0] == ParameterTransformation.effect_from_shape_if_flat:
                                 # check if flatness criteria are met
                                 for h in [h_down, h_up]:
+                                    # !!! TODO: bug! the relative difference should be flat, not the actual shape
                                     values = h.view().value
                                     mean, std = values.mean(), values.std()
                                     max_rel_outlier = safe_div(max(abs(values - mean)), mean)
@@ -813,7 +810,6 @@ class DatacardWriter(object):
                             h_up *= safe_div(n, u)
 
                         elif trafo in {ParameterTransformation.envelope, ParameterTransformation.envelope_if_one_sided}:
-                            d, u = integral(h_down), integral(h_up)
                             v_nom = h_nom.view()
                             v_down = h_down.view()
                             v_up = h_up.view()
@@ -850,11 +846,6 @@ class DatacardWriter(object):
                             v_down.value[down_mask] = v_nom.value[down_mask] - abs_diffs_down[down_mask]
                             v_down.value[up_mask] = v_nom.value[up_mask] - abs_diffs_up[up_mask]
                             v_down.variance[up_mask] = v_up.variance[up_mask]
-
-                        else:
-                            raise ValueError(
-                                f"unsupported transormation '{trafo}' for shape-type parameter '{param_obj.name}'",
-                            )
 
                     # custom hook to modify the shapes
                     h_nom, h_down, h_up = self.modify_parameter_shape(
