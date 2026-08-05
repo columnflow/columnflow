@@ -2781,7 +2781,12 @@ class ChunkedIOMixin(ConfigTask):
         return filter_configs
 
     def _get_nano_filter_config(self, target: law.FileSystemFileTarget) -> ChunkedIOHandler.FilterConfig | None:
-        if (nano_filter_config := self.config_inst.x("nano_filter_config", None)) is None:
+        if not callable(get_nano_filter_config := self.config_inst.x("get_nano_filter_config", None)):
+            return None
+
+        # evaluate the function to get the filter config
+        nano_filter_config = get_nano_filter_config(self, target)
+        if nano_filter_config is None:
             return None
 
         if not isinstance(nano_filter_config, ChunkedIOHandler.FilterConfig):

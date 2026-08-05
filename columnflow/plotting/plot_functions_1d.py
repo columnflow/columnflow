@@ -77,7 +77,8 @@ def plot_variable_stack(
     # optionally print process yields after blinding threshold, negative contribution removal and process scaling
     if print_yields:
         print("visible yields:")
-        for proc_inst, h in hists.items():
+        for proc_inst in sorted(hists.keys(), key=lambda proc_inst: proc_inst.name):
+            h = hists[proc_inst]
             print(f"  {proc_inst.name}: {remove_residual_axis_single(h, 'shift', select_value='nominal').sum().value}")
         print("")
 
