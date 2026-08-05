@@ -676,6 +676,7 @@ EOF
                 micromamba install \
                     gcc \
                     libgcc \
+                    gxx \
                     bash \
                     zsh \
                     "python=${CF_PYTHON_VERSION}" \
