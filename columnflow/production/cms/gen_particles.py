@@ -290,10 +290,22 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
         - ``tau_w_children``: list of the decay products from W boson decays from tau lepton decays, with the first
             entry being the down-type quark or charged lepton, the second entry being the up-type quark or neutrino, and
             additional decay products (e.g photons) are appended afterwards
+        - ``decay_type``: integer value describing the following cases:
+            - ee: 1
+            - mm: 2
+            - tt:
+                - ee: 113
+                - em: 123
+                - eh: 133
+                - me: 213
+                - mm: 223
+                - mh: 233
+                - he: 313
+                - hm: 323
+                - hh: 333
     """
     # note: in about 4% of DY events, the Z/g boson is missing, so this lookup starts at lepton level, see
-    # -> https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
-    # -> https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
+    # https://indico.cern.ch/event/1495537/contributions/6359516/attachments/3014424/5315938/HLepRare_25.02.14.pdf
 
     # helper to extract unique values
     unique_set = lambda a: set(np.unique(ak.flatten(a, axis=None)))
@@ -363,6 +375,27 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
         axis=1,
     )
 
+    # construct the decay type integer
+    first_lep_id = abs(lep.pdgId[:, 0])
+    t_mask = first_lep_id == 15
+    min_tau_1_w_children_id = ak.min(abs(tau_w_children.pdgId[:, 0]), axis=1)
+    min_tau_2_w_children_id = ak.min(abs(tau_w_children.pdgId[:, 1]), axis=1)
+    decay_type = (
+        np.zeros(len(events), np.uint8) +
+        # add values for overall z decay: e=1, m=2, t=3
+        ak.where(first_lep_id == 11, 1, 0) +
+        ak.where(first_lep_id == 13, 2, 0) +
+        ak.where(t_mask, 3, 0) +
+        # add values for the first tau decay into: e=100, m=200, h=300
+        ak.where(t_mask & (min_tau_1_w_children_id == 11), 100, 0) +
+        ak.where(t_mask & (min_tau_1_w_children_id == 13), 200, 0) +
+        ak.where(t_mask & (min_tau_1_w_children_id > 16), 300, 0) +
+        # add values for the second tau decay into: e=10, m=20, h=30
+        ak.where(t_mask & (min_tau_2_w_children_id == 11), 10, 0) +
+        ak.where(t_mask & (min_tau_2_w_children_id == 13), 20, 0) +
+        ak.where(t_mask & (min_tau_2_w_children_id > 16), 30, 0)
+    )
+
     # zip into a single array with named fields
     gen_dy = ak.zip(
         {
@@ -370,6 +403,7 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
             "lep": transform_gen_part(lep, depth_limit=2),
             "tau_children": transform_gen_part(tau_nuw, depth_limit=3),
             "tau_w_children": transform_gen_part(tau_w_children, depth_limit=3),
+            "decay_type": ak.values_astype(decay_type, np.uint8),
         },
         depth_limit=1,
     )
