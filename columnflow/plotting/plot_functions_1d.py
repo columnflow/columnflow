@@ -53,6 +53,7 @@ def plot_variable_stack(
     process_settings: dict | None = None,
     variable_settings: dict | None = None,
     print_yields: bool = True,
+    ratio_mode: str = "data_mc",
     **kwargs,
 ) -> plt.Figure:
     variable_inst = variable_insts[0]
@@ -104,6 +105,7 @@ def plot_variable_stack(
         shape_norm=shape_norm,
         shift_insts=shift_insts,
         density=density,
+        ratio_mode=ratio_mode,
         **kwargs,
     )
 
@@ -119,6 +121,13 @@ def plot_variable_stack(
     # additional, plot function specific changes
     if shape_norm:
         default_style_config["ax_cfg"]["ylabel"] = "Normalized entries"
+    # stack fraction
+    if ratio_mode == "stack_fraction":
+        default_style_config["rax_cfg"].update({
+            "ylabel": "Process fraction",
+            "ylim": (0.0, 1.0),
+            "yscale": "linear",
+        })
     style_config = law.util.merge_dicts(
         default_style_config,
         process_style_config,
@@ -126,6 +135,7 @@ def plot_variable_stack(
         style_config,
         deep=True,
     )
+    
 
     return plot_all(plot_config, style_config, **kwargs)
 

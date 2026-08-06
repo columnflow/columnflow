@@ -535,6 +535,7 @@ def prepare_stack_plot_config(
     syst_error_label: str = "MC syst. unc.",
     combined_error_label: str = "MC syst. + stat. unc.",
     density: bool = False,
+    ratio_mode: Literal["data_mc", "stack_fraction"] = "data_mc",
     **kwargs,
 ) -> OrderedDict:
     """
@@ -543,7 +544,11 @@ def prepare_stack_plot_config(
     data entrys with errorbars.
     """
     import hist
-
+    if ratio_mode not in {"data_mc", "stack_fraction"}:
+        raise ValueError(
+            f"unknown ratio mode '{ratio_mode}', expected one of "
+            "'data_mc' or 'stack_fraction'",
+        )
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     mc_syst_hists = []
@@ -573,6 +578,21 @@ def prepare_stack_plot_config(
             mc_labels.append(process_inst.label)
             if "shift" in h.axes.name and h.axes["shift"].size > 1:
                 mc_syst_hists.append(h)
+    
+# Warn about negative bins before constructing the fractional stack.
+    if ratio_mode == "stack_fraction":
+        negative_processes = [
+            label
+            for label, h in zip(mc_labels, mc_hists)
+            if np.any(h.values() < 0)
+        ]
+
+        if negative_processes:
+            logger.warning(
+                "stack-fraction panel contains negative bins for processes "
+                f"{negative_processes}; fractions can be negative or exceed one. "
+                "Consider enabling 'remove_negative'",
+            )
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:
@@ -600,6 +620,39 @@ def prepare_stack_plot_config(
                 "linewidth": [(0 if c is None else 1) for c in mc_colors],
             },
         }
+        if ratio_mode == "stack_fraction":
+            denominator = h_mc.values()
+
+            # A fractional composition is undefined when the total
+            # stacked yield is zero or non-finite. Such bins are drawn
+            # with zero-height components.
+            denominator = np.where(
+                np.isfinite(denominator) & (denominator != 0),
+                denominator,
+                np.inf,
+            )
+
+            # draw_stack distinguishes:
+            #
+            #   norm.shape == (n_hists, n_bins):
+            #       one denominator array per histogram
+            #
+            # Passing the explicit 2D array also avoids ambiguity when
+            # n_hists happens to equal n_bins.
+            fraction_norm = np.broadcast_to(
+                denominator,
+                (len(h_mc_stack), *denominator.shape),
+            )
+
+            plot_config["mc_stack"]["ratio_kwargs"] = {
+                "norm": fraction_norm,
+                "color": mc_colors,
+                "edgecolor": mc_edgecolors,
+                "linewidth": [
+                    0 if color is None else 1
+                    for color in mc_colors
+                ],
+            }
 
     # draw lines
     for i, h in enumerate(line_hists):
@@ -629,19 +682,20 @@ def prepare_stack_plot_config(
     draw_stat_errors = bool(not hide_stat_errors and h_mc_stack is not None)
     if draw_stat_errors and not merge_stat_errors:
         mc_norm = shape_norm_func(h_mc, shape_norm)
-        plot_config["mc_stat_unc"] = {
-            "method": "draw_stat_error_bands",
-            "hist": h_mc,
-            "kwargs": {
-                "norm": mc_norm,
-                "label": stat_error_label,
-                "hatch_style": "black",
-            },
-            "ratio_kwargs": {
-                "norm": h_mc.values(),
-                "hatch_style": "black",
-            },
-        }
+        if ratio_mode == "data_mc":
+            plot_config["mc_stat_unc"] = {
+                "method": "draw_stat_error_bands",
+                "hist": h_mc,
+                "kwargs": {
+                    "norm": mc_norm,
+                    "label": stat_error_label,
+                    "hatch_style": "black",
+                },
+                "ratio_kwargs": {
+                    "norm": h_mc.values(),
+                    "hatch_style": "black",
+                },
+            }
 
     # draw systematic error for stack
     draw_syst_errors = bool(mc_syst_hists and h_mc_stack is not None)
@@ -669,24 +723,25 @@ def prepare_stack_plot_config(
             label = combined_error_label
             hatch_style = "black"
         # add plot config
-        plot_config["mc_syst_unc"] = {
-            "method": "draw_syst_error_bands",
-            "hist": h_mc,
-            "kwargs": {
-                "syst_hists": _mc_syst_hists,
-                "shift_insts": _shift_insts,
-                "norm": mc_norm,
-                "label": label,
-                "hatch_style": hatch_style,
-                "show_rate_change": show_syst_rate_change,
-            },
-            "ratio_kwargs": {
-                "syst_hists": _mc_syst_hists,
-                "shift_insts": _shift_insts,
-                "norm": h_mc.values(),
-                "hatch_style": hatch_style,
-            },
-        }
+        if ratio_mode == "data_mc":
+            plot_config["mc_syst_unc"] = {
+                "method": "draw_syst_error_bands",
+                "hist": h_mc,
+                "kwargs": {
+                    "syst_hists": _mc_syst_hists,
+                    "shift_insts": _shift_insts,
+                    "norm": mc_norm,
+                    "label": label,
+                    "hatch_style": hatch_style,
+                    "show_rate_change": show_syst_rate_change,
+                },
+                "ratio_kwargs": {
+                    "syst_hists": _mc_syst_hists,
+                    "shift_insts": _shift_insts,
+                    "norm": h_mc.values(),
+                    "hatch_style": hatch_style,
+                },
+            }
 
     # draw data
     if data_hists:
@@ -702,7 +757,7 @@ def prepare_stack_plot_config(
             },
         }
 
-        if h_mc is not None:
+        if h_mc is not None and ratio_mode == "data_mc":
             plot_config["data"]["ratio_kwargs"] = {
                 "norm": h_mc.values() * data_norm / mc_norm,
                 "error_type": "poisson_unweighted",
