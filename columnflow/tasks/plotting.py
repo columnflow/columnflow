@@ -665,7 +665,7 @@ class PlotVariablesBaseMultiShifts(
 
         if not self.combine_shifts:
             branch_data = [
-                {**d, "shift_source": source}
+                DotDict.wrap({**d, "shift_source": source})
                 for d in branch_data
                 for source in self.shift_sources
                 if source != "nominal"

@@ -677,6 +677,7 @@ EOF
                     gcc \
                     libgcc \
                     gxx \
+                    libstdcxx-ng \
                     bash \
                     zsh \
                     "python=${CF_PYTHON_VERSION}" \
