@@ -11,10 +11,18 @@ __all__ = []
 import os
 import re
 import copy
+import json
+import base64
+import zlib
 import pathlib
 import dataclasses
+import collections
 
-from columnflow.types import ClassVar, Generator
+from columnflow.util import maybe_import
+from columnflow.types import TYPE_CHECKING, ClassVar, Generator, Literal
+
+if TYPE_CHECKING:
+    ak = maybe_import("awkward")
 
 
 #: Default root path to CAT metadata.
@@ -223,3 +231,148 @@ class CMSDatasetInfo:
         attrs = copy.deepcopy(self.__dict__)
         attrs.update(kwargs)
         return self.__class__(**attrs)
+
+
+# pdg id's mapped to particle names
+particle_names = {
+    2212: "p+",
+    1: "d",
+    2: "u",
+    3: "s",
+    4: "c",
+    5: "b",
+    6: "t",
+    11: "e-",
+    12: "ve",
+    13: "mu-",
+    14: "vmu",
+    15: "tau-",
+    16: "vtau",
+    21: "g",
+    22: "gamma",
+    23: "Z",
+    24: "W+",
+    25: "h",
+    111: "pi0",
+    211: "pi+",
+    130: "K0L",
+    310: "K0S",
+    311: "K0",
+    321: "K+",
+    411: "D+",
+    421: "D0",
+    431: "Ds+",
+    511: "B0",
+    521: "B+",
+    531: "Bs0",
+}
+
+# dynamically add "bar" for quarks
+for p in range(1, 7):
+    particle_names[-p] = f"{particle_names[p]}bar"
+# dynamically flip signs for leptons
+for p in [11, 13, 15]:
+    particle_names[-p] = f"{particle_names[p][:-1]}+"
+# just repeat neutrinos for anti-neutrinos
+for p in [12, 14, 16]:
+    particle_names[-p] = particle_names[p]
+# change signs for W and mesons ending in "+"
+for p, name in list(particle_names.items()):
+    if p >= 24 and name.endswith("+"):
+        particle_names[-p] = f"{name[:-1]}-"
+
+
+def visualize_gen_decay(gen_part: ak.Array, output_type: Literal["text", "link"] = "link") -> str:
+    """
+    Given a single generator particle (in coffea nano format), this function builds a graph representation of the
+    particle and its decay tree, and returns it either as a mermaid.live link or as a text representation of the graph.
+
+    :param gen_part: A single generator particle in coffea nano format.
+    :param output_type: The type of output to return. Either "text" for a text representation of the graph, or "link"
+        for a mermaid.live link.
+    :return: The output string.
+    """
+    if output_type not in (known_output_types := {"text", "link"}):
+        raise ValueError(f"invalid output_type '{output_type}', expected one of {known_output_types}")
+
+    last_num = -1
+
+    @dataclasses.dataclass
+    class Node:
+        pdg_id: int
+        status: int
+        pt: float | None = None
+        eta: float | None = None
+        children: list[Node] = dataclasses.field(default_factory=list)
+        _num: int | None = None
+        _float_digits: int = 3
+
+        def __post_init__(self) -> None:
+            nonlocal last_num
+            self._num = last_num = last_num + 1
+
+        @property
+        def name(self) -> str:
+            return f"node{self._num}"
+
+        @property
+        def label(self) -> str:
+            lines = []
+            if self.pdg_id in particle_names:
+                heading = particle_names[self.pdg_id]
+                lines.append(f"id={self.pdg_id}, status={self.status}")
+            else:
+                heading = str(self.pdg_id)
+                lines.append(f"status={self.status}")
+            kin = []
+            if self.pt is not None:
+                kin.append(f"pt={self.pt:.{self._float_digits}f}")
+            if self.eta is not None:
+                kin.append(f"eta={self.eta:.{self._float_digits}f}")
+            if kin:
+                lines.append(", ".join(kin))
+            return f"{heading}<br>{'<br>'.join('<small>' + line + '</small>' for line in lines)}"
+
+    # build the graph representation
+    root = Node(pdg_id=gen_part.pdgId, status=gen_part.status, pt=gen_part.pt, eta=gen_part.eta)
+    q = collections.deque([(root, child) for child in gen_part.children])
+    while q:
+        parent, child = q.popleft()
+        node = Node(pdg_id=child.pdgId, status=child.status, pt=child.pt, eta=child.eta)
+        if parent is not None:
+            parent.children.append(node)
+        q.extendleft([(node, c) for c in child.children][::-1])
+
+    # flatten into node name-label pairs and relation strings
+    labels = {}
+    relations = {}
+    q = collections.deque([root])
+    while q:
+        node = q.popleft()
+        labels[node.name] = node.label
+        relations[node.name] = [c.name for c in node.children]
+        q.extendleft(node.children[::-1])
+
+    # convert to mermaid graph
+    graph = ["graph TD"]
+    for name, label in labels.items():
+        graph.append(f"    {name}(\"{label}\")")
+    for parent_name, child_names in relations.items():
+        for child_name in child_names:
+            graph.append(f"    {parent_name} --> {child_name}")
+    graph_text = "\n".join(graph)
+
+    # handle output
+    if output_type == "text":
+        return graph_text
+
+    # build a mermaid.live link
+    # for that, first encode the graph text
+    data = json.dumps({
+        "code": graph_text,
+        "mermaid": json.dumps({"theme": "default"}),
+    })
+    encoded = base64.urlsafe_b64encode(zlib.compress(data.encode("utf-8"), level=9)).decode("utf-8")
+
+    url = f"https://mermaid.live/edit#pako:{encoded}"
+    return url
