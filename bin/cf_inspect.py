@@ -12,11 +12,12 @@ import os
 import json
 import pickle
 
-import awkward as ak
-
 from columnflow.columnar_util import update_ak_array, ChunkedIOHandler
-from columnflow.util import ipython_shell
-from columnflow.types import Any
+from columnflow.util import ipython_shell, maybe_import
+from columnflow.types import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    ak = maybe_import("awkward")
 
 
 def _load_json(fname: str, **kwargs) -> Any:
@@ -30,6 +31,7 @@ def _load_pickle(fname: str, **kwargs) -> Any:
 
 
 def _load_parquet(fname: str, **kwargs) -> ak.Array:
+    import awkward as ak
     return ak.from_parquet(fname)
 
 

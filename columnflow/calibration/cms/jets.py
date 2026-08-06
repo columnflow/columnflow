@@ -661,7 +661,7 @@ def jec_init(self: Calibrator, **kwargs) -> None:
 
     # add MET variables
     if self.propagate_met:
-        self.uses.add(f"{self.raw_met_name}.{{pt,phi}}")
+        self.uses.add(f"{{{self.raw_met_name},{self.met_name}}}.{{pt,phi}}")
         self.produces.add(f"{self.met_name}.{{pt,phi}}")
 
         # add shifted MET variables
