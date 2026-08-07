@@ -233,55 +233,6 @@ class CMSDatasetInfo:
         return self.__class__(**attrs)
 
 
-# pdg id's mapped to particle names
-particle_names = {
-    2212: "p+",
-    1: "d",
-    2: "u",
-    3: "s",
-    4: "c",
-    5: "b",
-    6: "t",
-    11: "e-",
-    12: "ve",
-    13: "mu-",
-    14: "vmu",
-    15: "tau-",
-    16: "vtau",
-    21: "g",
-    22: "gamma",
-    23: "Z",
-    24: "W+",
-    25: "h",
-    111: "pi0",
-    211: "pi+",
-    130: "K0L",
-    310: "K0S",
-    311: "K0",
-    321: "K+",
-    411: "D+",
-    421: "D0",
-    431: "Ds+",
-    511: "B0",
-    521: "B+",
-    531: "Bs0",
-}
-
-# dynamically add "bar" for quarks
-for p in range(1, 7):
-    particle_names[-p] = f"{particle_names[p]}bar"
-# dynamically flip signs for leptons
-for p in [11, 13, 15]:
-    particle_names[-p] = f"{particle_names[p][:-1]}+"
-# just repeat neutrinos for anti-neutrinos
-for p in [12, 14, 16]:
-    particle_names[-p] = particle_names[p]
-# change signs for W and mesons ending in "+"
-for p, name in list(particle_names.items()):
-    if p >= 24 and name.endswith("+"):
-        particle_names[-p] = f"{name[:-1]}-"
-
-
 def visualize_gen_decay(gen_part: ak.Array, output_type: Literal["text", "link"] = "link") -> str:
     """
     Given a single generator particle (in coffea nano format), this function builds a graph representation of the
@@ -292,6 +243,13 @@ def visualize_gen_decay(gen_part: ak.Array, output_type: Literal["text", "link"]
         for a mermaid.live link.
     :return: The output string.
     """
+    try:
+        from particle import Particle
+        get_particle_name = lambda pdg_id: Particle.from_pdgid(pdg_id).name
+        HAS_PARTICLE = True
+    except ImportError:
+        HAS_PARTICLE = False
+
     if output_type not in (known_output_types := {"text", "link"}):
         raise ValueError(f"invalid output_type '{output_type}', expected one of {known_output_types}")
 
@@ -303,13 +261,33 @@ def visualize_gen_decay(gen_part: ak.Array, output_type: Literal["text", "link"]
         status: int
         pt: float | None = None
         eta: float | None = None
+        phi: float | None = None
+        mass: float | None = None
         children: list[Node] = dataclasses.field(default_factory=list)
         _num: int | None = None
         _float_digits: int = 3
 
+        @classmethod
+        def from_gen_part(cls, gen_part: ak.Array) -> Node:
+            return cls(
+                pdg_id=gen_part.pdgId,
+                status=gen_part.status,
+                pt=gen_part.pt,
+                eta=gen_part.eta,
+                phi=gen_part.phi,
+                mass=gen_part.mass,
+            )
+
         def __post_init__(self) -> None:
             nonlocal last_num
             self._num = last_num = last_num + 1
+
+        def _round_float(self, value: float) -> str:
+            if value == 0:
+                return "0.0"
+            if abs(value) < 10**(-self._float_digits):
+                return f"{value:.{self._float_digits - 1}e}"
+            return f"{value:.{self._float_digits}f}"
 
         @property
         def name(self) -> str:
@@ -317,28 +295,26 @@ def visualize_gen_decay(gen_part: ak.Array, output_type: Literal["text", "link"]
 
         @property
         def label(self) -> str:
-            lines = []
-            if self.pdg_id in particle_names:
-                heading = particle_names[self.pdg_id]
-                lines.append(f"id={self.pdg_id}, status={self.status}")
-            else:
-                heading = str(self.pdg_id)
-                lines.append(f"status={self.status}")
-            kin = []
-            if self.pt is not None:
-                kin.append(f"pt={self.pt:.{self._float_digits}f}")
-            if self.eta is not None:
-                kin.append(f"eta={self.eta:.{self._float_digits}f}")
-            if kin:
-                lines.append(", ".join(kin))
-            return f"{heading}<br>{'<br>'.join('<small>' + line + '</small>' for line in lines)}"
+            heading = str(self.pdg_id)
+            parts = []
+            if HAS_PARTICLE:
+                heading = get_particle_name(self.pdg_id)
+                parts.append(f"id={self.pdg_id}")
+            parts += [
+                f"status={self.status}",
+                f"pt={self._round_float(self.pt)}" if self.pt is not None else "",
+                f"eta={self._round_float(self.eta)}" if self.eta is not None else "",
+                f"phi={self._round_float(self.phi)}" if self.phi is not None else "",
+                f"mass={self._round_float(self.mass)}" if self.mass is not None else "",
+            ]
+            return f"{heading}<br><small>{', '.join(filter(bool, parts))}</small>"
 
     # build the graph representation
-    root = Node(pdg_id=gen_part.pdgId, status=gen_part.status, pt=gen_part.pt, eta=gen_part.eta)
+    root = Node.from_gen_part(gen_part)
     q = collections.deque([(root, child) for child in gen_part.children])
     while q:
         parent, child = q.popleft()
-        node = Node(pdg_id=child.pdgId, status=child.status, pt=child.pt, eta=child.eta)
+        node = Node.from_gen_part(child)
         if parent is not None:
             parent.children.append(node)
         q.extendleft([(node, c) for c in child.children][::-1])
