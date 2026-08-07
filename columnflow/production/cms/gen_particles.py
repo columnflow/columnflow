@@ -344,6 +344,7 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
 
     # further treatment of tau decays
     tau = events.GenPart[tau_mask]
+    tau = tau[ak.argsort(tau.pdgId, axis=1, ascending=False)]
     tau_children = tau.distinctChildren[tau.distinctChildren.hasFlags("isFirstCopy", "isTauDecayProduct")]
     tau_children = ak.drop_none(tau_children)
     # prepare neutrino and W boson handling
@@ -381,7 +382,7 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
     min_tau_1_w_children_id = ak.min(abs(tau_w_children.pdgId[:, 0]), axis=1)
     min_tau_2_w_children_id = ak.min(abs(tau_w_children.pdgId[:, 1]), axis=1)
     decay_type = (
-        np.zeros(len(events), np.uint8) +
+        np.zeros(len(events), np.uint16) +
         # add values for overall z decay: e=1, m=2, t=3
         ak.where(first_lep_id == 11, 1, 0) +
         ak.where(first_lep_id == 13, 2, 0) +
@@ -403,7 +404,7 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
             "lep": transform_gen_part(lep, depth_limit=2),
             "tau_children": transform_gen_part(tau_nuw, depth_limit=3),
             "tau_w_children": transform_gen_part(tau_w_children, depth_limit=3),
-            "decay_type": ak.values_astype(decay_type, np.uint8),
+            "decay_type": ak.values_astype(decay_type, np.uint16),
         },
         depth_limit=1,
     )
@@ -412,3 +413,88 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
     events = set_ak_column(events, "gen_dy", gen_dy)
 
     return events
+
+
+@producer(
+    uses={
+        gen_dy_lookup,
+        "GenPart.{genPartIdxMother,status,statusFlags}",  # required by the gen particle identification
+        f"GenPart.{{{','.join(_keep_gen_part_fields)}}}",  # additional fields that should be read and added to gen_top
+    },
+    produces={"gen_dy_hepmc_filters"},
+)
+def gen_dy_hepmc_filters(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
+    """
+    Evaluates certain HepMC filters for DY events. The result is stored as a bit mask for specific filter
+    implementations.
+    """
+    # add dy indexing
+    events = self[gen_dy_lookup](events, **kwargs)
+
+    # start with zeros
+    hepmc_filters = np.zeros(len(events), np.uint8)
+
+    # set bits for events passing the respective filters
+    hepmc_filters += np.asarray(hepmc_filter_1(events), dtype=np.uint8) << 0
+    # no others yet to be placed on higher bits
+
+    events = set_ak_column(events, "gen_dy_hepmc_filters", hepmc_filters)
+
+    return events
+
+
+def hepmc_filter_1(events: ak.Array) -> np.ndarray:
+    """
+    Checks if the event contains a di-tau system and applies kinematic cuts.
+
+    Example    : DYto2Tau-2Jets_M-50_2J_Filtered_TuneCP5_13p6TeV_amcatnloFXFX-pythia8
+    HepMCFilter: https://github.com/cms-sw/cmssw/blob/master/GeneratorInterface/Core/src/EmbeddingHepMCFilter.cc
+    Filter cuts: https://cms-pdmv-prod.web.cern.ch/mcm/public/restapi/requests/get_fragment/HIG-Run3Summer22EEwmLHEGS-01476/0 # noqa: E501
+    """
+    # get taus with "isHardProcess" flag
+    tau = events.GenPart[(abs(events.GenPart.pdgId) == 15) & (events.GenPart.hasFlags("isHardProcess"))]
+    tau = tau[ak.argsort(tau.pdgId, axis=1, ascending=False)]  # sort by tau before anti-tau
+    visible = []
+
+    # iterate as long as there are children, starting with first level of tau children
+    children = tau.distinctChildrenDeep
+    while ak.max(ak.num(children, axis=2), axis=None) > 0:
+        # remove nus
+        abs_id = abs(children.pdgId)
+        nu_mask = (abs_id == 12) | (abs_id == 14) | (abs_id == 16)
+        children = children[~nu_mask]
+        # save visible particles to book keeping sums
+        status_mask = children.status == 1
+        visible.append(children[status_mask])
+        # continue with concated rest
+        children = ak.flatten(children[~status_mask].children, axis=3)
+
+    # combine to visible tau momenta and extract pt and eta
+    vis_tau = ak.concatenate(visible, axis=2).sum(axis=2)
+    pt = ak.fill_none(ak.pad_none(vis_tau.pt, 2, axis=1, clip=True), 0.0)
+    eta = ak.fill_none(ak.pad_none(abs(vis_tau.eta), 2, axis=1, clip=True), 5.0)
+
+    # apply channel dependent cuts, without ordering but repeating orientations
+    dt = events.gen_dy.decay_type
+    decision = (
+        (dt % 10 == 3) &  # tautau
+        ak.all(eta < 3.0, axis=1) &  # all eta's below 3.0
+        (
+            # em
+            ((dt == 123) & (pt[:, 0] > 11.0) & (pt[:, 1] > 8.0)) |
+            # eh
+            ((dt == 133) & (pt[:, 0] > 22.0) & (pt[:, 1] > 16.0)) |
+            # me
+            ((dt == 213) & (pt[:, 0] > 8.0) & (pt[:, 1] > 11.0)) |
+            # mh
+            ((dt == 233) & (pt[:, 0] > 19.0) & (pt[:, 1] > 16.0)) |
+            # he
+            ((dt == 313) & (pt[:, 0] > 16.0) & (pt[:, 1] > 22.0)) |
+            # hm
+            ((dt == 323) & (pt[:, 0] > 16.0) & (pt[:, 1] > 19.0)) |
+            # hh
+            ((dt == 333) & (pt[:, 0] > 20) & (pt[:, 1] > 20))  # order not important as cuts are the same
+        )
+    )
+
+    return decision
