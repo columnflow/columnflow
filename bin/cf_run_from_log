@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+# Script that parses a job log file and runs the last "law run " command found in it.
+
+cf_run_from_log() {
+    # get arguments
+    local log_file="$1"
+    if [ -z "${log_file}" ]; then
+        2>&1 echo "log file path must be provided as first argument"
+        return "1"
+    elif [ ! -f "${log_file}" ]; then
+        2>&1 echo "log file '${log_file}' does not exist"
+        return "2"
+    fi
+
+    # extract the command
+    local cmd="$( cat "${log_file}" | grep -Po '^command: \Klaw run .+$' | tail -n 1 )"
+    if [ -z "${cmd}" ]; then
+        2>&1 echo "no 'law run' command found in log file '${log_file}'"
+        return "3"
+    fi
+    echo "the following command was found in '${log_file}':"
+    echo ""
+    cf_color default_bright "${cmd}"
+    echo ""
+
+    # prompt the user for confirmation before executing the command
+    local skip_confirmation="$( cf_cast_bool "${CF_RUN_FROM_LOG_FORCE:-false}" )"
+    if ${skip_confirmation}; then
+        cf_color green "executing ..."
+        eval "${cmd}"
+    else
+        local confirm
+        read -p "run this command? (y/n): " confirm
+        if $( cf_cast_bool "${confirm}" ); then
+            eval "${cmd}"
+        else
+            cf_color red_bright "cancelled"
+        fi
+    fi
+}
+
+cf_run_from_log "$@"

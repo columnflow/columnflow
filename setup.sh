@@ -900,6 +900,7 @@ cf_check_tmp_dir() {
 
     return "0"
 }
+[ ! -z "${BASH_VERSION}" ] && export -f cf_check_tmp_dir
 
 cf_setup_git_hooks() {
     # Initializes lfs and custom githooks in the local checkout for both the columnflow
@@ -1046,7 +1047,7 @@ cf_init_submodule() {
 cf_cast_bool() {
     # lower case
     local value="$( cf_lower_case "$1" )"
-    if [ "${value}" = "1" ] || [ "${value}" = "yes" ] || [ "${value}" = "true" ]; then
+    if [ "${value}" = "1" ] || [ "${value}" = "yes" ] || [ "${value}" = "y" ] || [ "${value}" = "true" ]; then
         echo "true"
     else
         echo "false"
@@ -1137,11 +1138,13 @@ cf_lower_case() {
     # cross-shell lower case helper
     echo "$1" | tr "[:upper:]" "[:lower:]"
 }
+[ ! -z "${BASH_VERSION}" ] && export -f cf_lower_case
 
 cf_upper_case() {
     # cross-shell upper case helper
     echo "$1" | tr "[:lower:]" "[:upper:]"
 }
+[ ! -z "${BASH_VERSION}" ] && export -f cf_upper_case
 
 main() {
     # Invokes the main action of this script, catches possible error codes and prints a message.
