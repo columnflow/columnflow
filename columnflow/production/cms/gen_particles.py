@@ -379,8 +379,8 @@ def gen_dy_lookup(self: Producer, events: ak.Array, strict: bool = True, **kwarg
     # construct the decay type integer
     first_lep_id = abs(lep.pdgId[:, 0])
     t_mask = first_lep_id == 15
-    min_tau_1_w_children_id = ak.min(abs(tau_w_children.pdgId[:, 0]), axis=1)
-    min_tau_2_w_children_id = ak.min(abs(tau_w_children.pdgId[:, 1]), axis=1)
+    min_tau_1_w_children_id = ak.fill_none(ak.min(ak.firsts(abs(tau_w_children.pdgId)[:, 0:1]), axis=1), np.int32(0))
+    min_tau_2_w_children_id = ak.fill_none(ak.min(ak.firsts(abs(tau_w_children.pdgId)[:, 1:2]), axis=1), np.int32(0))
     decay_type = (
         np.zeros(len(events), np.uint16) +
         # add values for overall z decay: e=1, m=2, t=3
@@ -453,12 +453,18 @@ def hepmc_filter_1(events: ak.Array) -> np.ndarray:
     """
     # get taus with "isHardProcess" flag
     tau = events.GenPart[(abs(events.GenPart.pdgId) == 15) & (events.GenPart.hasFlags("isHardProcess"))]
+
+    # when there are no taus, stop early
+    if not ak.any(ak.num(tau, axis=1)):
+        return np.zeros(len(events), dtype=np.bool_)
+
+    # sort tau before anti-tau to be consistent with decay_type definition in gen_dy_lookup
     tau = tau[ak.argsort(tau.pdgId, axis=1, ascending=False)]  # sort by tau before anti-tau
-    visible = []
 
     # iterate as long as there are children, starting with first level of tau children
+    visible = []
     children = tau.distinctChildrenDeep
-    while ak.max(ak.num(children, axis=2), axis=None) > 0:
+    while (ak.max(ak.num(children, axis=2), axis=None) or 0) > 0:
         # remove nus
         abs_id = abs(children.pdgId)
         nu_mask = (abs_id == 12) | (abs_id == 14) | (abs_id == 16)
