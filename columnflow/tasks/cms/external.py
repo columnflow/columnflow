@@ -242,4 +242,4 @@ class CheckCATUpdates(ConfigTask, law.tasks.RunOnceTask):
                         f"{law.util.colored('new CATSnapshot line ->', style='bright')} CATSnapshot({args_str})\n",
                     )
                 else:
-                    self.publish_message("no updates found\n")
+                    self.publish_message(law.util.colored("no updates found\n", "yellow"))
