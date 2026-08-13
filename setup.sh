@@ -670,6 +670,7 @@ EOF
             echo "initialized conda with $( cf_color magenta "micromamba" ) interface and $( cf_color magenta "python ${CF_PYTHON_VERSION}" )"
 
             # install packages
+            # some versions pinned, see https://github.com/columnflow/columnflow/issues/816
             if ${conda_missing}; then
                 echo
                 cf_color cyan "setting up conda / micromamba environment"
@@ -683,9 +684,10 @@ EOF
                     "python=${CF_PYTHON_VERSION}" \
                     git \
                     git-lfs \
-                    gfal2 \
+                    "gfal2=2.23.1" \
                     gfal2-util \
-                    python-gfal2 \
+                    "python-gfal2=1.13.0" \
+                    "xrootd=5.8.4" \
                     myproxy \
                     conda-pack \
                     || return "$?"
