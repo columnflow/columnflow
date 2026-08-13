@@ -21,7 +21,7 @@ cf_run_from_log() {
     fi
     echo "the following command was found in '${log_file}':"
     echo ""
-    cf_color default_bright "${cmd}"
+    cf_color default_bright "$( echo "${cmd}" | sed -r 's/--/\\\n    --/g' )"
     echo ""
 
     # prompt the user for confirmation before executing the command
