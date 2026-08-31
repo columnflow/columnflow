@@ -234,13 +234,13 @@ def get_br_from_inclusive_datasets(
                 f"large error on the branching ratio of {rel_unc * 100:.2f}% for process '{process_inst.name}' "
                 f"({process_inst.id}), calculated along\n  {path_repr(best_br_path, best_dag_path)}",
             )
-        # in case there were multiple values, check their compatibility with the best one and warn if they diverge
+        # in case there were multiple values, check their compatibility with the best one and log if they diverge
         for i, (br, br_path, dag_path) in enumerate(brs[1:], 2):
             abs_diff = abs(best_br.n - br.n)
             rel_diff = abs_diff / best_br.n
             pull = abs(best_br.n - br.n) / (best_br.u(direction="up")**2 + br.u(direction="up")**2)**0.5
             if rel_diff > 0.1 and pull > 3:
-                logger.warning(
+                logger.debug(
                     f"detected diverging branching ratios between the best and the one on position {i} for process "
                     f"'{process_inst.name}' (abs_diff={abs_diff:.4f}, rel_diff={rel_diff:.4f}, pull={pull:.2f} ):"
                     f"\nbest path: {best_br.str(format=3)} from {path_repr(best_br_path, best_dag_path)}"

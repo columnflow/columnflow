@@ -6,7 +6,7 @@
 # 2. analysis.default_columnar_sandbox (law.cfg)
 # 3. venv_columnar_dev (default)
 
-action() {
+claw() {
     # get the target sandbox
     local sandbox
     if [ ! -z "${CLAW_SANDBOX}" ]; then
@@ -30,4 +30,5 @@ action() {
     local law_args="${@:1}"
     cf_sandbox "${sandbox}" law "${law_args//\*/\"\*\"}"
 }
-action "$@"
+
+claw "$@"

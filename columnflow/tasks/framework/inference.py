@@ -307,7 +307,7 @@ class SerializeInferenceModelBase(_SerializeInferenceModelBase):
                     except Exception as e:
                         raise Exception(
                             f"failed to load '{variable}' histogram for dataset '{dataset_name}' in config "
-                            f"'{config_inst.name}' from {inp.abspath}",
+                            f"'{config_inst.name}' from {inp['hists'][variable].abspath}",
                         ) from e
 
                     # determine processes to extract

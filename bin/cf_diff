@@ -1,5 +1,6 @@
-#!/bin/sh
-action () {
+#!/usr/bin/env bash
+
+cf_diff () {
     local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
@@ -7,4 +8,4 @@ action () {
     cf_sandbox venv_columnar_dev python "${this_dir}/cf_diff.py" "$@"
 }
 
-action "$@"
+cf_diff "$@"
