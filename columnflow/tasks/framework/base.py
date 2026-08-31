@@ -25,7 +25,7 @@ import order as od
 
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
 from columnflow.util import is_regex, prettify, DotDict, freeze
-from columnflow.types import Sequence, Callable, Any, T
+from columnflow.types import Sequence, Callable, Any, T, Literal
 
 
 logger = law.logger.get_logger(__name__)
@@ -449,7 +449,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         accept_patterns: bool = True,
         deep: bool | None = None,
         strict: bool = False,
-        multi_strategy: str = "first",
+        multi_strategy: Literal["first", "same", "union", "intersection", "all"] = "first",
     ) -> list[str] | dict[od.UniqueObject, list[str]]:
         """
         Returns all names of objects of type *object_cls* known to a *container* (e.g. :py:class:`od.Analysis` or
@@ -574,7 +574,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         task_params: dict[str, Any],
         container: str | od.AuxDataMixin | Sequence[od.AuxDataMixin],
         default_str: str | None = None,
-        multi_strategy: str = "first",
+        multi_strategy: Literal["first", "same", "union", "intersection", "all"] = "first",
         debug: bool = False,
     ) -> Any | list[Any] | dict[od.AuxDataMixin, Any]:
         """

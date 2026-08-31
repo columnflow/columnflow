@@ -415,6 +415,44 @@ def sum_hists(hists: Sequence[hist.Hist]) -> hist.Hist:
     return h_sum
 
 
+def sum_hists_shift_aware(hists: Sequence[hist.Hist], shift_axis_name: str = "shift") -> hist.Hist:
+    """
+    Same as :py:func:`sum_hists`, but takes care of handling missing shift bins in subsets of histograms correctly.
+    In particular, in case histograms A miss shifts present in histograms B, the missing shifts are filled first with
+    values of the nominal bin.
+
+    :param hists: The histograms to sum.
+    :param shift_axis_name: The name of the axis that contains the shift bins. Defaults to "shift".
+    :return: The summed histogram.
+    """
+    import hist
+
+    # get unique list of all shifts
+    all_shift_names = set()
+    for h in hists:
+        if shift_axis_name not in h.axes.name:
+            raise ValueError(f"histogram {h} does not have a '{shift_axis_name}' axis")
+        all_shift_names.update(h.axes[shift_axis_name])
+
+    # extend histograms with nominal values for missing shifts
+    for i, h in enumerate(hists):
+        shift_names = set(h.axes[shift_axis_name])
+        missing_shifts = all_shift_names - shift_names
+        if missing_shifts:
+            if "nominal" not in shift_names:
+                raise ValueError(f"histogram {h} does not have a 'nominal' bin in its '{shift_axis_name}' axis")
+            h_nom = h[{shift_axis_name: hist.loc("nominal")}]
+            h = ensure_bin_exists(h, shift_axis_name, missing_shifts)
+            for missing_shift in missing_shifts:
+                insert_axis_values(h, shift_axis_name, missing_shift, h_nom)
+            hists[i] = h
+
+    # now sum as usual
+    h_sum = sum_hists(hists)
+
+    return h_sum
+
+
 def select_category_bins(
     h: hist.Hist,
     categories: od.Category | str | Sequence[od.Category | str],
