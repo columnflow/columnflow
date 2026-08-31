@@ -178,11 +178,9 @@ class InferenceModelUser(
                     for param_obj in proc_obj.parameters:
                         if config_inst.name not in param_obj.config_data:
                             continue
-                        # only add if a shift is required for this parameter
-                        if (
-                            (param_obj.type.is_shape and not param_obj.transformations.any_from_rate) or
-                            (param_obj.type.is_rate and param_obj.transformations.any_from_shape)
-                        ):
+                        # check if a shift source is required for this parameter
+                        needs_source = param_obj.type.is_shape
+                        if needs_source and config_inst.name in param_obj.config_data:
                             shift_source = param_obj.config_data[config_inst.name].shift_source
                             for mc_dataset in mc_datasets:
                                 data["mc_datasets"][mc_dataset]["shift_sources"].add(shift_source)

@@ -7,12 +7,16 @@ Helpers to write and work with datacards.
 from __future__ import annotations
 
 import os
-from collections import OrderedDict
+import dataclasses
+import collections
 
 import law
+import order as od
 
 from columnflow import __version__ as cf_version
-from columnflow.inference import InferenceModel, ParameterType, ParameterTransformation, FlowStrategy
+from columnflow.inference import InferenceModel, FlowStrategy
+from columnflow.inference.parameter import ParameterType
+from columnflow.inference.transformation import ShapeTransformer
 from columnflow.hist_util import sum_hists
 from columnflow.util import DotDict, maybe_import, real_path, ensure_dir, safe_div, maybe_int
 from columnflow.types import TYPE_CHECKING, TypeAlias, Sequence, Any, Union, Hashable
@@ -70,7 +74,8 @@ class DatacardWriter(object):
             Configurable via *asymmetrize_if_large_threshold*.
         - :py:attr:`ParameterTransformation.normalize`: Normalizes shape variations such that their integrals match that
             of the nominal shape.
-        - :py:attr:`ParameterTransformation.centralize`: # TODO: not yet implemented
+        - :py:attr:`ParameterTransformation.centralize`: Moves the nominal shape right in between the up and down
+            variations, both for rate- and shype-type parameters. Rate effects are updated accordingly.
         - :py:attr:`ParameterTransformation.envelope`: Takes the bin-wise maximum in each direction of the up and down
             variations of shape-type parameters and constructs new shapes.
         - :py:attr:`ParameterTransformation.envelope_if_one_sided`: Same as above, but only in bins where up and down
@@ -96,88 +101,31 @@ class DatacardWriter(object):
     # minimum separator between columns
     col_sep = "  "
 
-    @classmethod
-    def validate_model(cls, inference_model_inst: InferenceModel, silent: bool = False) -> bool:
-        # perform parameter checks one after another, collect errors along the way
-        errors: list[str] = []
-        for cat_name, proc_name, param_obj in inference_model_inst.iter_parameters():
-            # check the transformations
-            _errors: list[str] = []
-            for i, trafo in enumerate(param_obj.transformations):
-                if i != 0 and trafo.requires_first_index:
-                    _errors.append(
-                        f"parameter transformation '{trafo}' must be the first one to apply, but found at index {i}",
-                    )
-                if not param_obj.type.is_shape and trafo.affects_shape_only:
-                    _errors.append(
-                        f"parameter transformation '{trafo}' only applies to shape-type parameters, but found type "
-                        f"'{param_obj.type}'",
-                    )
-                if not param_obj.type.is_rate and trafo.affects_rate_only:
-                    _errors.append(
-                        f"parameter transformation '{trafo}' only applies to rate-type parameters, but found type "
-                        f"'{param_obj.type}'",
-                    )
-            errors.extend(
-                f"for parameter '{param_obj}' in process '{proc_name}' in category '{cat_name}': {err}"
-                for err in _errors
-            )
+    # reference to the shape transformer class to be used
+    shape_transformer_cls = ShapeTransformer
 
-        # handle errors
-        if errors:
-            if silent:
-                return False
-            errors_repr = "\n  - ".join(errors)
-            raise ValueError(f"inference model invalid, reasons:\n  - {errors_repr}")
+    @dataclasses.dataclass
+    class ShapeData:
+        """
+        Container object describing data returned after shape writing.
+        """
 
-        return True
-
-    @classmethod
-    def validate_histograms(cls, histograms: DatacardHists, silent: bool = False) -> bool:
-        import hist
-
-        # validate structure of histograms, shape keys and histogram types
-        errors: list[str] = []
-        for cat_name, proc_hists in histograms.items():
-            if not isinstance(cat_name, str):
-                errors.append(f"category name key '{cat_name}' is not a string")
-            for proc_name, config_hists in proc_hists.items():
-                if not isinstance(proc_name, str):
-                    errors.append(f"process name '{proc_name}' in category '{cat_name}' is not a string")
-                for config_name, shift_hists in config_hists.items():
-                    if not isinstance(config_name, str):
-                        errors.append(
-                            f"config name '{config_name}' for process '{proc_name}' in category '{cat_name}' is not a "
-                            f"string",
-                        )
-                    for shift_key, h in shift_hists.items():
-                        # shift_key must be nominal or a tuple of (param_name, "up|down")
-                        if (
-                            shift_key != "nominal" and
-                            (
-                                not isinstance(shift_key, (tuple, list)) or
-                                len(shift_key) != 2 or
-                                shift_key[1] not in {"up", "down"}
-                            )
-                        ):
-                            errors.append(
-                                f"invalid shift key '{shift_key}' in config '{config_name}' for process "
-                                f"'{proc_name}' in category '{cat_name}'",
-                            )
-                        if not isinstance(h, hist.Hist):
-                            errors.append(
-                                f"histogram for shift '{shift_key}' in config '{config_name}' for process "
-                                f"'{proc_name}' in category '{cat_name}' is not a hist.Hist instance",
-                            )
-
-        # handle errors
-        if errors:
-            if silent:
-                return False
-            errors_repr = "\n  - ".join(errors)
-            raise ValueError(f"datacard histograms invalid, reasons:\n  - {errors_repr}")
-
-        return True
+        # nominal histograms in a mapping "category -> process -> histogram"
+        nominal_hists: dict[str, dict[str, "hist.Hist"]]
+        # the nominal rates in a mapping "category -> process -> rate"
+        rates: dict[str, dict[str, float]]
+        # rate-changing effects of shapes in a mapping "category -> process -> parameter -> (down effect, up effect)"
+        shape_effects: dict[str, dict[str, dict[str, tuple[float, float]]]]
+        # evaluated parameter types after shape writing in a mapping "category -> process -> parameter -> type"
+        parameter_types: dict[str, dict[str, dict[str, ParameterType]]]
+        # parameters whose transformations have been evaluated in a mapping "category -> process -> parameter names"
+        evaluated_trafos: dict[str, dict[str, set[str]]]
+        # the datacard pattern for extracting nominal shapes in CMS combine notation
+        # (variables: $CHANNEL, $PROCESS)
+        nom_pattern: str
+        # the datacard pattern for extracting systematic shapes in CMS combine notation
+        # (variables: $CHANNEL, $PROCESS, $SYSTEMATIC)
+        syst_pattern: str
 
     def __init__(
         self,
@@ -185,9 +133,7 @@ class DatacardWriter(object):
         histograms: DatacardHists,
         rate_precision: int = 4,
         effect_precision: int = 4,
-        effect_from_shape_if_flat_max_outlier: float = 0.2,
-        effect_from_shape_if_flat_max_deviation: float = 0.1,
-        asymmetrize_if_large_threshold: float = 0.2,
+        shape_transformer_kwargs: dict[str, Any] | None = None,
     ) -> None:
         super().__init__()
 
@@ -196,9 +142,9 @@ class DatacardWriter(object):
         self.histograms = histograms
         self.rate_precision = rate_precision
         self.effect_precision = effect_precision
-        self.effect_from_shape_if_flat_max_outlier = effect_from_shape_if_flat_max_outlier
-        self.effect_from_shape_if_flat_max_deviation = effect_from_shape_if_flat_max_deviation
-        self.asymmetrize_if_large_threshold = asymmetrize_if_large_threshold
+
+        # create a shape transformer instance
+        self.transformer = self.shape_transformer_cls(**(shape_transformer_kwargs or {}))
 
         # validate the inference model and histograms
         self.validate_model(self.inference_model_inst)
@@ -222,10 +168,10 @@ class DatacardWriter(object):
             shapes_path_ref = os.path.relpath(shapes_path, os.path.dirname(datacard_path))
 
         # write the shapes files
-        rates, shape_effects, nom_pattern, syst_pattern = self.write_shapes(shapes_path)
+        shape_data = self.write_shapes(shapes_path)
 
         # get category objects
-        cat_objects = [self.inference_model_inst.get_category(cat_name) for cat_name in rates]
+        cat_objects = [self.inference_model_inst.get_category(cat_name) for cat_name in shape_data.rates]
 
         # prepare blocks and lines to write
         blocks: DotDict[str, list] = DotDict()
@@ -241,31 +187,31 @@ class DatacardWriter(object):
         separators.add("counts")
 
         # shape lines
-        blocks.shapes = [("shapes", "*", "*", shapes_path_ref, nom_pattern, syst_pattern)]
+        blocks.shapes = [("shapes", "*", "*", shapes_path_ref, shape_data.nom_pattern, shape_data.syst_pattern)]
         separators.add("shapes")
 
         # store rate precisions per category
         rate_precisions = {
             cat_obj.name: self.rate_precision if cat_obj.rate_precision <= 0 else cat_obj.rate_precision
-            for cat_obj in map(self.inference_model_inst.get_category, rates.keys())
+            for cat_obj in map(self.inference_model_inst.get_category, shape_data.rates.keys())
         }
 
         # observations
         blocks.observations = []
-        if all("data" in _rates for _rates in rates.values()):
+        if all("data" in _rates for _rates in shape_data.rates.values()):
             blocks.observations = [
-                ("bin", list(rates)),
+                ("bin", list(shape_data.rates)),
                 ("observation", [
                     maybe_int(round(_rates["data"], rate_precisions[cat_name]))
-                    for cat_name, _rates in rates.items()
+                    for cat_name, _rates in shape_data.rates.items()
                 ]),
             ]
             separators.add("observations")
 
         # expected rates
         proc_names, s_names, b_names = [], [], []
-        flat_rates = OrderedDict()
-        for cat_name, _rates in rates.items():
+        flat_rates = collections.OrderedDict()
+        for cat_name, _rates in shape_data.rates.items():
             for proc_name, rate in _rates.items():
                 if proc_name == "data":
                     continue
@@ -307,22 +253,23 @@ class DatacardWriter(object):
                     silent=True,
                 )
 
-                # skip line-style parameters as they are handled separately below
-                if param_obj and param_obj.type == ParameterType.rate_unconstrained:
-                    continue
-
-                # empty effect
+                # skip empty effects
                 if param_obj is None:
                     effects.append("-")
                     continue
 
+                # skip line-style parameters as they are handled separately below
+                param_type = shape_data.parameter_types[cat_name][proc_name][param_name]
+                if param_obj and param_type == ParameterType.rate_unconstrained:
+                    continue
+
                 # compare with previously seen types as combine cannot mix arbitrary parameter types acting differently
                 # on different processes
-                types.add(param_obj.type)
+                types.add(param_type)
                 if len(types) > 1 and types != {ParameterType.rate_gauss, ParameterType.shape}:
                     raise ValueError(
-                        f"misconfigured parameter '{param_name}' with type '{param_obj.type}' that was previously "
-                        f"seen with incompatible type(s) '{types - {param_obj.type}}'",
+                        f"misconfigured parameter '{param_name}' with type '{param_type}' that was previously seen "
+                        f"with incompatible type(s) '{types - {param_type}}'",
                     )
 
                 # get the effect
@@ -337,7 +284,6 @@ class DatacardWriter(object):
 
                 def rnd(f: float | int) -> float:
                     r = round(f, effect_precision)
-
                     # warn in case the precision is too low for the effect
                     if abs(1.0 - f) < 10**(-effect_precision):
                         logger.warning(
@@ -346,93 +292,49 @@ class DatacardWriter(object):
                             f"{effect_precision} for the paremeter '{param_name}' acting on process '{proc_name}' in "
                             f"category '{cat_name}'",
                         )
-
                     return r
 
                 # update and transform effects
-                if param_obj.type.is_rate:
-                    # apply transformations one by one
-                    for trafo in param_obj.transformations:
-                        if trafo.from_shape:
-                            # take effect from shape variations
-                            effect = shape_effects[cat_name][proc_name][param_name]
+                if param_type.is_shape:
+                    # when the shape was originally constructed from a rate, reset the effect to 1
+                    if param_obj.type.is_rate:
+                        effect = 1.0
 
-                        elif trafo == ParameterTransformation.symmetrize:
-                            # skip symmetric effects
-                            if not isinstance(effect, tuple) or len(effect) != 2:
-                                continue
-                            # skip one sided effects
-                            if not (min(effect) <= 1 <= max(effect)):
-                                continue
-                            d, u = effect
-                            diff = 0.5 * (d + u) - 1.0
-                            effect = (effect[0] - diff, effect[1] - diff)
+                elif param_type.is_rate:
+                    # when the rate was originally constructed from a shape, read the effect from the shape data
+                    if param_obj.type.is_shape:
+                        effect = shape_data.shape_effects[cat_name][proc_name][param_name]
 
-                        elif (
-                            trafo == ParameterTransformation.asymmetrize or
-                            (
-                                trafo == ParameterTransformation.asymmetrize_if_large and
-                                isinstance(effect, float) and
-                                abs(effect - 1.0) >= self.asymmetrize_if_large_threshold
-                            )
-                        ):
-                            # skip asymmetric effects
-                            if not isinstance(effect, float):
-                                continue
-                            effect = (2.0 - effect, effect)
+                    elif param_name not in shape_data.evaluated_trafos[cat_name][proc_name]:
+                        # in this case, the transformation sequence was not evaluated during shape writing, so do it now
+                        trafo_output: ShapeTransformer.TransormationOutput = self.transformer.apply_transformations(
+                            param_obj=param_obj,
+                            h_nom=shape_data.nominal_hists[cat_name][proc_name],
+                        )
 
-                        elif trafo in {
-                            ParameterTransformation.flip_smaller_if_one_sided,
-                            ParameterTransformation.flip_larger_if_one_sided,
-                        }:
-                            # skip symmetric effects
-                            if not isinstance(effect, tuple) or len(effect) != 2:
-                                continue
-                            flip_larger = trafo == ParameterTransformation.flip_larger_if_one_sided
-                            flip_smaller = trafo == ParameterTransformation.flip_smaller_if_one_sided
-                            # check sidedness and determine which of the two effect values to flip, identified by index
-                            if max(effect) < 1.0:
-                                # both below nominal
-                                flip_index = int(
-                                    (effect[1] > effect[0] and flip_larger) or
-                                    (effect[1] < effect[0] and flip_smaller),
-                                )
-                            elif min(effect) > 1.0:
-                                # both above nominal
-                                flip_index = int(
-                                    (effect[1] > effect[0] and flip_smaller) or
-                                    (effect[1] < effect[0] and flip_larger),
-                                )
-                            else:
-                                # skip one-sided effects
-                                continue
-                            effect = tuple(((2.0 - e) if i == flip_index else e) for i, e in enumerate(effect))
-
-                elif param_obj.type.is_shape:
-                    # apply transformations one by one
-                    for trafo in param_obj.transformations:
-                        if trafo.from_rate:
-                            # when the shape was constructed from a rate, reset the effect to 1
-                            effect = 1.0
+                        # store the effect
+                        effect = trafo_output.effect
 
                 # custom hook to modify the effect
                 effect = self.modify_parameter_effect(cat_obj, proc_obj, param_obj, effect)
 
                 # encode the effect
-                if isinstance(effect, (int, float)):
+                encoded_effect: str
+                if param_type.is_shape and effect in {None, 1}:
+                    encoded_effect = "1"
+                elif isinstance(effect, (int, float)):
                     if effect == 0.0:
-                        effects.append("-")
-                    elif effect == 1.0 and param_obj.type.is_shape:
-                        effects.append("1")
+                        encoded_effect = "-"
                     else:
-                        effects.append(str(rnd(effect)))
-                elif isinstance(effect, tuple) and len(effect) == 2:
-                    effects.append(f"{rnd(effect[0])}/{rnd(effect[1])}")
+                        encoded_effect = str(rnd(effect))
+                elif isinstance(effect, (tuple, list)) and self.transformer.validate_effect(effect):
+                    encoded_effect = f"{rnd(effect[0])}/{rnd(effect[1])}"
                 else:
                     raise ValueError(
-                        f"effect '{effect}' of parameter '{param_name}' with type {param_obj.type} on process "
-                        f"'{proc_name}' in category '{cat_name}' cannot be encoded",
+                        f"effect '{effect}' (type {type(effect)}) of parameter '{param_name}' with type "
+                        f"{param_obj.type} on process '{proc_name}' in category '{cat_name}' cannot be encoded",
                     )
+                effects.append(encoded_effect)
 
             # add the tabular line
             if types and effects:
@@ -448,7 +350,8 @@ class DatacardWriter(object):
                 elif types == {ParameterType.rate_gauss, ParameterType.shape}:
                     # when mixing lnN and shape effects, combine expects the "shape?" type and makes the actual decision
                     # dependent on the presence of shape variations in the accompanying shape files, see
-                    # https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/v10.2.X/part2/settinguptheanalysis/?h=shape%3F#template-shape-uncertainties # noqa
+                    # https://cms-analysis.github.io/HiggsAnalysis-CombinedLimit/v10.2.X/part2/settinguptheanalysis/?h=shape%3F#template-shape-uncertainties # noqa: E501
+                    # (this hopefully gets solved less hacky in the future)
                     type_str = "shape?"
                 if not type_str:
                     raise ValueError(f"misconfigured parameter '{param_name}' with incompatible type(s) '{types}'")
@@ -547,20 +450,10 @@ class DatacardWriter(object):
     def write_shapes(
         self,
         shapes_path: str,
-    ) -> tuple[
-        dict[str, dict[str, float]],
-        dict[str, dict[str, dict[str, tuple[float, float]]]],
-        str,
-        str,
-    ]:
+    ) -> ShapeData:
         """
-        Create the shapes file at *shapes_path* and returns a tuple with four items,
-
-            - the nominal rates in a nested mapping "category -> process -> rate",
-            - rate-changing effects of shape systematics in a nested mapping
-              "category -> process -> parameter -> (down effect, up effect)",
-            - the datacard pattern for extracting nominal shapes, and
-            - the datacard pattern for extracting systematic shapes.
+        Create the shapes file at *shapes_path* and returns a :py:class:`ShapeData` object, containing all info from
+        shape handling and serialization.
         """
         import uproot
 
@@ -576,12 +469,13 @@ class DatacardWriter(object):
         syst_pattern = "{category}/{process}__{parameter}{direction}"
         syst_pattern_comb = "$CHANNEL/$PROCESS__$SYSTEMATIC"
 
-        # prepare rates and shape effects
-        rates = OrderedDict()
-        effects = OrderedDict()
-
-        # create the output file
-        out_file = uproot.recreate(shapes_path)
+        # prepare book-keeping dicts
+        rates = collections.OrderedDict()
+        effects = collections.OrderedDict()
+        param_types = collections.OrderedDict()
+        evaluated_trafos = collections.OrderedDict()
+        nom_hists = collections.OrderedDict()
+        out_hists = collections.OrderedDict()
 
         # helper to handle and apply flow strategy to histogram
         def handle_flow(cat_obj, h, name):
@@ -649,8 +543,13 @@ class DatacardWriter(object):
         for cat_name, proc_hists in self.histograms.items():
             cat_obj = self.inference_model_inst.get_category(cat_name)
 
-            _rates = rates[cat_name] = OrderedDict()
-            _effects = effects[cat_name] = OrderedDict()
+            _rates = rates[cat_name] = collections.OrderedDict()
+            _effects = effects[cat_name] = collections.OrderedDict()
+            _param_types = param_types[cat_name] = collections.OrderedDict()
+            _evaluated_trafos = evaluated_trafos[cat_name] = collections.OrderedDict()
+            _nom_hists = nom_hists[cat_name] = collections.OrderedDict()
+            _out_hists = out_hists[cat_name] = collections.OrderedDict()
+
             for proc_name, config_hists in proc_hists.items():
                 # skip if process is not known to category
                 proc_obj = self.inference_model_inst.get_process(process=proc_name, category=cat_name, silent=True)
@@ -682,7 +581,7 @@ class DatacardWriter(object):
                     return sum_hists(map(get, hists))
 
                 # optionally skip the process under specific conditions
-                if (skip_reason := self.check_skip_process(cat_obj, proc_obj, get_hist_sum("nominal"))):
+                if (skip_reason := self.check_skip_process(cat_obj, proc_obj, get_hist_sum(od.Shift.NOMINAL))):
                     skip_msg = f"skipping process '{proc_name}' in category '{cat_name}'"
                     if not isinstance(skip_reason, bool):
                         skip_msg += f", reason: {skip_reason}"
@@ -706,171 +605,109 @@ class DatacardWriter(object):
 
                 # nominal shape
                 nom_name = nom_pattern.format(category=cat_name, process=proc_name)
-                h_nom = load(nom_name, "nominal", scale=scale)
-                out_file[nom_name] = h_nom
-                _rates[proc_name] = h_nom.sum().value
+                h_nom = load(nom_name, od.Shift.NOMINAL, scale=scale)
                 integral = lambda h: h.sum().value
 
-                # prepare effects
-                __effects = _effects[proc_name] = OrderedDict()
+                # prepare book-keeping dicts
+                __effects = _effects[proc_name] = collections.OrderedDict()
+                __param_types = _param_types[proc_name] = collections.OrderedDict()
+                __evaluated_trafos = _evaluated_trafos[proc_name] = set()
+                __out_hists = _out_hists[proc_name] = collections.OrderedDict()
 
                 # go through all parameters and potentially handle varied shapes
                 for _, _, param_obj in self.inference_model_inst.iter_parameters(category=cat_name, process=proc_name):
+                    # store the initial parameter type
+                    __param_types[param_obj.name] = param_obj.type
+
+                    # the parameter can be skipped under certain conditions
+                    if (
+                        # initially not a shape
+                        not param_obj.type.is_shape and
+                        # does not change to a shape
+                        not param_obj.transformations.any_changes_type and
+                        # does not change nominal
+                        not param_obj.transformations.any_changes_nominal
+                    ):
+                        continue
+                    __evaluated_trafos.add(param_obj.name)
+
+                    # prepare up/down shape names
                     down_name = syst_pattern.format(
                         category=cat_name,
                         process=proc_name,
                         parameter=param_obj.name,
-                        direction="Down",
+                        direction=od.Shift.DOWN.capitalize(),
                     )
                     up_name = syst_pattern.format(
                         category=cat_name,
                         process=proc_name,
                         parameter=param_obj.name,
-                        direction="Up",
+                        direction=od.Shift.UP.capitalize(),
                     )
 
-                    # read or create the varied histograms, or skip the parameter
+                    # extract the varied histograms from the input when needed
+                    h_varied = None
                     if param_obj.type.is_shape:
-                        # the source of the shape depends on the transformation
-                        if param_obj.transformations.any_from_rate:
-                            # create the shape from the nominal one and an integral rate effect
-                            if isinstance(param_obj.effect, float):
-                                f_down, f_up = 2.0 - param_obj.effect, param_obj.effect
-                            elif isinstance(param_obj.effect, tuple) and len(param_obj.effect) == 2:
-                                f_down, f_up = param_obj.effect
-                            else:
-                                raise ValueError(
-                                    f"cannot interpret effect of parameter '{param_obj.name}' to create shape: "
-                                    f"{param_obj.effect}",
-                                )
-                            h_down = h_nom.copy() * f_down
-                            h_up = h_nom.copy() * f_up
-                        else:
-                            # just extract the shapes from the inputs
-                            h_down = load(down_name, (param_obj.name, "down"), fallback_key="nominal", scale=scale)
-                            h_up = load(up_name, (param_obj.name, "up"), fallback_key="nominal", scale=scale)
+                        h_varied = (
+                            load(down_name, (param_obj.name, od.Shift.DOWN), fallback_key=od.Shift.NOMINAL, scale=scale),
+                            load(up_name, (param_obj.name, od.Shift.UP), fallback_key=od.Shift.NOMINAL, scale=scale),
+                        )
 
-                    elif param_obj.type.is_rate:
-                        if param_obj.transformations.any_from_shape:
-                            # just extract the shapes
-                            h_down = load(down_name, (param_obj.name, "down"), fallback_key="nominal", scale=scale)
-                            h_up = load(up_name, (param_obj.name, "up"), fallback_key="nominal", scale=scale)
-
-                            # in case the transformation is effect_from_shape_if_flat, and any of the two variations
-                            # do not qualify as "flat", convert the parameter to shape-type and drop all transformations
-                            # that do not apply to shapes
-                            if param_obj.transformations[0] == ParameterTransformation.effect_from_shape_if_flat:
-                                # check if flatness criteria are met
-                                for h in [h_down, h_up]:
-                                    # !!! TODO: bug! the relative difference should be flat, not the actual shape
-                                    values = h.view().value
-                                    mean, std = values.mean(), values.std()
-                                    max_rel_outlier = safe_div(max(abs(values - mean)), mean)
-                                    rel_deviation = safe_div(std, mean)
-                                    is_flat = (
-                                        max_rel_outlier <= self.effect_from_shape_if_flat_max_outlier and
-                                        rel_deviation <= self.effect_from_shape_if_flat_max_deviation
-                                    )
-                                    if not is_flat:
-                                        param_obj.type = ParameterType.shape
-                                        param_obj.transformations = type(param_obj.transformations)(
-                                            trafo for trafo in param_obj.transformations[1:]
-                                            if not trafo.affects_rate_only
-                                        )
-                                        break
-                        else:
-                            continue
-
-                    else:
-                        # other effect type that is not handled yet
-                        logger.warning(f"datacard parameter '{param_obj.name}' has unsupported type '{param_obj.type}'")
-                        continue
-
-                    # apply optional transformations one by one
-                    for trafo in param_obj.transformations:
-                        if trafo == ParameterTransformation.symmetrize:
-                            # get the absolute spread based on integrals
-                            n, d, u = integral(h_nom), integral(h_down), integral(h_up)
-                            # skip one sided effects
-                            if not (min(d, n) <= n <= max(d, n)):
-                                logger.info(
-                                    f"skipping shape symmetrization of parameter '{param_obj.name}' for process "
-                                    f"'{proc_name}' in category '{cat_name}' as effect is one-sided",
-                                )
-                                continue
-                            # find the central point, compute the diff w.r.t. nominal, and shift
-                            diff = 0.5 * (d + u) - n
-                            h_down *= safe_div(d - diff, d)
-                            h_up *= safe_div(u - diff, u)
-
-                        elif trafo == ParameterTransformation.normalize:
-                            # normale varied hists to the nominal integral
-                            n, d, u = integral(h_nom), integral(h_down), integral(h_up)
-                            h_down *= safe_div(n, d)
-                            h_up *= safe_div(n, u)
-
-                        elif trafo in {ParameterTransformation.envelope, ParameterTransformation.envelope_if_one_sided}:
-                            v_nom = h_nom.view()
-                            v_down = h_down.view()
-                            v_up = h_up.view()
-                            # compute masks denoting at which locations a variation is abs larger than the other
-                            diffs_up = v_up.value - v_nom.value
-                            diffs_down = v_down.value - v_nom.value
-                            up_mask = abs(diffs_up) > abs(diffs_down)
-                            down_mask = abs(diffs_down) > abs(diffs_up)
-                            # when only checking one-sided, remove True's from the masks where variations are two-sided
-                            if trafo == ParameterTransformation.envelope_if_one_sided:
-                                one_sided = (diffs_up * diffs_down) > 0
-                                up_mask &= one_sided
-                                down_mask &= one_sided
-                            # fill values from the larger variation
-                            v_up.value[down_mask] = v_nom.value[down_mask] - diffs_down[down_mask]
-                            v_up.variance[down_mask] = v_down.variance[down_mask]
-                            v_down.value[up_mask] = v_nom.value[up_mask] - diffs_up[up_mask]
-                            v_down.variance[up_mask] = v_up.variance[up_mask]
-
-                        elif trafo == ParameterTransformation.envelope_enforce_two_sided:
-                            # envelope creation with enforced two-sidedness
-                            v_nom = h_nom.view()
-                            v_down = h_down.view()
-                            v_up = h_up.view()
-                            # compute masks denoting at which locations a variation is abs larger than the other
-                            abs_diffs_up = abs(v_up.value - v_nom.value)
-                            abs_diffs_down = abs(v_down.value - v_nom.value)
-                            up_mask = abs_diffs_up >= abs_diffs_down
-                            down_mask = ~up_mask
-                            # fill values from the absolute larger variation
-                            v_up.value[up_mask] = v_nom.value[up_mask] + abs_diffs_up[up_mask]
-                            v_up.value[down_mask] = v_nom.value[down_mask] + abs_diffs_down[down_mask]
-                            v_up.variance[down_mask] = v_down.variance[down_mask]
-                            v_down.value[down_mask] = v_nom.value[down_mask] - abs_diffs_down[down_mask]
-                            v_down.value[up_mask] = v_nom.value[up_mask] - abs_diffs_up[up_mask]
-                            v_down.variance[up_mask] = v_up.variance[up_mask]
-
-                    # custom hook to modify the shapes
-                    h_nom, h_down, h_up = self.modify_parameter_shape(
-                        cat_obj,
-                        proc_obj,
-                        param_obj,
-                        h_nom,
-                        h_down,
-                        h_up,
+                    # apply the sequence of transformations
+                    trafo_output: ShapeTransformer.TransormationOutput = self.transformer.apply_transformations(
+                        param_obj=param_obj,
+                        h_nom=h_nom,
+                        h_varied=h_varied,
                     )
 
-                    # fill empty bins again after all transformations
-                    fill_empty(cat_obj, h_down)
-                    fill_empty(cat_obj, h_up)
+                    # update iteration variables
+                    h_nom = trafo_output.h_nom
+                    __param_types[param_obj.name] = trafo_output.param_type
 
-                    # save the effect
-                    __effects[param_obj.name] = (
-                        safe_div(integral(h_down), integral(h_nom)),
-                        safe_div(integral(h_up), integral(h_nom)),
-                    )
+                    if trafo_output.param_type.is_rate:
+                        # when then type changed to rate, we only need to save the converted rate effect
+                        __effects[param_obj.name] = trafo_output.effect
 
-                    # save them to file if they have shape-type
-                    if param_obj.type.is_shape:
-                        out_file[down_name] = h_down
-                        out_file[up_name] = h_up
+                    elif trafo_output.param_type.is_shape:
+                        # otherwise, handle shapes
+
+                        # create a shallow copy of the parameter object with potentially updated type
+                        _param_obj = DotDict({**param_obj, "type": trafo_output.param_type})
+
+                        # unpack shapes
+                        h_nom = trafo_output.h_nom
+                        h_down = trafo_output.h_varied[0]
+                        h_up = trafo_output.h_varied[1]
+
+                        # custom hook to modify the shapes
+                        h_nom, h_down, h_up = self.modify_parameter_shape(
+                            cat_obj,
+                            proc_obj,
+                            _param_obj,
+                            h_nom,
+                            h_down,
+                            h_up,
+                        )
+
+                        # fill empty bins again after all transformations
+                        fill_empty(cat_obj, h_down)
+                        fill_empty(cat_obj, h_up)
+
+                        # save the effect
+                        __effects[param_obj.name] = (
+                            safe_div(integral(h_down), integral(h_nom)),
+                            safe_div(integral(h_up), integral(h_nom)),
+                        )
+
+                        # store hists
+                        __out_hists[down_name] = h_down
+                        __out_hists[up_name] = h_up
+
+                # store the nominal hist too and move it to the front
+                __out_hists[nom_name] = h_nom
+                __out_hists.move_to_end(nom_name, last=False)
+                _nom_hists[proc_name] = h_nom
+                _rates[proc_name] = h_nom.sum().value
 
             # data handling, first checking if data should be faked, then if real data exists
             if cat_obj.data_from_processes:
@@ -878,7 +715,7 @@ class DatacardWriter(object):
                 h_data = []
                 for proc_name in cat_obj.data_from_processes:
                     if proc_name in proc_hists:
-                        h_data.extend([hd["nominal"] for hd in proc_hists[proc_name].values()])
+                        h_data.extend([hd[od.Shift.NOMINAL] for hd in proc_hists[proc_name].values()])
                     else:
                         logger.warning(f"process '{proc_name}' not found in histograms for creating fake data, skipping")
                 if not h_data:
@@ -888,7 +725,9 @@ class DatacardWriter(object):
                 h_data = sum_hists(h_data)
                 handle_flow(cat_obj, h_data, data_name)
                 h_data.view().variance = h_data.view().value
-                out_file[data_name] = h_data
+                _out_hists[data_name] = h_data
+                _out_hists.move_to_end(data_name, last=False)
+                _nom_hists["data"] = h_data
                 _rates["data"] = float(h_data.sum().value)
 
             elif proc_hists.get("data"):
@@ -908,13 +747,86 @@ class DatacardWriter(object):
                 h_data = sum_hists(h_data)
                 data_name = data_pattern.format(category=cat_name)
                 handle_flow(cat_obj, h_data, data_name)
-                out_file[data_name] = h_data
+                _out_hists[data_name] = h_data
+                _out_hists.move_to_end(data_name, last=False)
+                _nom_hists["data"] = h_data
                 _rates["data"] = h_data.sum().value
 
             else:
                 logger.warning(f"neither real data found nor fake data created in category '{cat_name}'")
 
-        return (rates, effects, nom_pattern_comb, syst_pattern_comb)
+        # write to file
+        q = collections.deque(out_hists.items())
+        with uproot.recreate(shapes_path) as out_file:
+            while q:
+                name, h = q.popleft()
+                if isinstance(h, dict):
+                    q.extendleft(reversed(h.items()))
+                else:
+                    out_file[name] = h
+
+        return self.ShapeData(
+            nominal_hists=nom_hists,
+            rates=rates,
+            shape_effects=effects,
+            parameter_types=param_types,
+            evaluated_trafos=evaluated_trafos,
+            nom_pattern=nom_pattern_comb,
+            syst_pattern=syst_pattern_comb,
+        )
+
+    def validate_model(self, inference_model_inst: InferenceModel) -> None:
+        # per category and process, validate all parameters
+        for cat_obj in inference_model_inst.categories:
+            for proc_obj in cat_obj.processes:
+                try:
+                    self.transformer.validate_parameters(proc_obj.parameters)
+                except Exception as e:
+                    raise ValueError(
+                        f"invalid parameters for process '{proc_obj.name}' in category '{cat_obj.name}': {e}",
+                    ) from e
+
+    def validate_histograms(self, histograms: DatacardHists) -> None:
+        import hist
+
+        # validate structure of histograms, shape keys and histogram types
+        errors: list[str] = []
+        for cat_name, proc_hists in histograms.items():
+            if not isinstance(cat_name, str):
+                errors.append(f"category name key '{cat_name}' is not a string")
+            for proc_name, config_hists in proc_hists.items():
+                if not isinstance(proc_name, str):
+                    errors.append(f"process name '{proc_name}' in category '{cat_name}' is not a string")
+                for config_name, shift_hists in config_hists.items():
+                    if not isinstance(config_name, str):
+                        errors.append(
+                            f"config name '{config_name}' for process '{proc_name}' in category '{cat_name}' is not a "
+                            f"string",
+                        )
+                    for shift_key, h in shift_hists.items():
+                        # shift_key must be nominal or a tuple of (param_name, "up|down")
+                        if (
+                            shift_key != od.Shift.NOMINAL and
+                            (
+                                not isinstance(shift_key, (tuple, list)) or
+                                len(shift_key) != 2 or
+                                shift_key[1] not in {od.Shift.UP, od.Shift.DOWN}
+                            )
+                        ):
+                            errors.append(
+                                f"invalid shift key '{shift_key}' in config '{config_name}' for process '{proc_name}' "
+                                f"in category '{cat_name}'",
+                            )
+                        if not isinstance(h, hist.Hist):
+                            errors.append(
+                                f"histogram for shift '{shift_key}' in config '{config_name}' for process "
+                                f"'{proc_name}' in category '{cat_name}' is not a hist.Hist instance",
+                            )
+
+        # handle errors
+        if errors:
+            errors_repr = "\n  - ".join(errors)
+            raise ValueError(f"datacard histograms invalid, reasons:\n  - {errors_repr}")
 
     @classmethod
     def align_lines(
