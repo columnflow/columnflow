@@ -33,7 +33,7 @@ from columnflow.inference.transformation import ShapeTransformer
 from columnflow.plotting import check_multi_variable_support, check_multi_category_support
 from columnflow.util import DotDict, dev_sandbox, maybe_import, pattern_matcher
 from columnflow.hist_util import (
-    add_missing_shifts, sum_hists, select_category_bins, insert_axis_values, ensure_bin_exists,
+    add_missing_shifts, sum_hists, sum_hists_shift_aware, select_category_bins, insert_axis_values, ensure_bin_exists,
 )
 from columnflow.config_util import get_shift_from_configs, expand_shift_sources
 from columnflow.types import TYPE_CHECKING, TypeAlias, Any
@@ -363,18 +363,17 @@ class PlotVariablesBase(_PlotVariablesBase):
 
                         # loop and extract one histogram per process
                         for process_inst, process_info in config_process_map[config_inst].items():
-                            if dataset_inst not in process_info["dataset_proc_name_map"].keys():
+                            # get subprocess names to merge
+                            if not (subproc_names := process_info["dataset_proc_name_map"].get(dataset_inst)):
                                 continue
 
-                            # select processes and reduce axis
+                            # select and merge processes
                             h = h_in[{
                                 "process": [
                                     hist.loc(proc_name)
-                                    for proc_name in process_info["dataset_proc_name_map"][dataset_inst]
-                                    if proc_name in h_in.axes["process"]
+                                    for proc_name in set(subproc_names) & set(h_in.axes["process"])
                                 ],
-                            }]
-                            h = h[{"process": sum}]
+                            }][{"process": sum}]
 
                             # skip empty histograms right away
                             if h.empty():
@@ -786,6 +785,13 @@ class PlotVariablesBaseShiftsFromModel(
         "empty",
         brace_expand=True,
     )
+    merge_processes = law.CSVParameter(
+        default=(),
+        brace_expand=True,
+        description="names or patterns of processes to select from the inference model and optionally merge; if empty, "
+        "all processes defined by the model will be used unchanged; can also be the key of a mapping defined in the "
+        "'process_groups' auxiliary data of the config; default: empty",
+    )
     skip_processes = law.CSVParameter(
         default=(),
         brace_expand=True,
@@ -909,12 +915,42 @@ class PlotVariablesBaseShiftsFromModel(
             params["categories"] = tuple(sorted(category_map.keys()))
             params["category_map"] = {cat_name: category_map[cat_name] for cat_name in params["categories"]}
 
+            # expand merge processes
+            if (merge_processes := params.get("merge_processes")):
+                merge_processes = cls.find_config_objects(
+                    names=merge_processes,
+                    container=config_insts,
+                    object_cls=od.Process,
+                    groups_str="process_groups",
+                    multi_strategy="intersection",
+                )
+                params["merge_processes"] = tuple(merge_processes)
+
         return params
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    @property
+    def processes_repr(self) -> str:
+        return DatasetsProcessesMixin._processes_repr(self.merge_processes or self.processes)
 
-        # constraint: since the plotting requires actual process instances with labels, etc, it is currently not
+    @property
+    def datasets_repr(self) -> str:
+        return DatasetsProcessesMixin._datasets_repr(self.datasets)
+
+    @classmethod
+    def _nuisances_repr(cls, nuisances: set[str]) -> str:
+        return cls._multi_sequence_repr(nuisances, sort=True)
+
+    @property
+    def nuisances_repr(self) -> str:
+        return (
+            self._nuisances_repr(self.nuisance_map[self.branch_data.category])
+            if self.is_branch()
+            else self._nuisances_repr(set.union(*self.nuisance_map.values()))
+        )
+
+    @law.workflow_property(cache=True)
+    def processes(self) -> tuple[tuple[str]]:
+        # validation: since the plotting requires actual process instances with labels, etc, it is currently not
         # supported for the inference model to use the same config process multiple times within the same config object
         # to compose different model processes, e.g.
         #   proc obj a
@@ -938,33 +974,32 @@ class PlotVariablesBaseShiftsFromModel(
                             f"({','.join(proc_obj_names)}); this is currently not supported for plotting",
                         )
 
-    @property
-    def processes_repr(self) -> str:
-        return DatasetsProcessesMixin._processes_repr(self.processes)
-
-    @property
-    def datasets_repr(self) -> str:
-        return DatasetsProcessesMixin._datasets_repr(self.datasets)
-
-    @classmethod
-    def _nuisances_repr(cls, nuisances: set[str]) -> str:
-        return cls._multi_sequence_repr(nuisances, sort=True)
-
-    @property
-    def nuisances_repr(self) -> str:
-        return (
-            self._nuisances_repr(self.nuisance_map[self.branch_data.category])
-            if self.is_branch()
-            else self._nuisances_repr(set.union(*self.nuisance_map.values()))
-        )
-
-    @law.workflow_property(cache=True)
-    def processes(self) -> tuple[tuple[str]]:
+        # extract all processes from model that are required and not explicitly skipped
         config_data = self.combined_config_data
-        exclude = pattern_matcher(self.skip_processes) if self.skip_processes else (lambda proc_name: False)
-        include = lambda proc_name: not exclude(proc_name)
+        merge_proc_insts = {
+            config_inst: [config_inst.get_process(proc_name) for proc_name in self.merge_processes]
+            for config_inst in config_data
+        }
+        exclude_matcher = pattern_matcher(self.skip_processes) if self.skip_processes else (lambda proc_name: False)
+        def needed(config_inst: od.Config, proc_name: str) -> bool:
+            if exclude_matcher(proc_name):
+                return False
+            if self.merge_processes:
+                _proc_inst = config_inst.get_process(proc_name)
+                in_merge_processes = any(
+                    proc_inst == _proc_inst or proc_inst.has_process(_proc_inst, deep=True)
+                    for proc_inst in merge_proc_insts[config_inst]
+                )
+                if not in_merge_processes:
+                    return False
+            return True
+
         return tuple(
-            tuple(filter(include, set.union(*(mc_data.proc_names for mc_data in config_data.mc_datasets.values()))))
+            tuple(
+                proc_name
+                for proc_name in set.union(*(mc_data.proc_names for mc_data in config_data.mc_datasets.values()))
+                if needed(config_inst, proc_name)
+            )
             for config_inst, config_data in config_data.items()
         )
 
@@ -1133,12 +1168,19 @@ class PlotVariablesBaseShiftsFromModel(
         category_name: str,
         variable_name: str,
     ) -> ConfigHists:
+        """
+        Hook that uses all read histograms to
+        - insert missing nuisance parameters through bins on the "shift" axis,
+        - apply all parameter transformations to histograms, and
+        - optionally merge processes.
+        """
         import hist
 
         # determine which nuisances to consider for this category
         nuisances = {self.branch_data.nuisance} if self.split_nuisances else self.nuisance_map[category_name]
 
-        # build mapping "proc name -> config name -> arameter objects"
+        # build mapping "proc name -> config name -> parameter objects"
+        # (the latter are filtered by selected nuisances)
         param_map = collections.defaultdict(dict)
         for proc_objs in self.inference_model_inst.get_processes(category=self.category_map[category_name]).values():
             for proc_obj in proc_objs:
@@ -1152,6 +1194,7 @@ class PlotVariablesBaseShiftsFromModel(
         # create a shape transformer helper, for now with defaults
         transformer = ShapeTransformer(**(self.shape_transformer_kwargs or {}))
 
+        # go through all histograms and apply the parameter transformations to them, injecting the resulting shapes back
         for config_inst, proc_hists in hists.items():
             for proc_inst, h_all in proc_hists.items():
                 # pick the nominal histogram only, but keep the shift axis which is extended below
@@ -1181,7 +1224,7 @@ class PlotVariablesBaseShiftsFromModel(
                         else:
                             h_varied[param_obj.name] = None
 
-                    # perform transformations
+                    # perform transformations, force creation of shapes regardless of parameter type (rate or shape)
                     output = transformer.apply_parameters(
                         param_objs=param_objs,
                         h_nom=h_nom,
@@ -1202,9 +1245,32 @@ class PlotVariablesBaseShiftsFromModel(
                 # store the updated histogram
                 proc_hists[proc_inst] = h
 
+            # optional merging
+            if self.merge_processes:
+                orig_hists = proc_hists.copy()
+                proc_hists.clear()
+                for proc_name in self.merge_processes:
+                    proc_inst = config_inst.get_process(proc_name)
+                    _hists = []
+                    for _proc_inst, h in list(orig_hists.items()):
+                        if _proc_inst == proc_inst or proc_inst.has_process(_proc_inst, deep=True):
+                            orig_hists.pop(_proc_inst)
+                            _hists.append(h)
+                    if hists:
+                        proc_hists[proc_inst] = sum_hists_shift_aware(_hists)
+                    else:
+                        self.logger.warning(
+                            f"no processes histograms found to merge into process histogram '{proc_name}'; existing "
+                            f"processes were {','.join(p.name for p in orig_hists)}",
+                        )
+
         return hists
 
     def update_shifts_before_plotting(self, shifts: list[od.Shift], hists: MergedHistDicts) -> list[od.Shift]:
+        """
+        Hook used to extend list of shifts considered for plotting by those found in histograms (as per
+        :py:meth:`update_hists_before_config_merging`).
+        """
         # hists has only one entry, so unpack values
         proc_hists = next(iter(hists.values()))
 
