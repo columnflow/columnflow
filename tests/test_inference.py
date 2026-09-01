@@ -33,6 +33,7 @@ class TestInferenceModel(unittest.TestCase):
             scale=scale,
             is_dynamic=is_dynamic,
             skip_if_empty=True,
+            empty_bin_value=None,
             parameters=[],
         )
 
