@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 
-# Script that parses a job log file and runs the last "law run " command found in it.
-
 cf_run_from_log() {
+    # Script that parses a job log file and runs the last "law run " command found in it.
+    #
+    # Arguments:
+    #   1. log_file
+    #       The log file to extract the command from.
+    #   2. skip_confirmation (optional)
+    #       Whether to skip the confirmation prompt before executing the command.
+
     # get arguments
     local log_file="$1"
     if [ -z "${log_file}" ]; then
@@ -12,6 +18,10 @@ cf_run_from_log() {
         2>&1 echo "log file '${log_file}' does not exist"
         return "2"
     fi
+
+    local skip_confirmation="${CF_RUN_FROM_LOG_FORCE:-false}"
+    [ "$#" -ge 2 ] && [ ! -z "$2" ] && skip_confirmation="$2"
+    skip_confirmation="$( cf_cast_bool "${skip_confirmation}" )"
 
     # extract the command
     local cmd="$( cat "${log_file}" | grep -Po '^command: \Klaw run .+$' | tail -n 1 )"
@@ -25,7 +35,6 @@ cf_run_from_log() {
     echo ""
 
     # prompt the user for confirmation before executing the command
-    local skip_confirmation="$( cf_cast_bool "${CF_RUN_FROM_LOG_FORCE:-false}" )"
     if ${skip_confirmation}; then
         cf_color green "executing ..."
         eval "${cmd}"
