@@ -530,15 +530,6 @@ class DatacardWriter(object):
                     view.value[-2] += overflow[0]
                     view.variance[-2] += overflow[1]
 
-        # helper to fill empty bins in-place
-        def fill_empty(cat_obj, h):
-            if not cat_obj.empty_bin_value:
-                return
-            value = h.view().value
-            mask = value <= 0
-            value[mask] = cat_obj.empty_bin_value
-            h.view().variance[mask] = cat_obj.empty_bin_value
-
         # iterate through shapes
         for cat_name, proc_hists in self.histograms.items():
             cat_obj = self.inference_model_inst.get_category(cat_name)
@@ -588,6 +579,18 @@ class DatacardWriter(object):
                     skip_msg = logger.info(skip_msg)
                     continue
 
+                # helper to fill empty bins in-place
+                def fill_empty(h: hist.Hist) -> None:
+                    empty_bin_value = proc_obj.empty_bin_value
+                    if empty_bin_value is None:
+                        empty_bin_value = cat_obj.empty_bin_value
+                    if empty_bin_value is None or empty_bin_value <= 0:
+                        return
+                    value = h.view().value
+                    mask = value <= 0
+                    value[mask] = empty_bin_value
+                    h.view().variance[mask] = empty_bin_value
+
                 # helper to extract sum of hists, apply scale, handle flow and fill empty bins
                 def load(
                     hist_name: str,
@@ -597,7 +600,7 @@ class DatacardWriter(object):
                 ) -> hist.Hist:
                     h = get_hist_sum(hist_key, fallback_key) * scale
                     handle_flow(cat_obj, h, hist_name)
-                    fill_empty(cat_obj, h)
+                    fill_empty(h)
                     return h
 
                 # get the process scale (usually 1)
@@ -690,8 +693,8 @@ class DatacardWriter(object):
                         )
 
                         # fill empty bins again after all transformations
-                        fill_empty(cat_obj, h_down)
-                        fill_empty(cat_obj, h_up)
+                        fill_empty(h_down)
+                        fill_empty(h_up)
 
                         # save the effect
                         __effects[param_obj.name] = (
