@@ -539,11 +539,10 @@ def ensure_bin_exists(
     h = h.copy()
 
     # find the axis and its index
-    for axis_index, axis in enumerate(h.axes):
-        if axis.name == axis_name:
-            break
-    else:
+    if axis_name not in h.axes.name:
         raise ValueError(f"no axis named '{axis_name}' found in histogram: {h}")
+    axis_index = h.axes.name.index(axis_name)
+    axis = h.axes[axis_name]
 
     # for now, only adjustments to categorical axes are allowed
     categorical_types = (hist.axis.IntCategory, hist.axis.StrCategory)

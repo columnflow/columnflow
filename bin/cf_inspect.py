@@ -12,7 +12,7 @@ import os
 import json
 import pickle
 
-from columnflow.columnar_util import update_ak_array, ChunkedIOHandler
+from columnflow.columnar_util import update_ak_array, attach_coffea_behavior, ChunkedIOHandler
 from columnflow.util import ipython_shell, maybe_import
 from columnflow.types import TYPE_CHECKING, Any
 
@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
     if len(objects) > 1 and args.merge_columns:
         objects = [update_ak_array(objects[0], *objects[1:])]
-    if len(objects) == 1:
+    if (single_object := len(objects) == 1):
         objects = objects[0]
     print("file content loaded into variable 'objects'")
 
@@ -161,10 +161,11 @@ if __name__ == "__main__":
     if args.events:
         # preload common packages
         import awkward as ak  # noqa
-        import numpy as np   # noqa
+        import numpy as np  # noqa
 
-        events = interpreted = objects
-        print("events loaded from objects[0] into variable 'events'")
+        interpreted = attach_coffea_behavior(objects) if single_object else list(map(attach_coffea_behavior, objects))
+        events = interpreted
+        print("events loaded from objects into variable 'events'")
 
     elif args.hists:
         # preload common packages

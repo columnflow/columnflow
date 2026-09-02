@@ -356,7 +356,12 @@ def use_flow_bins(
         return h_out
 
     # determine the index of the axis of interest and check if it has flow bins activated
-    axis_idx = axis_name if isinstance(axis_name, int) else h_in.axes.name.index(axis_name)
+    if isinstance(axis_name, int):
+        axis_idx = axis_name
+    elif axis_name in h_in.axes.name:
+        axis_idx = h_in.axes.name.index(axis_name)
+    else:
+        raise ValueError(f"axis '{axis_name}' not found in histogram {h_in} with axes {h_in.axes.name}")
     h_view = h_out.view(flow=True)
     if h_out.view().shape[axis_idx] + 2 != h_view.shape[axis_idx]:
         raise Exception(f"We expect axis {axis_name} to have assigned an underflow and overflow bin")

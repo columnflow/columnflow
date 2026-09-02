@@ -795,8 +795,8 @@ class PlotVariablesBaseShiftsFromModel(
     skip_processes = law.CSVParameter(
         default=(),
         brace_expand=True,
-        description="names or patterns of processes to skip, based on all processes extract from the inference model; "
-        "default: empty",
+        description="names or patterns of processes to skip, based on all processes extracted from the inference "
+        "model; default: empty",
     )
     nuisances = law.CSVParameter(
         default=(),
@@ -1256,7 +1256,7 @@ class PlotVariablesBaseShiftsFromModel(
                         if _proc_inst == proc_inst or proc_inst.has_process(_proc_inst, deep=True):
                             orig_hists.pop(_proc_inst)
                             _hists.append(h)
-                    if hists:
+                    if _hists:
                         proc_hists[proc_inst] = sum_hists_shift_aware(_hists)
                     else:
                         self.logger.warning(
