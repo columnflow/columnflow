@@ -853,65 +853,12 @@ class PlotVariablesBaseShiftsFromModel(
                 )))
             params["variables"] = tuple(variables)
 
-            # before evaluating categories, build a map "model category -> config categories"
-            full_catogory_map_rev = {
-                cat_obj.name: {
-                    config_data.category
-                    for config_name, config_data in cat_obj.config_data.items()
-                    if config_name in params["configs"]
-                }
-                for cat_obj in inference_model_inst.categories
-            }
-            full_category_map = {
-                cat_name: model_cat_name
-                for model_cat_name, cat_names in full_catogory_map_rev.items()
-                for cat_name in cat_names
-            }
-
-            # expand / default categories
-            category_map = {}
-            if (categories := params.get("categories")):
-                for cat_expr in categories:
-                    cat_pattern, model_cat_pattern = cat_expr.split(":", 1) if ":" in cat_expr else (cat_expr, None)
-
-                    # when model cat is a pattern, it should expand to exactly one actual name
-                    model_cat_name = None
-                    if model_cat_pattern:
-                        matcher = pattern_matcher(model_cat_pattern)
-                        for _model_cat_name in full_catogory_map_rev.keys():
-                            if matcher(_model_cat_name):
-                                if model_cat_name is not None:
-                                    raise Exception(
-                                        f"model category pattern '{model_cat_pattern}' matches multiple model "
-                                        f"categories ('{model_cat_name}' and '{_model_cat_name}'); please specify a "
-                                        "more specific pattern or use an exact name",
-                                    )
-                                model_cat_name = _model_cat_name
-                        if model_cat_name is None:
-                            raise Exception(
-                                f"model category pattern '{model_cat_pattern}' does not match any model category",
-                            )
-
-                    # expand category pattern
-                    cat_names = cls.find_config_objects(
-                        names=cat_pattern,
-                        container=config_insts,
-                        object_cls=od.Category,
-                        groups_str="category_groups",
-                        multi_strategy="intersection",
-                    )
-
-                    # fill the map
-                    for cat_name in cat_names:
-                        if model_cat_name is None and cat_name not in full_category_map:
-                            raise Exception(
-                                f"category '{cat_name}' is not defined in the inference model; using the syntax "
-                                "'CATEGORY:MODEL_CATEGORY', as MODEL_CATEGORY, specify any of "
-                                f"{','.join(full_catogory_map_rev)}",
-                            )
-                        category_map[cat_name] = model_cat_name or full_category_map[cat_name]
-            else:
-                category_map.update(full_category_map)
+            # expand categories
+            category_map = cls.resolve_model_category_map(
+                inference_model_inst=inference_model_inst,
+                config_insts=config_insts,
+                categories=params.get("categories"),
+            )
             params["categories"] = tuple(sorted(category_map.keys()))
             params["category_map"] = {cat_name: category_map[cat_name] for cat_name in params["categories"]}
 
@@ -927,6 +874,71 @@ class PlotVariablesBaseShiftsFromModel(
                 params["merge_processes"] = tuple(merge_processes)
 
         return params
+
+    @classmethod
+    def resolve_model_category_map(cls, inference_model_inst, config_insts, categories) -> dict[str, str]:
+        # before evaluating categories, build a map "model category -> config categories"
+        config_names = {config_inst.name for config_inst in config_insts}
+        full_catogory_map_rev = {
+            cat_obj.name: {
+                config_data.category
+                for config_name, config_data in cat_obj.config_data.items()
+                if config_name in config_names
+            }
+            for cat_obj in inference_model_inst.categories
+        }
+        full_category_map = {
+            cat_name: model_cat_name
+            for model_cat_name, cat_names in full_catogory_map_rev.items()
+            for cat_name in cat_names
+        }
+
+        # expand / default categories
+        category_map = {}
+        if categories:
+            for cat_expr in categories:
+                cat_pattern, model_cat_pattern = cat_expr.split(":", 1) if ":" in cat_expr else (cat_expr, None)
+
+                # when model cat is a pattern, it should expand to exactly one actual name
+                model_cat_name = None
+                if model_cat_pattern:
+                    matcher = pattern_matcher(model_cat_pattern)
+                    for _model_cat_name in full_catogory_map_rev.keys():
+                        if matcher(_model_cat_name):
+                            if model_cat_name is not None:
+                                raise Exception(
+                                    f"model category pattern '{model_cat_pattern}' matches multiple model "
+                                    f"categories ('{model_cat_name}' and '{_model_cat_name}'); please specify a "
+                                    "more specific pattern or use an exact name",
+                                )
+                            model_cat_name = _model_cat_name
+                    if model_cat_name is None:
+                        raise Exception(
+                            f"model category pattern '{model_cat_pattern}' does not match any model category",
+                        )
+
+                # expand category pattern
+                cat_names = cls.find_config_objects(
+                    names=cat_pattern,
+                    container=config_insts,
+                    object_cls=od.Category,
+                    groups_str="category_groups",
+                    multi_strategy="intersection",
+                )
+
+                # fill the map
+                for cat_name in cat_names:
+                    if model_cat_name is None and cat_name not in full_category_map:
+                        raise Exception(
+                            f"category '{cat_name}' is not defined in the inference model; using the syntax "
+                            "'CATEGORY:MODEL_CATEGORY', as MODEL_CATEGORY, specify any of "
+                            f"{','.join(full_catogory_map_rev)}",
+                        )
+                    category_map[cat_name] = model_cat_name or full_category_map[cat_name]
+        else:
+            category_map.update(full_category_map)
+
+        return category_map
 
     @property
     def processes_repr(self) -> str:
