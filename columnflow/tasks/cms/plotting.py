@@ -213,16 +213,46 @@ class PlotPostfitFromModel1D(_PlotPostfitFromModel):
             h2.view(flow=True).value[...] = h.view(flow=True).value
             return h2
 
-        # to be consistent to other plotting tasks, create a mapping "process -> hist"
-        proc_hists: ProcHists = {}
+        # create a mapping of process instance to process object in the inference model
+        proc_map: dict[od.Process, DotDict] = {}
         for proc_obj_name in shapes.processes:
             proc_obj = self.inference_model_inst.get_process(process=proc_obj_name, category=cat_obj.name)
-            proc_name = proc_obj.config_data[config_inst.name].process
-            if exclude_matcher(proc_name):
-                continue
-            proc_inst = config_inst.get_process(proc_name)
-            proc_hists[proc_inst] = sanitize_hist(shapes.hist(proc_obj_name))
-        proc_hists[config_inst.get_process("data")] = sanitize_hist(shapes.data_hist)
+            proc_inst = config_inst.get_process(proc_obj.config_data[config_inst.name].process)
+            proc_map[proc_inst] = proc_obj
+
+        # helper to show warnings in case a process is not used but actually contributed to the requested uncertainty
+        def maybe_warn_unused_process(proc_inst: od.Process, skip: bool = False) -> None:
+            # never warn about data
+            if proc_inst.is_data:
+                return
+            # never warn in case "none" uncertainty is requested
+            if self.uncertainty == "none":
+                return
+            # do not warn for signals when only "bkg" uncertainty is requested
+            if self.uncertainty == "bkg" and proc_map[proc_inst].is_signal:
+                return
+            # warn
+            if skip:
+                action = "skipped"
+                extra = ""
+            else:
+                action = "not merged"
+                extra = f"; merge processes: {','.join(self.merge_processes)}"
+            self.logger.warning(
+                f"shape of process '{proc_inst.name}' was {action} for plotting in category '{category_inst.name}', "
+                f"but was likely considered for the computation of the requested uncertainty type '{self.uncertainty}' "
+                f"which is inconsistent and might be misleading{extra}",
+            )
+
+        # to be consistent to other plotting tasks, create a mapping "process -> hist"
+        proc_hists: ProcHists = {}
+        for proc_inst, proc_obj in proc_map.items():
+            if exclude_matcher(proc_inst.name):
+                maybe_warn_unused_process(proc_inst, skip=True)
+            else:
+                proc_hists[proc_inst] = sanitize_hist(shapes.hist(proc_obj.name))
+        if not exclude_matcher("data"):
+            proc_hists[config_inst.get_process("data")] = sanitize_hist(shapes.data_hist)
 
         # optional process merging and selection
         if self.merge_processes:
@@ -239,14 +269,12 @@ class PlotPostfitFromModel1D(_PlotPostfitFromModel):
                     proc_hists[proc_inst] = sum_hists(_hists)
                 else:
                     self.logger.warning(
-                        f"no processes histograms found to merge into process histogram '{proc_name}'; existing "
-                        f"processes were {','.join(p.name for p in orig_hists)}",
+                        f"no process shape found to merge into process histogram '{proc_name}'; existing processes "
+                        f"were {','.join(p.name for p in orig_hists)}",
                     )
-            if orig_hists and self.uncertainty != "none":
-                raise Exception(
-                    "the following processes were not merged into any of the specified merge processes which is "
-                    f"inconsistent when not using '--uncertainty none': {','.join(p.name for p in orig_hists)}",
-                )
+            # potentially warn about unmerged, left-over processes
+            for proc_inst in orig_hists:
+                maybe_warn_unused_process(proc_inst, skip=False)
 
         # update histograms using custom hooks
         proc_hists = self.invoke_hist_hooks(
