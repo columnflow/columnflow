@@ -312,11 +312,13 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     config is used.
 
     When py:attr`allow_stitching` is set to True, the sum of event weights is computed for all datasets with a leaf
-    process contained in the leaf processes of the py:attr:`dataset_inst`. For stitching, the process_id needs to be
-    reconstructed for each leaf process on a per event basis. Moreover, when stitching is enabled, an additional
-    normalization weight is computed for the inclusive dataset only and stored in a column named
-    `<weight_name>_inclusive_only`. This weight resembles the normalization weight for the inclusive dataset, as if it
-    were unstitched and should therefore only be applied, when using the inclusive dataset as a standalone dataset.
+    process contained within the main process of the py:attr:`dataset_inst`. For stitching, the "process_id" needs to be
+    reconstructed for each leaf process on a per-event basis.
+
+    Moreover, when stitching is enabled, an additional normalization weight is computed for the inclusive dataset only
+    and stored in a column named `<weight_name>_inclusive`. This weight resembles the normalization weight for the
+    inclusive dataset, as if it were unstitched and should therefore only be applied, when using the inclusive dataset
+    as a standalone dataset.
     """
     # read the process id column
     process_id = np.asarray(events.process_id)
@@ -342,7 +344,7 @@ def normalization_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Arra
     events = set_ak_column(events, self.weight_name, norm_weight, value_type=np.float32)
 
     # when stitching, also compute the inclusive-only weight
-    if self.allow_stitching and self.dataset_inst == self.inclusive_dataset:
+    if self.allow_stitching and self.weight_name_incl:
         incl_norm_weight = events.mc_weight * self.inclusive_weight
         events = set_ak_column(events, self.weight_name_incl, incl_norm_weight, value_type=np.float32)
 
@@ -365,7 +367,8 @@ def normalization_weights_init(self: Producer, **kwargs) -> None:
         self.inclusive_dataset, self.required_datasets = self.get_stitching_datasets()
 
         # potentially also store the weight needed for only using the inclusive dataset
-        if self.dataset_inst == self.inclusive_dataset:
+        self.weight_name_incl = None
+        if self.dataset_inst == self.inclusive_dataset and len(self.required_datasets) > 1:
             self.weight_name_incl = f"{self.weight_name}_inclusive"
             self.produces.add(self.weight_name_incl)
     else:
