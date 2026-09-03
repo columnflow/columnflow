@@ -537,8 +537,14 @@ def prepare_stack_plot_config(
     show_syst_rate_change: bool = False,
     ratio_mark_out_of_range: bool = True,
     stat_error_label: str = "MC stat. unc.",
+    stat_hatch_style: str = "black",
     syst_error_label: str = "MC syst. unc.",
-    combined_error_label: str = "MC syst. + stat. unc.",
+    syst_hatch_style: str = "green_backwards",
+    combined_error_label: str = "MC unc.",
+    combined_hatch_style: str = "black",
+    custom_errors: np.ndarray | tuple[np.ndarray, np.ndarray] | None = None,  # up/down in asym. case
+    custom_error_label: str = "Custom unc.",
+    custom_hatch_style: str = "black",
     density: bool = False,
     **kwargs,
 ) -> OrderedDict:
@@ -640,11 +646,11 @@ def prepare_stack_plot_config(
             "kwargs": {
                 "norm": mc_norm,
                 "label": stat_error_label,
-                "hatch_style": "black",
+                "hatch_style": stat_hatch_style,
             },
             "ratio_kwargs": {
                 "norm": h_mc.values(),
-                "hatch_style": "black",
+                "hatch_style": stat_hatch_style,
             },
         }
 
@@ -656,7 +662,7 @@ def prepare_stack_plot_config(
         _shift_insts = shift_insts
         _mc_syst_hists = mc_syst_hists
         label = syst_error_label
-        hatch_style = "green_backwards"
+        hatch_style = syst_hatch_style
         if merge_stat_errors:
             _shift_insts = [
                 *shift_insts,
@@ -672,7 +678,7 @@ def prepare_stack_plot_config(
                 insert_axis_values(h, "shift", "mc_stat_down", nom_view.value - stat_err)
                 _mc_syst_hists.append(h)
             label = combined_error_label
-            hatch_style = "black"
+            hatch_style = stat_hatch_style
         # add plot config
         plot_config["mc_syst_unc"] = {
             "method": "draw_syst_error_bands",
@@ -690,6 +696,27 @@ def prepare_stack_plot_config(
                 "shift_insts": _shift_insts,
                 "norm": h_mc.values(),
                 "hatch_style": hatch_style,
+            },
+        }
+
+    # optional additional error band
+    draw_custom_errors = bool(custom_errors is not None and h_mc_stack is not None)
+    if draw_custom_errors:
+        mc_norm = shape_norm_func(h_mc, shape_norm)
+        # add plot config
+        plot_config["mc_syst_unc"] = {
+            "method": "draw_custom_error_band",
+            "hist": h_mc,
+            "kwargs": {
+                "errors": custom_errors,
+                "norm": mc_norm,
+                "label": custom_error_label,
+                "hatch_style": custom_hatch_style,
+            },
+            "ratio_kwargs": {
+                "errors": custom_errors,
+                "norm": h_mc.values(),
+                "hatch_style": custom_hatch_style,
             },
         }
 
