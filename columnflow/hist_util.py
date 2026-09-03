@@ -76,11 +76,22 @@ def fill_hist(
         flat_values = flat_np_view(data[ax.name])
         right_egde_mask = flat_values == ax.edges[-1]
         if np.any(right_egde_mask):
-            flat_values = ak.where(right_egde_mask, flat_values - ax.widths[-1] * 1e-5, flat_values)
+            corr_values = ak.where(right_egde_mask, flat_values - ax.widths[-1] * 1e-5, flat_values)
+            # in edge cases, corr_values might still be exactly at the edge value so check and optionally shift again
+            right_egde_mask = corr_values == ax.edges[-1]
+            if np.any(right_egde_mask):
+                corr_values = ak.where(corr_values == ax.edges[-1], flat_values - ax.widths[-1] * 0.5, corr_values)
+                # final check
+                right_egde_mask = corr_values == ax.edges[-1]
+                if np.any(right_egde_mask):
+                    raise Exception(
+                        f"failed to ultimately correct values that hit the last bin edge for axis '{ax.name}' in "
+                        f"histogram '{h.name}'",
+                    )
             data[ax.name] = (
-                flat_values
+                corr_values
                 if data[ax.name].ndim == 1
-                else layout_ak_array(flat_values, data[ax.name])
+                else layout_ak_array(corr_values, data[ax.name])
             )
 
     # check if conversion to records is needed
