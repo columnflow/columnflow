@@ -969,7 +969,7 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
     )
     slurm_flavor = luigi.ChoiceParameter(
         default=_default_slurm_flavor,
-        choices=("maxwell",),
+        choices=("maxwell","iphc"),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
         f"maxwell; default: '{_default_slurm_flavor}'",
@@ -1041,12 +1041,23 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
 
         # set nodes
         config.custom_content.append(("nodes", 1))
-
+        
         # custom, flavor dependent settings
         if self.slurm_flavor == "maxwell":
             # nothing yet
             pass
 
+        elif self.slurm_flavor == "iphc":
+            # Slurm resource request
+            # asking for memory > 2 GB (default) is not allowed,
+            # so use more cpus-per-task to avail more memory
+            # 4 cpus-per-task ==> max 8G memory
+            config.custom_content.extend([
+                ("ntasks", 1),
+                ("cpus-per-task", 4),
+            ])
+
+        
         # render variales
         config.render_variables["cf_bootstrap_name"] = "slurm"
         config.render_variables.setdefault("cf_pre_setup_command", "")
