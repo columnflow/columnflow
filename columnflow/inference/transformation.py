@@ -682,12 +682,14 @@ class ShapeTransformer:
         return float(sum(cls.get_values(inp, flow=flow)))
 
     @classmethod
-    def validate_effect(cls, effect: Effect) -> bool:
+    def validate_effect(cls, effect: Effect, silent: bool = False) -> bool:
         valid_num = lambda n: isinstance(n, (float, int)) and n >= 0
         if valid_num(effect):
             return True
         if isinstance(effect, tuple) and len(effect) == 2 and all(map(valid_num, effect)):
             return True
+        if silent:
+            return False
         raise ValueError(f"invalid effect {effect}: must be single value of 2-tuple of a non-negative float, int")
 
     @classmethod

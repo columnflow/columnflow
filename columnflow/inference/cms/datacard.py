@@ -327,7 +327,7 @@ class DatacardWriter(object):
                         encoded_effect = "-"
                     else:
                         encoded_effect = str(rnd(effect))
-                elif isinstance(effect, (tuple, list)) and self.transformer.validate_effect(effect):
+                elif isinstance(effect, (tuple, list)) and self.transformer.validate_effect(effect, silent=True):
                     encoded_effect = f"{rnd(effect[0])}/{rnd(effect[1])}"
                 else:
                     raise ValueError(
@@ -496,14 +496,15 @@ class DatacardWriter(object):
             # warn in case of flow content
             if cat_obj.flow_strategy in {FlowStrategy.warn, FlowStrategy.move}:
                 move_msg = "; will be moved to first/last bin" if cat_obj.flow_strategy == FlowStrategy.move else ""
+                log_once = logger.warning_once if cat_obj.flow_strategy == FlowStrategy.warn else logger.info_once
                 if underflow[0]:
-                    logger.warning_once(
+                    log_once(
                         f"underflow_warn_{self.inference_model_inst.cls_name}_{cat_obj.name}_{name}",
                         f"underflow content detected in category '{cat_obj.name}' for histogram "
                         f"'{name}' ({underflow[0] / view.value.sum() * 100:.1f}% of integral){move_msg}",
                     )
                 if overflow[0]:
-                    logger.warning_once(
+                    log_once(
                         f"overflow_warn_{self.inference_model_inst.cls_name}_{cat_obj.name}_{name}",
                         f"overflow content detected in category '{cat_obj.name}' for histogram "
                         f"'{name}' ({overflow[0] / view.value.sum() * 100:.1f}% of integral){move_msg}",
