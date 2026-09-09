@@ -30,6 +30,9 @@ if TYPE_CHECKING:
     hist = maybe_import("hist")
 
 
+default_store_per_variable = law.config.get_expanded_bool("analysis", "default_histogram_store_per_variable")
+
+
 class VariablesMixinWorkflow(
     VariablesMixin,
     law.LocalWorkflow,
@@ -56,6 +59,10 @@ class _CreateHistograms(
 class CreateHistograms(_CreateHistograms):
 
     last_edge_inclusive = last_edge_inclusive_inst
+    store_per_variable = luigi.BoolParameter(
+        default=default_store_per_variable,
+        description=f"when set, store each variable in a separate output file; default: {default_store_per_variable}",
+    )
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -148,7 +155,15 @@ class CreateHistograms(_CreateHistograms):
 
     @workflow_condition.output
     def output(self):
-        return {"hists": self.target(f"hist__vars_{self.variables_repr}__{self.branch}.pickle")}
+        output = {}
+        if self.store_per_variable:
+            output["hists"] = law.SiblingFileCollection({
+                var_name: self.target(f"hist__var_{var_name}__{self.branch}.pickle")
+                for var_name in self.variable_tuples
+            })
+        else:
+            output["hists"] = self.target(f"hist__vars_{self.variables_repr}__{self.branch}.pickle")
+        return output
 
     @law.decorator.notify
     @law.decorator.log
@@ -334,7 +349,13 @@ class CreateHistograms(_CreateHistograms):
         self.teardown_hist_producer_inst()
 
         # merge output files
-        self.output()["hists"].dump(histograms, formatter="pickle")
+        output = self.output()["hists"]
+        with self.publish_step(f"dumping {len(histograms)} histogram(s) ..."):
+            if self.store_per_variable:
+                for var_key, outp in output.targets.items():
+                    outp.dump(histograms[var_key], formatter="pickle")
+            else:
+                output.dump(histograms, formatter="pickle")
 
 
 # overwrite class defaults
@@ -456,7 +477,11 @@ class MergeHistograms(_MergeHistograms):
 
         # load input histograms
         hists = [
-            inp["hists"].load(formatter="pickle")
+            (
+                {var_name: _inp.load(formatter="pickle") for var_name, _inp in inp["hists"].targets.items()}
+                if isinstance(inp["hists"], law.FileCollection)
+                else inp["hists"].load(formatter="pickle")
+            )
             for inp in self.iter_progress(inputs.targets.values(), len(inputs), reach=(0, 50))
         ]
 
