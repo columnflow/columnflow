@@ -12,12 +12,13 @@ import os
 import json
 import pickle
 
-from columnflow.columnar_util import update_ak_array, attach_coffea_behavior, ChunkedIOHandler
+from columnflow.columnar_util import update_ak_array, attach_coffea_behavior, get_ak_routes, ChunkedIOHandler
 from columnflow.util import ipython_shell, maybe_import
-from columnflow.types import TYPE_CHECKING, Any
+from columnflow.types import Any
 
-if TYPE_CHECKING:
-    ak = maybe_import("awkward")
+np = maybe_import("numpy")
+ak = maybe_import("awkward")
+uproot = maybe_import("uproot")
 
 
 def _load_json(fname: str, **kwargs) -> Any:
@@ -31,13 +32,10 @@ def _load_pickle(fname: str, **kwargs) -> Any:
 
 
 def _load_parquet(fname: str, **kwargs) -> ak.Array:
-    import awkward as ak
     return ak.from_parquet(fname)
 
 
 def _load_nano_root(fname: str, treepath: str | None = None, **kwargs) -> ak.Array:
-    import uproot
-
     # get the default treepath
     source = uproot.open(fname)
     if treepath is None:
@@ -73,15 +71,14 @@ def load(fname: str, **kwargs) -> Any:
     raise NotImplementedError(f"no loader implemented for extension '{ext}'")
 
 
-def list_content(data: Any) -> None:
-    if isinstance(data, ak.Array):
-        from columnflow.columnar_util import get_ak_routes
-        routes = get_ak_routes(data)
-        print(f"found {len(routes)} routes:")
+def list_content(obj: Any, name: str) -> None:
+    if isinstance(obj, ak.Array):
+        routes = get_ak_routes(obj)
+        print(f"\nfound {len(routes)} routes in '{name}':")
         print("  - " + "\n  - ".join(map(str, routes)))
 
     else:
-        raise NotImplementedError(f"content listing not implemented for '{type(data)}'")
+        print(f"WARNING: content listing not implemented for '{name}' ({type(obj)})")
 
 
 if __name__ == "__main__":
@@ -149,38 +146,45 @@ if __name__ == "__main__":
         "treepath": args.treepath,
     }
     objects = [load(fname, **load_kwargs) for fname in args.files]
+    single_object = len(objects) == 1
 
-    if len(objects) > 1 and args.merge_columns:
+    # merge objects if configured
+    if not single_object and args.merge_columns:
         objects = [update_ak_array(objects[0], *objects[1:])]
-    if (single_object := len(objects) == 1):
-        objects = objects[0]
-    print("file content loaded into variable 'objects'")
+    _objects = objects
 
     # interpret data
-    interpreted = objects
+    object_name = lambda i: f"objects[{i}]"
     if args.events:
-        # preload common packages
-        import awkward as ak  # noqa
-        import numpy as np  # noqa
-
-        interpreted = attach_coffea_behavior(objects) if single_object else list(map(attach_coffea_behavior, objects))
-        events = interpreted
-        print("events loaded from objects into variable 'events'")
+        objects = list(map(attach_coffea_behavior, objects))
+        if single_object:
+            events = objects[0]
+            object_name = lambda i: "events"
+            print("interpreted content as event array in variable 'events'")
+        else:
+            print("interpreted content as event arrays in variable 'objects'")
 
     elif args.hists:
-        # preload common packages
         import hist  # noqa
-
-        if isinstance(objects, hist.Hist):
-            h = interpreted = objects
-            print("histogram loaded from objects[0] into variable 'h'")
+        if single_object:
+            h = objects[0]
+            object_name = lambda i: "h"
+            print("interpreted content as histogram in variable 'h'")
         else:
-            hists = interpreted = objects
-            print("histograms loaded from objects[0] into variable 'hists'")
+            hists = objects
+            object_name = lambda i: "hists"
+            print("interpreted content as histograms in variable 'hists'")
+
+    else:
+        if single_object:
+            objects = objects[0]
+            object_name = lambda i: "objects"
+        print("file content loaded into variable 'objects'")
 
     # list content
     if args.list:
-        list_content(interpreted)
+        for i, obj in enumerate(_objects):
+            list_content(obj, object_name(i))
 
     # start the ipython shell
     ipython_shell()()
