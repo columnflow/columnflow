@@ -969,7 +969,7 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
     )
     slurm_flavor = luigi.ChoiceParameter(
         default=_default_slurm_flavor,
-        choices=("maxwell","iphc"),
+        choices=("maxwell", "iphc"),
         significant=False,
         description="the 'flavor' (i.e. configuration name) of the batch system; choices: "
         f"maxwell; default: '{_default_slurm_flavor}'",
