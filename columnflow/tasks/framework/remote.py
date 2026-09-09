@@ -1041,7 +1041,7 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
 
         # set nodes
         config.custom_content.append(("nodes", 1))
-        
+
         # custom, flavor dependent settings
         if self.slurm_flavor == "maxwell":
             # nothing yet
@@ -1057,7 +1057,6 @@ class SlurmWorkflow(RemoteWorkflowMixin, law.slurm.SlurmWorkflow):
                 ("cpus-per-task", 4),
             ])
 
-        
         # render variales
         config.render_variables["cf_bootstrap_name"] = "slurm"
         config.render_variables.setdefault("cf_pre_setup_command", "")
