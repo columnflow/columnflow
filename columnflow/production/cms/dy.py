@@ -120,8 +120,8 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
 
 @producer(
     uses={"gen_dilepton_pt"},
-    # weight variations are defined in init
-    produces={"dy_weight"},
+    # produced columns are defined in init based on weight_name
+    weight_name="dy_weight",
     # only run on mc
     mc_only=True,
     # function to determine the correction file
@@ -195,7 +195,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         dy_weight = self.dy_corrector.evaluate(*inputs)
 
         # save the weights in a new column
-        events = set_ak_column(events, f"dy_weight{postfix}", dy_weight, value_type=np.float32)
+        events = set_ak_column(events, f"{self.weight_name}{postfix}", dy_weight, value_type=np.float32)
 
     return events
 
@@ -216,15 +216,16 @@ def dy_weights_init(self: Producer, **kwargs) -> None:
     if self.dy_config.used_columns:
         self.uses.update(self.dy_config.used_columns)
 
-    # declare additional produced columns
+    # declare produced columns
+    self.produces.add(self.weight_name)
     if self.dy_config.unc_correction:
         # the number should always be 10
         self.n_unc = 10
         for i in range(self.n_unc):
-            self.produces.add(f"dy_weight{i + 1}_{{up,down}}")
+            self.produces.add(f"{self.weight_name}{i + 1}_{{up,down}}")
     elif self.dy_config.systs:
         for syst in self.dy_config.systs:
-            self.produces.add(f"dy_weight_{syst}")
+            self.produces.add(f"{self.weight_name}_{syst}")
 
 
 @dy_weights.requires
