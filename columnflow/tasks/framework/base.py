@@ -24,7 +24,7 @@ import law
 import order as od
 
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
-from columnflow.util import is_regex, prettify, DotDict, freeze
+from columnflow.util import prettify, DotDict, freeze
 from columnflow.types import Sequence, Callable, Any, T, Literal
 
 
@@ -413,10 +413,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             # (the original sequence is living once on the previous stack until now)
             _keys = keys_func()
 
-            # check if the pattern matches any key
-            regex = is_regex(pattern)
+            # check if the pattern matches any key, removing identical prefixes
+            prefix, _pattern = pattern.split("_", 1) if "_" in pattern else ("", pattern)
             for i, key in enumerate(_keys):
-                if law.util.multi_match(key, pattern, regex=regex):
+                if (not prefix or key.startswith(f"{prefix}_")) and law.util.multi_match(key.split("_", 1)[1], _pattern):
                     # remove the matched key from remaining lookup keys
                     _keys.pop(i)
                     # when obj is not a dict, we found the value
