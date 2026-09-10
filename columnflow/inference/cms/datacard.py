@@ -285,7 +285,7 @@ class DatacardWriter(object):
                 def rnd(f: float | int) -> float:
                     r = round(f, effect_precision)
                     # warn in case the precision is too low for the effect
-                    if abs(1.0 - f) < 10**(-effect_precision):
+                    if f != r and abs(1.0 - f) < 10**(-effect_precision):
                         logger.warning(
                             f"the effect value '{f}' is rounded to '{r}' which probably leads to loosing its intended "
                             f"impact; consider choosing an effect precision higher than the current value of "

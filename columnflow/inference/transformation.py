@@ -901,8 +901,8 @@ class ShapeTransformer:
             )
             return (d, u)
         # symmetrize by taking the mean of differences to 1
-        mean = 0.5 * (u + d) - 1
-        return (1 - mean, 1 + mean) if u >= d else (1 + mean, 1 - mean)
+        diff = 0.5 * (u - d)
+        return (1 - diff, 1 + diff)
 
     def _apply_symmetrize_shape(
         self,
@@ -926,9 +926,9 @@ class ShapeTransformer:
             logger.info(f"skipping shape symmetrization of parameter '{param_obj.name}' as effect is one-sided")
             return h_varied
         # find the central point, compute the diff w.r.t. nominal, and shift
-        diff = 0.5 * (d + u) - n
-        h_d = h_varied[0] * safe_div(d - diff, d)
-        h_u = h_varied[1] * safe_div(u - diff, u)
+        diff = 0.5 * (u - d)
+        h_d = h_varied[0] * safe_div(n - diff, d)
+        h_u = h_varied[1] * safe_div(n + diff, u)
         return (h_d, h_u)
 
     def _apply_asymmetrize_rate(
