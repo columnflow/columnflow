@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
 
 default_store_per_variable = law.config.get_expanded_bool("analysis", "default_histogram_store_per_variable")
+default_only_missing = law.config.get_expanded_bool("analysis", "default_histogram_only_missing")
 
 
 class VariablesMixinWorkflow(
@@ -61,7 +62,12 @@ class CreateHistograms(_CreateHistograms):
     last_edge_inclusive = last_edge_inclusive_inst
     store_per_variable = luigi.BoolParameter(
         default=default_store_per_variable,
-        description=f"when set, store each variable in a separate output file; default: {default_store_per_variable}",
+        description=f"when True, store each variable in a separate output file; default: {default_store_per_variable}",
+    )
+    only_missing = luigi.BoolParameter(
+        default=default_only_missing,
+        description="when True, and --store-per-variable is True as well, only store missing variable histograms; "
+        f"default: {default_only_missing}",
     )
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
@@ -177,8 +183,9 @@ class CreateHistograms(_CreateHistograms):
             Route, update_ak_array, add_ak_aliases, has_ak_column, attach_coffea_behavior, ak_concatenate_safe,
         )
 
-        # prepare inputs
+        # prepare inputs and outputs
         inputs = self.input()
+        outputs = self.output()["hists"]
 
         # get IDs and names of all leaf categories
         leaf_category_map = {
@@ -284,6 +291,9 @@ class CreateHistograms(_CreateHistograms):
 
                 # define and fill histograms, taking into account multiple axes
                 for var_key, var_names in self.variable_tuples.items():
+                    if self.store_per_variable and self.only_missing and outputs[var_key].exists():
+                        continue
+
                     # get variable instances
                     variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
@@ -338,7 +348,7 @@ class CreateHistograms(_CreateHistograms):
                     )
 
         # post-process the histograms
-        for var_key in self.variable_tuples.keys():
+        for var_key in histograms:
             histograms[var_key] = self.hist_producer_inst.run_post_process_hist(h=histograms[var_key], task=self)
 
             # check the format after post-processing if no merged preprocessing will take place
@@ -349,13 +359,12 @@ class CreateHistograms(_CreateHistograms):
         self.teardown_hist_producer_inst()
 
         # merge output files
-        output = self.output()["hists"]
         with self.publish_step(f"dumping {len(histograms)} histogram(s) ..."):
             if self.store_per_variable:
-                for var_key, outp in output.targets.items():
-                    outp.dump(histograms[var_key], formatter="pickle")
+                for var_key, h in histograms.items():
+                    outputs[var_key].dump(h, formatter="pickle")
             else:
-                output.dump(histograms, formatter="pickle")
+                outputs.dump(histograms, formatter="pickle")
 
 
 # overwrite class defaults
@@ -389,9 +398,9 @@ class _MergeHistograms(
 class MergeHistograms(_MergeHistograms):
 
     only_missing = luigi.BoolParameter(
-        default=False,
-        description="when True, identify missing variables first and only require histograms of "
-        "missing ones; default: False",
+        default=default_only_missing,
+        description="when True, identify missing variables first and only require histograms of missing ones; "
+        f"default: {default_only_missing}",
     )
     remove_previous = luigi.BoolParameter(
         default=False,
