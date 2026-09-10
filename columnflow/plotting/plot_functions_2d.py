@@ -25,6 +25,8 @@ from columnflow.plotting.plot_util import (
     apply_density,
     get_position,
     reduce_with,
+    remove_label_placeholders,
+    apply_label_placeholders,
 )
 from columnflow.types import TYPE_CHECKING
 
@@ -199,7 +201,33 @@ def plot_2d(
     # apply style_config
     ax.set(**style_config["ax_cfg"])
     if not skip_legend:
-        ax.legend(**style_config["legend_cfg"])
+        # TODO: the following is mostly taken from plot_all, which should take over most of the 2d plotting as well
+        legend_kwargs = style_config.get("legend_cfg") or {}
+
+        # prepare legend handles and labels
+        handles, labels = ax.get_legend_handles_labels()
+
+        # no handling of entries_per_column
+        legend_kwargs.pop("cf_entries_per_column", None)
+
+        # custom hook to adjust handles and labels
+        update_handles_labels = legend_kwargs.pop("cf_update_handles_labels", None)
+        if callable(update_handles_labels):
+            update_handles_labels(ax, handles, labels, 1)
+
+        # interpret placeholders
+        apply = []
+        if legend_kwargs.pop("cf_short_labels", False):
+            apply.append("SHORT")
+        if legend_kwargs.pop("cf_line_breaks", False):
+            apply.append("BREAK")
+        labels = [apply_label_placeholders(label, apply=apply) for label in labels]
+
+        # drop remaining placeholders
+        labels = list(map(remove_label_placeholders, labels))
+
+        # make legend using ordered handles/labels
+        ax.legend(handles, labels, **legend_kwargs)
 
     if variable_insts[0].discrete_x:
         ax.set_xticks([], minor=True)
