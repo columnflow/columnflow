@@ -428,34 +428,27 @@ class MergeHistograms(_MergeHistograms):
         # create a dummy branch map so that this task could be submitted as a job
         return {0: None}
 
-    def _get_variables(self):
-        if self.is_workflow():
-            return self.as_branch()._get_variables()
-
-        variables = self.variables
-
-        # optional dynamic behavior: determine not yet created variables and require only those
-        if self.only_missing:
-            missing = self.output()["hists"].count(existing=False, keys=True)[1]
-            variables = sorted(missing, key=variables.index)
-
-        return variables
+    @law.workflow_property(cache=True)
+    def missing_variables(self):
+        missing = self.as_branch().output()["hists"].count(existing=False, keys=True)[1]
+        return sorted(missing, key=self.variables.index)
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        variables = self._get_variables()
+        variables = self.missing_variables if self.only_missing else self.variables
         if variables:
             reqs["hists"] = self.pilot_workflow_requires(self.reqs.CreateHistograms.req_different_branching(
                 self,
                 branch=-1,
                 variables=tuple(variables),
+                _exclude={"only_missing"},
             ))
 
         return reqs
 
     def requires(self):
-        variables = self._get_variables()
+        variables = self.missing_variables if self.only_missing else self.variables
         if not variables:
             return []
 
@@ -464,6 +457,7 @@ class MergeHistograms(_MergeHistograms):
             branch=-1,
             variables=tuple(variables),
             workflow="local",
+            _exclude={"only_missing"},
         )
 
     def output(self):
