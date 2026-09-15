@@ -811,7 +811,7 @@ class PlotVariablesBaseShiftsFromModel(
     )
     split_nuisances = luigi.BoolParameter(
         default=False,
-        description="whether to split the nuisance parameters and create plots for each nuisances; default: False",
+        description="whether to split the nuisance parameters and create separate plots for each one; default: False",
     )
     # fix some upstream parameters
     multi_variable = False
@@ -1011,7 +1011,7 @@ class PlotVariablesBaseShiftsFromModel(
                 proc_name
                 for proc_name in set.union(*(mc_data.proc_names for mc_data in config_data.mc_datasets.values()))
                 if needed(config_inst, proc_name)
-            )
+            ) + (("data",) if config_data.data_datasets else ())
             for config_inst, config_data in config_data.items()
         )
 
@@ -1213,8 +1213,7 @@ class PlotVariablesBaseShiftsFromModel(
                 h = h_all[{"shift": [hist.loc("nominal")]}]
 
                 # check which nuisances should be added through parameter objects as shifts
-                param_objs = param_map.get(proc_inst.name, {})[config_inst.name]
-                if param_objs:
+                if proc_inst.name in param_map and (param_objs := param_map.get(proc_inst.name, {})[config_inst.name]):
                     # ensure that the shift axis contains all parameters
                     h = ensure_bin_exists(h, "shift", expand_shift_sources(param_obj.name for param_obj in param_objs))
 
@@ -1244,7 +1243,7 @@ class PlotVariablesBaseShiftsFromModel(
                         output_type=ShapeTransformer.OutputType.convert_to_shapes,
                     )
 
-                    # when the nominal hist was updated, inject it's values back into h
+                    # when the nominal hist was updated, inject its values back into h
                     # (can happen in certain circumstances depending on some transformations)
                     if output.nominal_changed:
                         insert_axis_values(h, "shift", "nominal", output.h_nom)
@@ -1270,7 +1269,7 @@ class PlotVariablesBaseShiftsFromModel(
                             _hists.append(h)
                     if _hists:
                         proc_hists[proc_inst] = sum_hists_shift_aware(_hists)
-                    else:
+                    elif orig_hists:
                         self.logger.warning(
                             f"no processes histograms found to merge into process histogram '{proc_name}'; existing "
                             f"processes were {','.join(p.name for p in orig_hists)}",
