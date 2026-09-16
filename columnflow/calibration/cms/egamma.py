@@ -77,6 +77,7 @@ class EGammaCorrectionConfig(TAFConfig):
 def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     # gather inputs
     coll = events[self.collection_name]
+    coll_empty = ak.all(ak.num(coll, axis=1) == 0)
     variable_map = {
         "run": events.run if ak.sum(ak.num(coll, axis=1), axis=0) else [],
         "pt": coll.pt,
@@ -105,11 +106,19 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
             events = set_ak_column(events, f"{self.collection_name}.energyErr_scale_uncorrected", coll.energyErr)
 
         # get scaled pt
-        scale = self.scale_corrector.evaluate("scale", *get_inputs(self.scale_corrector))
+        scale = (
+            1.0
+            if coll_empty
+            else self.scale_corrector.evaluate("scale", *get_inputs(self.scale_corrector))
+        )
         pt_scaled = coll.pt * scale
 
         # get scaled energy error
-        smear = self.smear_syst_corrector.evaluate("smear", *get_inputs(self.smear_syst_corrector, pt=pt_scaled))
+        smear = (
+            1.0
+            if coll_empty
+            else self.smear_syst_corrector.evaluate("smear", *get_inputs(self.smear_syst_corrector, pt=pt_scaled))
+        )
         energy_err_scaled = (((coll.energyErr)**2 + (coll.energy * smear)**2))**0.5 * scale
 
         # store columns
@@ -136,7 +145,7 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
                 "seediPhiOriY": coll.seediPhiOriY,
                 "eta": coll.superclusterEta,
             }
-            rnd = rnd_tool.evaluate(*(rnd_variable_map[inp.name] for inp in rnd_tool.inputs))
+            rnd = 1.0 if coll_empty else rnd_tool.evaluate(*(rnd_variable_map[inp.name] for inp in rnd_tool.inputs))
         else:
             rnd_args = (full_like(coll.pt, 0.0), full_like(coll.pt, 1.0))
             if self.use_deterministic_seeds:
@@ -149,7 +158,11 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
         # helper to compute smeared pt and energy error values given a syst
         def apply_smearing(syst):
             # get smeared pt
-            smear = self.smear_syst_corrector.evaluate(syst, *get_inputs(self.smear_syst_corrector))
+            smear = (
+                1.0
+                if coll_empty
+                else self.smear_syst_corrector.evaluate(syst, *get_inputs(self.smear_syst_corrector))
+            )
             smear_factor = 1.0 + smear * rnd
             pt_smeared = coll.pt * smear_factor
             # get smeared energy error
@@ -168,7 +181,11 @@ def _egamma_scale_smear(self: Calibrator, events: ak.Array, **kwargs) -> ak.Arra
                 # exact behavior depends on syst itself
                 if syst in {"scale_up", "scale_down"}:
                     # compute scale with smeared pt and apply muliplicatively to smeared values
-                    scale = self.smear_syst_corrector.evaluate(syst, *get_inputs(self.smear_syst_corrector, pt=pt_smeared))  # noqa: E501
+                    scale = (
+                        1.0
+                        if coll_empty
+                        else self.smear_syst_corrector.evaluate(syst, *get_inputs(self.smear_syst_corrector, pt=pt_smeared))  # noqa: E501
+                    )
                     events = set_ak_column_f32(events, f"{self.collection_name}.pt_{syst}", pt_smeared * scale)
                     events = set_ak_column_f32(events, f"{self.collection_name}.energyErr_{syst}", energy_err_smeared * scale)  # noqa: E501
 

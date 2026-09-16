@@ -23,7 +23,7 @@ from columnflow.plotting.plot_util import (
     HatchStyles,
     get_hatch_kwargs,
 )
-from columnflow.types import TYPE_CHECKING, Sequence
+from columnflow.types import TYPE_CHECKING, Sequence, Literal
 
 np = maybe_import("numpy")
 if TYPE_CHECKING:
@@ -183,6 +183,65 @@ def draw_syst_error_bands(
             bar_kwargs["label"] += f"__BREAK__{effect_str}"
         else:
             bar_kwargs["label"] = effect_str
+
+    # evaluate label placeholders
+    if "label" in bar_kwargs:
+        bar_kwargs["label"] = remove_label_placeholders(apply_label_placeholders(bar_kwargs["label"]))
+
+    # plot
+    ax.bar(**bar_kwargs)
+
+
+def draw_custom_error_band(
+    ax: plt.Axes,
+    h: hist.Hist,
+    errors: np.ndarray | tuple[np.ndarray, np.ndarray],
+    mode: Literal["abs", "rel"] = "abs",
+    norm: float | Sequence | np.ndarray = 1.0,
+    hatch_style: HatchStyles = "black",
+    **kwargs,
+) -> None:
+    if mode not in (known_modes := {"abs", "rel"}):
+        raise ValueError(f"mode must be one of {known_modes}, not '{mode}'")
+    if len(h.axes) != 1:
+        raise ValueError("draw_custom_error_band only supports 1D histograms")
+
+    # expand errors
+    if isinstance(errors, tuple):
+        if len(errors) != 2:
+            raise ValueError(f"when providing a tuple of errors, it must have length 2, not {len(errors)}")
+        errors_up, errors_down = errors
+    else:
+        errors_up = errors_down = errors
+    # check sizes
+    if len(errors_up) != h.axes[0].size:
+        raise ValueError(f"size of errors_up ({len(errors_up)}) does not match number of bins ({ax.size})")
+    if len(errors_down) != h.axes[0].size:
+        raise ValueError(f"size of errors_down ({len(errors_down)}) does not match number of bins ({ax.size})")
+    # always convert to relative values
+    if mode == "abs":
+        errors_up = errors_up / h.values()
+        errors_down = errors_down / h.values()
+
+    # sanitize
+    errors_up[np.isnan(errors_up)] = 0.0
+    errors_down[np.isnan(errors_down)] = 0.0
+
+    # compute the baseline
+    # fill 1 in places where both numerator and denominator are 0, and 0 for remaining nan's
+    baseline = h.values() / norm
+    baseline[(h.values() == 0) & (norm == 0)] = 1.0
+    baseline[np.isnan(baseline)] = 0.0
+
+    # create bar plot args
+    bar_kwargs = {
+        "x": h.axes[0].centers,
+        "bottom": baseline * (1 - errors_down),
+        "height": baseline * (errors_up + errors_down),
+        "width": h.axes[0].edges[1:] - h.axes[0].edges[:-1],
+        **get_hatch_kwargs(hatch_style),
+        **kwargs,
+    }
 
     # evaluate label placeholders
     if "label" in bar_kwargs:
@@ -482,7 +541,7 @@ def plot_all(
     plot_methods = {
         func.__name__: func
         for func in [
-            draw_stat_error_bands, draw_syst_error_bands, draw_stack, draw_hist, draw_profile,
+            draw_stat_error_bands, draw_syst_error_bands, draw_custom_error_band, draw_stack, draw_hist, draw_profile,
             draw_errorbars,
         ]
     }

@@ -81,7 +81,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
                     mc_datasets: [hh_ggf]
                 scale: 1.0
                 is_dynamic: False
-                skip_if_empty: True
+                skip_if_empty: False
+                empty_bin_value: None
                 parameters:
                   - name: lumi
                     type: rate_gauss
@@ -112,6 +113,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
                 scale: 1.0
                 is_dynamic: False
                 skip_if_empty: True
+                empty_bin_value: None
                 parameters:
                   - name: lumi
                     type: rate_gauss
@@ -289,6 +291,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         scale: float | int = 1.0,
         is_dynamic: bool = False,
         skip_if_empty: bool = True,
+        empty_bin_value: float | None = None,
     ) -> DotDict:
         """
         Returns a dictionary representing a process, forwarding all arguments.
@@ -301,6 +304,8 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
         :param is_dynamic: A boolean flag deciding whether this process is dynamic, i.e., whether it is created
             on-the-fly.
         :param skip_if_empty: A boolean flag deciding whether this process should be skipped if input hists are empty.
+        :param empty_bin_value: When bins have no content, they are filled with this value. Should have precedence over
+            the category's *empty_bin_value* setting. Only applies if the process is not skipped.
         :returns: A dictionary representing the process.
         """
         return DotDict([
@@ -314,6 +319,7 @@ class InferenceModel(Derivable, metaclass=InferenceModelMeta):
             ("scale", float(scale)),
             ("is_dynamic", bool(is_dynamic)),
             ("skip_if_empty", bool(skip_if_empty)),
+            ("empty_bin_value", None if empty_bin_value is None else float(empty_bin_value)),
             ("parameters", []),
         ])
 

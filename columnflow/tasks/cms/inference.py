@@ -24,6 +24,8 @@ if TYPE_CHECKING:
 
 class CreateDatacards(SerializeInferenceModelBase):
 
+    task_namespace = "cf.cms"
+
     resolution_task_cls = MergeHistograms
     datacard_writer_cls = DatacardWriter
 

@@ -22,7 +22,7 @@ logger = law.logger.get_logger(__name__)
 
 
 @dataclasses.dataclass
-class DrellYanConfig:
+class _DrellYanConfigBase:
     # era, e.g. "2022preEE"
     era: str
     # correction set name
@@ -31,6 +31,16 @@ class DrellYanConfig:
     unc_correction: str | None = None
     # generator order
     order: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.era or not self.correction:
+            raise ValueError(f"{self.__class__.__name__}: missing era or correction")
+        if self.unc_correction and not self.order:
+            raise ValueError(f"{self.__class__.__name__}: when unc_correction is defined, order must be set")
+
+
+@dataclasses.dataclass
+class DrellYanWeightConfig(_DrellYanConfigBase):
     # list of systematics to be considered
     systs: list[str] | None = None
     # functions to get the number of jets and b-tagged jets from the events in case they should be used as inputs
@@ -39,11 +49,23 @@ class DrellYanConfig:
     # additional columns to be loaded, e.g. as needed for njets or nbtags
     used_columns: set = dataclasses.field(default_factory=set)
 
-    def __post_init__(self) -> None:
-        if not self.era or not self.correction:
-            raise ValueError(f"{self.__class__.__name__}: missing era or correction")
-        if self.unc_correction and not self.order:
-            raise ValueError(f"{self.__class__.__name__}: when unc_correction is defined, order must be set")
+
+@dataclasses.dataclass
+class RecoilConfig(_DrellYanConfigBase):
+    pass
+
+
+@dataclasses.dataclass
+class DrellYanConfig(DrellYanWeightConfig):
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        logger.warning_once(
+            f"{self.__class__.__name__}_deprecated",
+            f"{self.__class__.__module__}.{self.__class__.__name__} is deprecated; please use either "
+            "'DrellYanWeightConfig' or 'RecoilConfig'",
+        )
 
 
 @producer(
@@ -120,8 +142,8 @@ def gen_dilepton(self, events: ak.Array, **kwargs) -> ak.Array:
 
 @producer(
     uses={"gen_dilepton_pt"},
-    # weight variations are defined in init
-    produces={"dy_weight"},
+    # produced columns are defined in init based on weight_name
+    weight_name="dy_weight",
     # only run on mc
     mc_only=True,
     # function to determine the correction file
@@ -144,12 +166,12 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
 
     *get_dy_weight_file* can be adapted in a subclass in case it is stored differently in the external files.
 
-    The analysis config should contain an auxiliary entry *dy_weight_config* pointing to a :py:class:`DrellYanConfig`
-    object:
+    The analysis config should contain an auxiliary entry *dy_weight_config* pointing to a
+    :py:class:`DrellYanWeightConfig` object:
 
     .. code-block:: python
 
-        cfg.x.dy_weight_config = DrellYanConfig(
+        cfg.x.dy_weight_config = DrellYanWeightConfig(
             era="2022preEE",
             order="NLO",
             correction="DY_pTll_reweighting",
@@ -195,7 +217,7 @@ def dy_weights(self: Producer, events: ak.Array, **kwargs) -> ak.Array:
         dy_weight = self.dy_corrector.evaluate(*inputs)
 
         # save the weights in a new column
-        events = set_ak_column(events, f"dy_weight{postfix}", dy_weight, value_type=np.float32)
+        events = set_ak_column(events, f"{self.weight_name}{postfix}", dy_weight, value_type=np.float32)
 
     return events
 
@@ -210,21 +232,22 @@ def dy_weights_init(self: Producer, **kwargs) -> None:
         )
 
     # get the dy weight config
-    self.dy_config: DrellYanConfig = self.get_dy_weight_config()
+    self.dy_config: DrellYanWeightConfig = self.get_dy_weight_config()
 
     # declare additional used columns
     if self.dy_config.used_columns:
         self.uses.update(self.dy_config.used_columns)
 
-    # declare additional produced columns
+    # declare produced columns
+    self.produces.add(self.weight_name)
     if self.dy_config.unc_correction:
         # the number should always be 10
         self.n_unc = 10
         for i in range(self.n_unc):
-            self.produces.add(f"dy_weight{i + 1}_{{up,down}}")
+            self.produces.add(f"{self.weight_name}{i + 1}_{{up,down}}")
     elif self.dy_config.systs:
         for syst in self.dy_config.systs:
-            self.produces.add(f"dy_weight_{syst}")
+            self.produces.add(f"{self.weight_name}_{syst}")
 
 
 @dy_weights.requires
@@ -311,11 +334,12 @@ def recoil_corrected_met(self: Producer, events: ak.Array, **kwargs) -> ak.Array
 
     *get_dy_recoil_file* can be adapted in a subclass in case it is stored differently in the external files.
 
-    The campaign era and name of the correction set (see link above) should be given as an auxiliary entry in the config:
+    The campaign era and name of the correction set (see link above) should be given as an auxiliary entry in the config
+    through a :py:class:`RecoilConfig` object:
 
     .. code-block:: python
 
-        cfg.x.dy_recoil_config = DrellYanConfig(
+        cfg.x.dy_recoil_config = RecoilConfig(
             era="2022preEE",
             order="NLO",
             correction="Recoil_correction_Rescaling",
@@ -499,6 +523,6 @@ def recoil_corrected_met_setup(
     correction_set = load_correction_set(self.get_dy_recoil_file(bundle.files))
 
     # Retrieve the corrections used for the nominal correction and for uncertainties.
-    self.dy_recoil_config: DrellYanConfig = self.get_dy_recoil_config()
+    self.dy_recoil_config: RecoilConfig = self.get_dy_recoil_config()
     self.recoil_corrector = correction_set[self.dy_recoil_config.correction]
     self.recoil_unc_corrector = correction_set[self.dy_recoil_config.unc_correction]

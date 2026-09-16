@@ -24,8 +24,8 @@ import law
 import order as od
 
 from columnflow.columnar_util import mandatory_coffea_columns, Route, ColumnCollection
-from columnflow.util import is_regex, prettify, DotDict, freeze
-from columnflow.types import Sequence, Callable, Any, T
+from columnflow.util import prettify, DotDict, freeze
+from columnflow.types import Sequence, Callable, Any, T, Literal
 
 
 logger = law.logger.get_logger(__name__)
@@ -413,10 +413,10 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             # (the original sequence is living once on the previous stack until now)
             _keys = keys_func()
 
-            # check if the pattern matches any key
-            regex = is_regex(pattern)
+            # check if the pattern matches any key, removing identical prefixes
+            prefix, _pattern = pattern.split("_", 1) if "_" in pattern else ("", pattern)
             for i, key in enumerate(_keys):
-                if law.util.multi_match(key, pattern, regex=regex):
+                if (not prefix or key.startswith(f"{prefix}_")) and law.util.multi_match(key.split("_", 1)[1], _pattern):
                     # remove the matched key from remaining lookup keys
                     _keys.pop(i)
                     # when obj is not a dict, we found the value
@@ -449,7 +449,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         accept_patterns: bool = True,
         deep: bool | None = None,
         strict: bool = False,
-        multi_strategy: str = "first",
+        multi_strategy: Literal["first", "same", "union", "intersection", "all"] = "first",
     ) -> list[str] | dict[od.UniqueObject, list[str]]:
         """
         Returns all names of objects of type *object_cls* known to a *container* (e.g. :py:class:`od.Analysis` or
@@ -574,7 +574,7 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         task_params: dict[str, Any],
         container: str | od.AuxDataMixin | Sequence[od.AuxDataMixin],
         default_str: str | None = None,
-        multi_strategy: str = "first",
+        multi_strategy: Literal["first", "same", "union", "intersection", "all"] = "first",
         debug: bool = False,
     ) -> Any | list[Any] | dict[od.AuxDataMixin, Any]:
         """

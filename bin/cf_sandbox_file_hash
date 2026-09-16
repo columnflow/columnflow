@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-action() {
+cf_sandbox_file_hash() {
     local shell_is_zsh="$( [ -z "${ZSH_VERSION}" ] && echo "false" || echo "true" )"
     local this_file="$( ${shell_is_zsh} && echo "${(%):-%x}" || echo "${BASH_SOURCE[0]}" )"
     local this_dir="$( cd "$( dirname "${this_file}" )" && pwd )"
@@ -13,4 +13,5 @@ action() {
 
     python "${this_dir}/$( basename "${this_file}" ).py" "$@"
 }
-action "$@"
+
+cf_sandbox_file_hash "$@"

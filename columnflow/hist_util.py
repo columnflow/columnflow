@@ -76,11 +76,22 @@ def fill_hist(
         flat_values = flat_np_view(data[ax.name])
         right_egde_mask = flat_values == ax.edges[-1]
         if np.any(right_egde_mask):
-            flat_values = ak.where(right_egde_mask, flat_values - ax.widths[-1] * 1e-5, flat_values)
+            corr_values = ak.where(right_egde_mask, flat_values - ax.widths[-1] * 1e-5, flat_values)
+            # in edge cases, corr_values might still be exactly at the edge value so check and optionally shift again
+            right_egde_mask = corr_values == ax.edges[-1]
+            if np.any(right_egde_mask):
+                corr_values = ak.where(corr_values == ax.edges[-1], flat_values - ax.widths[-1] * 0.5, corr_values)
+                # final check
+                right_egde_mask = corr_values == ax.edges[-1]
+                if np.any(right_egde_mask):
+                    raise Exception(
+                        f"failed to ultimately correct values that hit the last bin edge for axis '{ax.name}' in "
+                        f"histogram '{h.name}'",
+                    )
             data[ax.name] = (
-                flat_values
+                corr_values
                 if data[ax.name].ndim == 1
-                else layout_ak_array(flat_values, data[ax.name])
+                else layout_ak_array(corr_values, data[ax.name])
             )
 
     # check if conversion to records is needed
@@ -415,6 +426,44 @@ def sum_hists(hists: Sequence[hist.Hist]) -> hist.Hist:
     return h_sum
 
 
+def sum_hists_shift_aware(hists: Sequence[hist.Hist], shift_axis_name: str = "shift") -> hist.Hist:
+    """
+    Same as :py:func:`sum_hists`, but takes care of handling missing shift bins in subsets of histograms correctly.
+    In particular, in case histograms A miss shifts present in histograms B, the missing shifts are filled first with
+    values of the nominal bin.
+
+    :param hists: The histograms to sum.
+    :param shift_axis_name: The name of the axis that contains the shift bins. Defaults to "shift".
+    :return: The summed histogram.
+    """
+    import hist
+
+    # get unique list of all shifts
+    all_shift_names = set()
+    for h in hists:
+        if shift_axis_name not in h.axes.name:
+            raise ValueError(f"histogram {h} does not have a '{shift_axis_name}' axis")
+        all_shift_names.update(h.axes[shift_axis_name])
+
+    # extend histograms with nominal values for missing shifts
+    for i, h in enumerate(hists):
+        shift_names = set(h.axes[shift_axis_name])
+        missing_shifts = all_shift_names - shift_names
+        if missing_shifts:
+            if "nominal" not in shift_names:
+                raise ValueError(f"histogram {h} does not have a 'nominal' bin in its '{shift_axis_name}' axis")
+            h_nom = h[{shift_axis_name: hist.loc("nominal")}]
+            h = ensure_bin_exists(h, shift_axis_name, missing_shifts)
+            for missing_shift in missing_shifts:
+                insert_axis_values(h, shift_axis_name, missing_shift, h_nom)
+            hists[i] = h
+
+    # now sum as usual
+    h_sum = sum_hists(hists)
+
+    return h_sum
+
+
 def select_category_bins(
     h: hist.Hist,
     categories: od.Category | str | Sequence[od.Category | str],
@@ -501,11 +550,10 @@ def ensure_bin_exists(
     h = h.copy()
 
     # find the axis and its index
-    for axis_index, axis in enumerate(h.axes):
-        if axis.name == axis_name:
-            break
-    else:
+    if axis_name not in h.axes.name:
         raise ValueError(f"no axis named '{axis_name}' found in histogram: {h}")
+    axis_index = h.axes.name.index(axis_name)
+    axis = h.axes[axis_name]
 
     # for now, only adjustments to categorical axes are allowed
     categorical_types = (hist.axis.IntCategory, hist.axis.StrCategory)

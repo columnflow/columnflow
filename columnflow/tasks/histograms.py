@@ -30,6 +30,10 @@ if TYPE_CHECKING:
     hist = maybe_import("hist")
 
 
+default_store_per_variable = law.config.get_expanded_bool("analysis", "default_histogram_store_per_variable")
+default_only_missing = law.config.get_expanded_bool("analysis", "default_histogram_only_missing")
+
+
 class VariablesMixinWorkflow(
     VariablesMixin,
     law.LocalWorkflow,
@@ -56,6 +60,15 @@ class _CreateHistograms(
 class CreateHistograms(_CreateHistograms):
 
     last_edge_inclusive = last_edge_inclusive_inst
+    store_per_variable = luigi.BoolParameter(
+        default=default_store_per_variable,
+        description=f"when True, store each variable in a separate output file; default: {default_store_per_variable}",
+    )
+    only_missing = luigi.BoolParameter(
+        default=default_only_missing,
+        description="when True, and --store-per-variable is True as well, only store missing variable histograms; "
+        f"default: {default_only_missing}",
+    )
 
     sandbox = dev_sandbox(law.config.get("analysis", "default_columnar_sandbox"))
 
@@ -148,7 +161,15 @@ class CreateHistograms(_CreateHistograms):
 
     @workflow_condition.output
     def output(self):
-        return {"hists": self.target(f"hist__vars_{self.variables_repr}__{self.branch}.pickle")}
+        output = {}
+        if self.store_per_variable:
+            output["hists"] = law.SiblingFileCollection({
+                var_name: self.target(f"hist__var_{var_name}__{self.branch}.pickle")
+                for var_name in self.variable_tuples
+            })
+        else:
+            output["hists"] = self.target(f"hist__vars_{self.variables_repr}__{self.branch}.pickle")
+        return output
 
     @law.decorator.notify
     @law.decorator.log
@@ -162,8 +183,9 @@ class CreateHistograms(_CreateHistograms):
             Route, update_ak_array, add_ak_aliases, has_ak_column, attach_coffea_behavior, ak_concatenate_safe,
         )
 
-        # prepare inputs
+        # prepare inputs and outputs
         inputs = self.input()
+        outputs = self.output()["hists"]
 
         # get IDs and names of all leaf categories
         leaf_category_map = {
@@ -269,6 +291,9 @@ class CreateHistograms(_CreateHistograms):
 
                 # define and fill histograms, taking into account multiple axes
                 for var_key, var_names in self.variable_tuples.items():
+                    if self.store_per_variable and self.only_missing and outputs[var_key].exists():
+                        continue
+
                     # get variable instances
                     variable_insts = [self.config_inst.get_variable(var_name) for var_name in var_names]
 
@@ -323,7 +348,7 @@ class CreateHistograms(_CreateHistograms):
                     )
 
         # post-process the histograms
-        for var_key in self.variable_tuples.keys():
+        for var_key in histograms:
             histograms[var_key] = self.hist_producer_inst.run_post_process_hist(h=histograms[var_key], task=self)
 
             # check the format after post-processing if no merged preprocessing will take place
@@ -334,7 +359,12 @@ class CreateHistograms(_CreateHistograms):
         self.teardown_hist_producer_inst()
 
         # merge output files
-        self.output()["hists"].dump(histograms, formatter="pickle")
+        with self.publish_step(f"dumping {len(histograms)} histogram(s) ..."):
+            if self.store_per_variable:
+                for var_key, h in histograms.items():
+                    outputs[var_key].dump(h, formatter="pickle")
+            else:
+                outputs.dump(histograms, formatter="pickle")
 
 
 # overwrite class defaults
@@ -368,9 +398,9 @@ class _MergeHistograms(
 class MergeHistograms(_MergeHistograms):
 
     only_missing = luigi.BoolParameter(
-        default=False,
-        description="when True, identify missing variables first and only require histograms of "
-        "missing ones; default: False",
+        default=default_only_missing,
+        description="when True, identify missing variables first and only require histograms of missing ones; "
+        f"default: {default_only_missing}",
     )
     remove_previous = luigi.BoolParameter(
         default=False,
@@ -398,34 +428,27 @@ class MergeHistograms(_MergeHistograms):
         # create a dummy branch map so that this task could be submitted as a job
         return {0: None}
 
-    def _get_variables(self):
-        if self.is_workflow():
-            return self.as_branch()._get_variables()
-
-        variables = self.variables
-
-        # optional dynamic behavior: determine not yet created variables and require only those
-        if self.only_missing:
-            missing = self.output()["hists"].count(existing=False, keys=True)[1]
-            variables = sorted(missing, key=variables.index)
-
-        return variables
+    @law.workflow_property(cache=True)
+    def missing_variables(self):
+        missing = self.as_branch().output()["hists"].count(existing=False, keys=True)[1]
+        return sorted(missing, key=self.variables.index)
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
 
-        variables = self._get_variables()
+        variables = self.missing_variables if self.only_missing else self.variables
         if variables:
             reqs["hists"] = self.pilot_workflow_requires(self.reqs.CreateHistograms.req_different_branching(
                 self,
                 branch=-1,
                 variables=tuple(variables),
+                _exclude={"only_missing"},
             ))
 
         return reqs
 
     def requires(self):
-        variables = self._get_variables()
+        variables = self.missing_variables if self.only_missing else self.variables
         if not variables:
             return []
 
@@ -434,6 +457,7 @@ class MergeHistograms(_MergeHistograms):
             branch=-1,
             variables=tuple(variables),
             workflow="local",
+            _exclude={"only_missing"},
         )
 
     def output(self):
@@ -456,7 +480,11 @@ class MergeHistograms(_MergeHistograms):
 
         # load input histograms
         hists = [
-            inp["hists"].load(formatter="pickle")
+            (
+                {var_name: _inp.load(formatter="pickle") for var_name, _inp in inp["hists"].targets.items()}
+                if isinstance(inp["hists"], law.FileCollection)
+                else inp["hists"].load(formatter="pickle")
+            )
             for inp in self.iter_progress(inputs.targets.values(), len(inputs), reach=(0, 50))
         ]
 

@@ -4029,7 +4029,7 @@ class ChunkedIOHandler(object):
                 filter_str = "" if self.n_entries_filtered == self.n_entries_total else "(filtered) "
                 raise ValueError(
                     f"number of {filter_str}entries of source {source_index} '{source}' ({n_filtered:_}) does not "
-                    f"match that of source 0 ({self.n_entries_filtered:_})",
+                    f"match that of source 0 '{self.source_list[0]}' ({self.n_entries_filtered:_})",
                 )
 
             # save the source object

@@ -11,10 +11,23 @@ __all__ = []
 import os
 import re
 import copy
+import json
+import base64
+import zlib
 import pathlib
+import functools
 import dataclasses
+import collections
 
-from columnflow.types import ClassVar, Generator
+import law
+
+from columnflow.util import maybe_import, expand_path
+from columnflow.types import TYPE_CHECKING, ClassVar, Generator, Literal
+
+if TYPE_CHECKING:
+    ak = maybe_import("awkward")
+    uproot = maybe_import("uproot")
+    hist = maybe_import("hist")
 
 
 #: Default root path to CAT metadata.
@@ -223,3 +236,214 @@ class CMSDatasetInfo:
         attrs = copy.deepcopy(self.__dict__)
         attrs.update(kwargs)
         return self.__class__(**attrs)
+
+
+def visualize_gen_decay(gen_part: ak.Array, output_type: Literal["text", "link"] = "link") -> str:
+    """
+    Given a single generator particle (in coffea nano format), this function builds a graph representation of the
+    particle and its decay tree, and returns it either as a mermaid.live link or as a text representation of the graph.
+
+    :param gen_part: A single generator particle in coffea nano format.
+    :param output_type: The type of output to return. Either "text" for a text representation of the graph, or "link"
+        for a mermaid.live link.
+    :return: The output string.
+    """
+    try:
+        from particle import Particle
+        get_particle_name = lambda pdg_id: Particle.from_pdgid(pdg_id).name
+        HAS_PARTICLE = True
+    except ImportError:
+        HAS_PARTICLE = False
+
+    if output_type not in (known_output_types := {"text", "link"}):
+        raise ValueError(f"invalid output_type '{output_type}', expected one of {known_output_types}")
+
+    last_num = -1
+
+    @dataclasses.dataclass
+    class Node:
+        pdg_id: int
+        status: int
+        pt: float | None = None
+        eta: float | None = None
+        phi: float | None = None
+        mass: float | None = None
+        children: list[Node] = dataclasses.field(default_factory=list)
+        _num: int | None = None
+        _float_digits: int = 3
+
+        @classmethod
+        def from_gen_part(cls, gen_part: ak.Array) -> Node:
+            return cls(
+                pdg_id=gen_part.pdgId,
+                status=gen_part.status,
+                pt=gen_part.pt,
+                eta=gen_part.eta,
+                phi=gen_part.phi,
+                mass=gen_part.mass,
+            )
+
+        def __post_init__(self) -> None:
+            nonlocal last_num
+            self._num = last_num = last_num + 1
+
+        def _round_float(self, value: float) -> str:
+            if value == 0:
+                return "0.0"
+            if abs(value) < 10**(-self._float_digits):
+                return f"{value:.{self._float_digits - 1}e}"
+            return f"{value:.{self._float_digits}f}"
+
+        @property
+        def name(self) -> str:
+            return f"node{self._num}"
+
+        @property
+        def label(self) -> str:
+            heading = str(self.pdg_id)
+            parts = []
+            if HAS_PARTICLE:
+                heading = get_particle_name(self.pdg_id)
+                parts.append(f"id={self.pdg_id}")
+            parts += [
+                f"status={self.status}",
+                f"pt={self._round_float(self.pt)}" if self.pt is not None else "",
+                f"eta={self._round_float(self.eta)}" if self.eta is not None else "",
+                f"phi={self._round_float(self.phi)}" if self.phi is not None else "",
+                f"mass={self._round_float(self.mass)}" if self.mass is not None else "",
+            ]
+            return f"{heading}<br><small>{', '.join(filter(bool, parts))}</small>"
+
+    # build the graph representation
+    root = Node.from_gen_part(gen_part)
+    q = collections.deque([(root, child) for child in gen_part.children])
+    while q:
+        parent, child = q.popleft()
+        node = Node.from_gen_part(child)
+        if parent is not None:
+            parent.children.append(node)
+        q.extendleft([(node, c) for c in child.children][::-1])
+
+    # flatten into node name-label pairs and relation strings
+    labels = {}
+    relations = {}
+    q = collections.deque([root])
+    while q:
+        node = q.popleft()
+        labels[node.name] = node.label
+        relations[node.name] = [c.name for c in node.children]
+        q.extendleft(node.children[::-1])
+
+    # convert to mermaid graph
+    graph = ["graph TD"]
+    for name, label in labels.items():
+        graph.append(f"    {name}(\"{label}\")")
+    for parent_name, child_names in relations.items():
+        for child_name in child_names:
+            graph.append(f"    {parent_name} --> {child_name}")
+    graph_text = "\n".join(graph)
+
+    # handle output
+    if output_type == "text":
+        return graph_text
+
+    # build a mermaid.live link
+    # for that, first encode the graph text
+    data = json.dumps({
+        "code": graph_text,
+        "mermaid": json.dumps({"theme": "default"}),
+    })
+    encoded = base64.urlsafe_b64encode(zlib.compress(data.encode("utf-8"), level=9)).decode("utf-8")
+
+    url = f"https://mermaid.live/edit#pako:{encoded}"
+    return url
+
+
+@functools.cache
+def _uproot_keys(path: str | pathlib.Path) -> list[str]:
+    import uproot
+
+    path = os.path.abspath(expand_path(path))
+    with uproot.open(path) as f:
+        return list(f.keys())
+
+
+class HarvesterShapes:
+    """
+    Helper class providing access to histograms stored in a category category of a CMS Combine Harvester shape file.
+    """
+
+    @classmethod
+    def read_categories(
+        cls,
+        path: str | pathlib.Path | uproot.reading.ReadOnlyDirectory,
+        prefit: bool = False,
+        return_keys: bool = False,
+    ) -> list[str | tuple[str, str]]:
+        # load keys from uproot file or directory
+        if not callable(getattr(path, "keys", None)):
+            path = os.path.abspath(expand_path(path))
+            keys = _uproot_keys(path)
+        else:
+            keys = list(path.keys())
+
+        # loop through keys, check if they refer to the correct directories
+        categories = {}
+        for key in keys:
+            key = key.split(";", 1)[0]
+            if "/" not in key and key.endswith("_prefit" if prefit else "_postfit"):
+                categories[key.rsplit("_", 1)[0]] = key
+
+        return list(categories.items() if return_keys else categories)
+
+    @classmethod
+    def from_file(cls, path: str | pathlib.Path, prefit: bool = False) -> dict[str, HarvesterShapes]:
+        import uproot
+
+        data: dict[str, HarvesterShapes] = {}
+
+        path = os.path.abspath(expand_path(path))
+        with uproot.open(path) as f:
+            for category, key in cls.read_categories(f, prefit=prefit, return_keys=True):
+                data[category] = HarvesterShapes(category, prefit, f[key])
+
+        return data
+
+    def __init__(self, category: str, prefit: bool, uproot_dir: uproot.reading.ReadOnlyDirectory) -> None:
+        super().__init__()
+
+        # store attributes
+        self.category = category
+        self.prefit = prefit
+        self.uproot_dir = uproot_dir
+
+        # eager inspection
+        self.keys = law.util.make_unique(k.split(";", 1)[0] for k in self.uproot_dir.keys())
+        non_process_keys = {"TotalBkg", "TotalProcs", "TotalSig", "data_obs"}
+        self.processes = [k for k in self.keys if k not in non_process_keys]
+
+        # cache for loaded and converted histograms
+        self._hists: dict[str, hist.Hist] = {}
+
+    def hist(self, key: str) -> hist.Hist:
+        if key not in self.keys:
+            raise KeyError(f"key '{key}' not found in shapes for category '{self.category}'")
+        if key not in self._hists:
+            self._hists[key] = self.uproot_dir[key].to_hist()
+        return self._hists[key]
+
+    @property
+    def data_hist(self) -> hist.Hist:
+        return self.hist("data_obs")
+
+    @property
+    def background_hist(self) -> hist.Hist:
+        return self.hist("TotalBkg")
+
+    @property
+    def signal_hist(self) -> hist.Hist:
+        return self.hist("TotalSig")
+
+    @property
+    def total_hist(self) -> dict[str, hist.Hist]:
+        return self.hist("TotalProcs")
