@@ -315,9 +315,9 @@ class CreateHistograms(_CreateHistograms):
                         if not callable(sel):
                             raise ValueError(f"invalid selection '{sel}', for now only callables are supported")
                         mask = sel(masked_events)
-                        masked_events = masked_events[mask]
-                        masked_weights = masked_weights[mask]
-                        masked_category_ids = masked_category_ids[mask]
+                        masked_events = ak.drop_none(masked_events[mask], axis=0)
+                        masked_weights = ak.drop_none(masked_weights[mask], axis=0)
+                        masked_category_ids = ak.drop_none(masked_category_ids[mask], axis=0)
 
                     # broadcast arrays so that each event can be filled for all its categories
                     fill_data = {
