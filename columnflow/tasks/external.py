@@ -149,7 +149,7 @@ class GetDatasetLFNs(DatasetTask, law.tasks.TransferLocalFile):
         if code != 0:
             raise Exception(f"dasgoclient query failed:\n{out}")
 
-        broken_files = dataset_inst[shift_inst.name].get_aux("broken_files", [])
+        broken_files = set(dataset_inst[shift_inst.name].get_aux("broken_files", []))
 
         return [
             line.strip()

@@ -323,6 +323,9 @@ class AnalysisTask(BaseTask, law.SandboxTask):
         """
         # get different attributes by which the default version might be looked up
         keys = cls.get_config_lookup_keys(params)
+        for key in keys:
+            if "_" in key:
+                raise ValueError(f"config lookup key '{key}' contains underscore which is not allowed")
 
         # forward to lookup implementation
         version = cls._get_default_version(inst, params, keys)
@@ -1070,6 +1073,9 @@ class AnalysisTask(BaseTask, law.SandboxTask):
             location = OutputLocation[location]
         if location == OutputLocation.config:
             lookup_keys = self.get_config_lookup_keys(self)
+            for key in lookup_keys:
+                if "_" in key:
+                    raise ValueError(f"config lookup key '{key}' contains underscore which is not allowed")
             outputs_dict = self._get_cfg_outputs_dict()
             location = copy.deepcopy(self._dfs_key_lookup(lookup_keys, outputs_dict))
             if not location:
