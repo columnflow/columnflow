@@ -106,7 +106,7 @@ def plot_variable_stack(
     )
     # additional, plot function specific changes
     if shape_norm:
-        default_style_config["ax_cfg"]["ylabel"] = "Normalized entries"
+        default_style_config["ax_cfg"]["ylabel"] = "Normalised entries"
     style_config = law.util.merge_dicts(
         default_style_config,
         process_style_config,
@@ -155,6 +155,9 @@ def plot_variable_efficiency(
         "ax_cfg": {"ylabel": "Efficiency" if shape_norm else "Cumulative entries"},
     }
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+
+    #Hard-coded: remove
+    style_config["ax_cfg"]["ylim"] = (0., 1.5)
 
     return plot_variable_stack(
         hists,
@@ -235,7 +238,7 @@ def plot_variable_variants(
 
     style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
     if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
+        style_config["ax_cfg"]["ylabel"] = "Normalised entries"
 
     return plot_all(plot_config, style_config, **kwargs)
 
@@ -343,7 +346,7 @@ def plot_shifted_variable(
     if legend_title:
         default_style_config["legend_cfg"]["title"] = legend_title
     if shape_norm:
-        style_config["ax_cfg"]["ylabel"] = "Normalized entries"
+        style_config["ax_cfg"]["ylabel"] = "Normalised entries"
     style_config = law.util.merge_dicts(
         default_style_config,
         process_style_config,
@@ -429,7 +432,8 @@ def plot_cutflow(
 
     fig, (ax,) = plot_all(plot_config, style_config, **kwargs)
 
-    ax.set_xticklabels(xticklabels, rotation=45, ha="right")
+    ax.set_xticklabels(xticklabels, rotation=90, ha="center")
+    # ax.set_xticklabels(xticklabels, rotation=90, ha="right")
 
     return fig, (ax,)
 
@@ -583,7 +587,7 @@ def plot_profile(
     )
     ax1.set(
         ylim=(ax1_ymin, ax1_ymax),
-        ylabel="Normalized entries",
+        ylabel="Normalised entries",
         yscale=base_distribution_yscale,
     )
 

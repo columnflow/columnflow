@@ -84,7 +84,7 @@ class SettingsParameter(law.CSVParameter):
         => "param1=2,param2=False"
     """
     settings_delimiter = "="
-    tuple_delimiter = "AAA"
+    tuple_delimiter = "AAA" # NOTE: tuple_delimiter was supposed to be ";", but something broke so it didn't work for me
 
     @classmethod
     def parse_setting(cls, setting: str) -> tuple[str, float | bool | str]:

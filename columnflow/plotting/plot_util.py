@@ -489,9 +489,13 @@ def prepare_style_config(
     unit_format = "{title} [{unit}]"
 
     if density:
+        unit = variable_inst.unit if variable_inst.unit and variable_inst.unit != "1" else "unit"
+        # if variable_inst.discrete_x:
+        if variable_inst.x("skip_rebin", False):  # hotfix for bbWW analysis
+            unit = "1"
         ylabel = variable_inst.get_full_y_title(
             bin_width=False,
-            unit=variable_inst.unit or "unit",
+            unit=unit,
             unit_format="< {title} / {unit} >",
         )
     else:

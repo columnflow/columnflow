@@ -246,6 +246,9 @@ class PlotVariablesBase(_PlotVariablesBase):
 
                         # create expected shift bins and fill them with the nominal histogram
                         expected_shifts = plot_shift_names & process_shift_map[process_inst.name]
+                        if h.sum().value == 0:
+                            # HOTFIX: skip empty hists
+                            continue
                         add_missing_shifts(h, expected_shifts, str_axis="shift", nominal_bin="nominal")
 
                         # update axis labels

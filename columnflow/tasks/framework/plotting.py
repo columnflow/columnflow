@@ -634,14 +634,14 @@ class VariablePlotSettingMixin(
                     config_inst,
                     object_type="variable",
                 )
-            # Filter to only requested variables
-            if "variables" in params and params["variables"]:
-                requested_variables = set(params["variables"])
-                params["variable_settings"] = DotDict({
-                    name: opts
-                    for name, opts in params["variable_settings"].items()
-                    if name in requested_variables
-                })
+            # # Filter to only requested variables
+            # if "variables" in params and params["variables"]:
+            #     requested_variables = set(params["variables"])
+            #     params["variable_settings"] = DotDict({
+            #         name: opts
+            #         for name, opts in params["variable_settings"].items()
+            #         if name in requested_variables
+            #     })
 
         return params
 
