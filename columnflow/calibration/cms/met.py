@@ -104,7 +104,7 @@ def met_phi_run2(self: Calibrator, events: ak.Array, **kwargs) -> ak.Array:
     corr_phi = np.array(met.phi, dtype=np.float32)
 
     # select only events where MET pt is below the expected beam energy
-    mask = met.pt < (0.5 * self.config_inst.campaign.ecm)
+    mask = met.pt < (0.5 * self.config_inst.campaign.ecm * 1000)
 
     # arguments for evaluation
     args = (
