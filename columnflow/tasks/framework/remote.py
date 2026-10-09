@@ -603,7 +603,7 @@ class RemoteWorkflowMixin(AnalysisTask):
 
                 # set the pre command to extend potential afs permissions
                 if not config.render_variables.get("cf_pre_setup_command"):
-                    config.render_variables["cf_pre_setup_command"] = "aklog"
+                    config.render_variables["cf_pre_setup_command"] = "command -v aklog &>/dev/null && aklog"
 
         # add the wlcg tools
         if wlcg:
