@@ -81,6 +81,17 @@ class PlotBase(ConfigTask):
         "exceeds a certain threshold; defaults to the `default_blinding_threshold` aux field of "
         "the config",
     )
+    ratio_mode = luigi.ChoiceParameter(
+        choices=("data_mc", "stack_fraction"),
+        default="data_mc",
+        significant=False,
+        description=(
+            "content shown in the lower panel; 'data_mc' draws the "
+            "usual Data/MC ratio and 'stack_fraction' draws the "
+            "fractional composition of the stacked processes; "
+            "default: data_mc"
+        ),
+    )
 
     exclude_params_remote_workflow = {"debug_plot"}
     exclude_params_hash = {"general_settings"}
@@ -122,6 +133,7 @@ class PlotBase(ConfigTask):
         dict_add_strict(params, "cms_label", None if self.cms_label == law.NO_STR else self.cms_label)
         dict_add_strict(params, "general_settings", self.general_settings)
         dict_add_strict(params, "custom_style_config", self.custom_style_config)
+        dict_add_strict(params, "ratio_mode", self.ratio_mode)
         dict_add_strict(
             params,
             "blinding_threshold",

@@ -687,7 +687,7 @@ class PlotCutflowVariables1D(_PlotCutflowVariables1D):
         "--per-plot parameter",
         allow_empty=True,
     )
-    plot_function_processes = "columnflow.plotting.plot_functions_1d.plot_variable_per_process"
+    plot_function_processes = "columnflow.plotting.plot_functions_1d.plot_variable_stack"
     plot_function_steps = "columnflow.plotting.plot_functions_1d.plot_variable_variants"
 
     per_plot = luigi.ChoiceParameter(
