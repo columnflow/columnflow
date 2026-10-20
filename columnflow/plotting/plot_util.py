@@ -582,7 +582,7 @@ def prepare_stack_plot_config(
             mc_colors.append(process_inst.color1)
             mc_edgecolors.append(process_inst.color2)
             mc_labels.append(process_inst.label)
-            if "shift" in h.axes.name and h.axes["shift"].size > 1:
+            if "shift" in h.axes.name:
                 mc_syst_hists.append(h)
 
     h_data, h_mc, h_mc_stack = None, None, None
