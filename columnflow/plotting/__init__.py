@@ -44,3 +44,11 @@ def check_multi_category_support(plot_func: Callable) -> bool:
     Helper to check if a plot function supports multi-category plotting.
     """
     return "multi_category" in _get_plot_features(plot_func)
+
+def supports_multi_version(plot_func: Callable) -> Callable:
+    _add_plot_feature(plot_func, "multi_version")
+    return plot_func
+
+
+def check_multi_version_support(plot_func: Callable) -> bool:
+    return "multi_version" in _get_plot_features(plot_func)
