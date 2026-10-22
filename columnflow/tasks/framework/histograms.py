@@ -122,7 +122,8 @@ class HistogramsUserBase(
 
         # select categories
         if categories:
-            h = select_category_bins(h, categories, use_leaves=True, prefer_parents=True, reduce=False)
+            category_insts = list(map(config_inst.get_category, law.util.make_unique(law.util.make_list(categories))))
+            h = select_category_bins(h, category_insts, use_leaves=True, prefer_parents=True, reduce=False)
 
         # select shifts
         if shifts:
