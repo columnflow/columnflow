@@ -528,6 +528,63 @@ def select_category_bins(
     return h
 
 
+def ensure_categorical_axis_exists(
+    h: hist.Hist,
+    axis_name: str,
+    value: int | str,
+    index: int | None = None,
+    **kwargs,
+) -> hist.Hist:
+    """
+    Ensures that a histogram *h* has a categorical axis named *axis_name*. If it already exists, *h* is returned
+    unchanged. Otherwise, a copy of *h* with an additional categorical axis is created and the existing contents of *h*
+    are placed into the bin corresponding to *value*. The axis type (int or str category) is inferred from the type of
+    *value*.
+
+    By default, the new axis is inserted right before the first non-categorical (i.e., variable) axis, or appended at
+    the end if no such axis exists. Use *index* to define the position explicitly.
+
+    :param h: The histogram to add the axis to.
+    :param axis_name: The name of the axis to add.
+    :param value: The value on the newly added axis that the currently stored data should be assigned to.
+    :param index: The position of the new axis. Defaults to the position before the first variable axis.
+    :param **kwargs: Additional keyword arguments for axis creation.
+    :return: A new histogram with the additional axis.
+    """
+    import hist
+
+    # return a copy in case the axis already exists
+    if axis_name in h.axes.name:
+        return h.copy()
+
+    # create the new axis depending on the type of value
+    kwargs.setdefault("growth", True)
+    if isinstance(value, str):
+        axis = hist.axis.StrCategory([value], name=axis_name, **kwargs)
+    elif isinstance(value, int):
+        axis = hist.axis.IntCategory([value], name=axis_name, **kwargs)
+    else:
+        raise TypeError(f"value must be a str or int to create a categorical axis, got {type(value).__name__}")
+
+    # determine the insertion index
+    cat_types = (hist.axis.IntCategory, hist.axis.StrCategory)
+    if index is None:
+        index = next((i for i, ax in enumerate(h.axes) if not isinstance(ax, cat_types)), len(h.axes))
+    elif index < 0:
+        index += len(h.axes) + 1
+
+    # create the new histogram
+    axes = list(h.axes)
+    axes.insert(index, axis)
+    h_new = hist.Hist(*axes, storage=h.storage_type())
+
+    # insert the contents (categorical axes have no underflow bin, so no flow offset is needed)
+    insert_at = tuple(index * [slice(None)] + [axis.index(value)])
+    h_new.view(flow=True)[insert_at] = h.view(flow=True)
+
+    return h_new
+
+
 def ensure_bin_exists(
     h: hist.Hist,
     axis_name: str,

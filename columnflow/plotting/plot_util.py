@@ -19,7 +19,9 @@ import order as od
 import scinum as sn
 
 from columnflow.util import maybe_import, try_int, try_complex, safe_div, UNSET
-from columnflow.hist_util import copy_axis, sum_hists, ensure_bin_exists, insert_axis_values
+from columnflow.hist_util import (
+    copy_axis, sum_hists, ensure_categorical_axis_exists, ensure_bin_exists, insert_axis_values,
+)
 from columnflow.types import TYPE_CHECKING, Iterable, Any, Callable, Sequence, Hashable, Literal
 
 np = maybe_import("numpy")
@@ -579,11 +581,10 @@ def prepare_stack_plot_config(
             line_hide_stat_errors.append(proc_hide_stat_errors)
         else:
             mc_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
+            mc_syst_hists.append(ensure_categorical_axis_exists(h, "shift", default_shift))
             mc_colors.append(process_inst.color1)
             mc_edgecolors.append(process_inst.color2)
             mc_labels.append(process_inst.label)
-            if "shift" in h.axes.name and h.axes["shift"].size > 1:
-                mc_syst_hists.append(h)
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:

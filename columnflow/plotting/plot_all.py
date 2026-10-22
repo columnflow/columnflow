@@ -140,7 +140,7 @@ def draw_syst_error_bands(
             down_diffs.append(min(shift_up_diff, shift_down_diff, 0))
         # combination based on the method
         if method == "quadratic_sum":
-            up_diff = sum(d**2 for d in up_diffs)**0.5
+            up_diff = sum(u**2 for u in up_diffs)**0.5
             down_diff = sum(d**2 for d in down_diffs)**0.5
         else:  # envelope
             up_diff = max(up_diffs)
