@@ -236,7 +236,7 @@ class TestModel(MLModel):
 
     def training_selector(
         self,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
         requested_selector: str,
     ) -> str:
         # training uses the default selector
@@ -244,7 +244,7 @@ class TestModel(MLModel):
 
     def training_reducer(
         self,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
         requested_reducer: str,
     ) -> str:
         # training uses the requested reducer, as passed on the command line
@@ -252,7 +252,7 @@ class TestModel(MLModel):
 
     def training_producers(
         self,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
         requested_producers: Sequence[str],
     ) -> list[str]:
         # training uses the default producer
@@ -260,7 +260,7 @@ class TestModel(MLModel):
 
     def training_calibrators(
         self,
-        config_inst: od.Config,
+        analysis_inst: od.Analysis,
         requested_calibrators: Sequence[str],
     ) -> list[str]:
         # training uses a calibrator named "skip_jecunc"
