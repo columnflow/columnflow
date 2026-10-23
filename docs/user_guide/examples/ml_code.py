@@ -242,6 +242,14 @@ class TestModel(MLModel):
         # training uses the default selector
         return "default"
 
+    def training_reducer(
+        self,
+        config_inst: od.Config,
+        requested_reducer: str,
+    ) -> str:
+        # training uses the requested reducer, as passed on the command line
+        return requested_reducer
+
     def training_producers(
         self,
         config_inst: od.Config,
