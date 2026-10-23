@@ -12,7 +12,7 @@ import re
 import math
 import operator
 import functools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import order as od
@@ -564,10 +564,10 @@ def prepare_stack_plot_config(
     import hist
 
     # separate histograms into stack, lines and data hists
-    mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
-    mc_syst_hists = []
-    line_hists, line_colors, line_labels, line_hide_stat_errors, line_linewidth = [], [], [], [], []
-    data_hists, data_hide_stat_errors = [], []
+    mc_hists, mc_syst_hists, line_hists, data_hists = [], [], [], []
+    mc_kwargs = defaultdict(list)
+    line_kwargs = defaultdict(list)
+    line_hide_stat_errors, data_hide_stat_errors = [], []
     data_label = None
 
     default_shift = shift_insts[0].name if len(shift_insts) == 1 else "nominal"
@@ -582,16 +582,17 @@ def prepare_stack_plot_config(
                 data_label = process_inst.label
         elif get_attr_or_aux(process_inst, "unstack", False):
             line_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
-            line_colors.append(process_inst.color1)
-            line_labels.append(process_inst.label)
-            line_linewidth.append(get_attr_or_aux(process_inst, "linewidth", 1))
+            line_kwargs["label"].append(process_inst.label)
+            line_kwargs["color"].append(process_inst.color1)
+            line_kwargs["linewidth"].append(get_attr_or_aux(process_inst, "linewidth", 1))
             line_hide_stat_errors.append(proc_hide_stat_errors)
         else:
             mc_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
             mc_syst_hists.append(ensure_categorical_axis_exists(h, "shift", default_shift))
-            mc_colors.append(process_inst.color1)
-            mc_edgecolors.append(process_inst.color2)
-            mc_labels.append(process_inst.label)
+            mc_kwargs["label"].append(process_inst.label)
+            mc_kwargs["color"].append(process_inst.color1)
+            mc_kwargs["edgecolor"].append(process_inst.color2)
+            mc_kwargs["linewidth"].append(0 if process_inst.color1 is None else 1)
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:
@@ -613,10 +614,7 @@ def prepare_stack_plot_config(
             "hist": h_mc_stack,
             "kwargs": {
                 "norm": mc_norm,
-                "label": mc_labels,
-                "color": mc_colors,
-                "edgecolor": mc_edgecolors,
-                "linewidth": [(0 if c is None else 1) for c in mc_colors],
+                **mc_kwargs,
             },
         }
 
@@ -628,15 +626,9 @@ def prepare_stack_plot_config(
             "hist": h,
             "kwargs": {
                 "norm": line_norm,
-                "label": line_labels[i],
-                "color": line_colors[i],
-                "linewidth": line_linewidth[i],
                 "error_type": "variance",
+                **line_kwargs,
             },
-            # "ratio_kwargs": {
-            #     "norm": h.values(),
-            #     "color": line_colors[i],
-            # },
         }
 
         # suppress error bars by overriding `yerr`
