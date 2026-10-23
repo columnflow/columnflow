@@ -84,7 +84,8 @@ def round_dynamic(value: int | float) -> int | float:
     Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
 
         - 0 -> 0 (int)
-        - (0, 1) -> round to 1 significant digit (float)
+        - (0, 0.1) -> round to 2 significant digits (float)
+        - [0.1, 1) -> round to 1 significant digit (float)
         - [1, 10) -> round to 1 significant digit (int)
         - [10, inf) -> round to 2 significant digits (int)
 
@@ -92,7 +93,7 @@ def round_dynamic(value: int | float) -> int | float:
     :return: The rounded value.
     """
     # determine significant digits
-    digits = 1 if abs(value) < 10 else 2
+    digits = 1 if abs(value) < 10 and abs(value) >= 0.1 else 2
 
     # split into value and magnitude
     v_str, _, mag = sn.round_value(value, method=digits)
@@ -234,10 +235,12 @@ def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hi
                 )
         if isinstance(scale_factor, (int, float)) and scale_factor != 1:
             hists[proc_inst] = h * scale_factor
+            mantissa, exp = f"{scale_factor:.1e}".split("e")
+            exp = int(exp)
             scale_factor_str = (
-                str(scale_factor)
-                if scale_factor < 1e5 else
-                re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
+                f"{scale_factor:g}"
+                if -5 < exp < 5 else
+                rf"${mantissa}\times10^{{{exp}}}$"
             )
             proc_inst.label = apply_label_placeholders(
                 proc_inst.label,
