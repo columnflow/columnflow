@@ -64,6 +64,7 @@ def get_cms_label(ax: plt.Axes, llabel: str) -> dict:
         "llabel": llabel,
         "fontsize": 22,
         "data": False,
+        "scilocator_adjust": False,  # prevents the automatic adjustment of the CMS label position
     }
     if "CMS" in llabel:
         cms_label_kwargs["exp"] = ""
