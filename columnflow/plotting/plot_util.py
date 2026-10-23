@@ -566,7 +566,7 @@ def prepare_stack_plot_config(
     # separate histograms into stack, lines and data hists
     mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
     mc_syst_hists = []
-    line_hists, line_colors, line_labels, line_hide_stat_errors = [], [], [], []
+    line_hists, line_colors, line_labels, line_hide_stat_errors, line_linewidth = [], [], [], [], []
     data_hists, data_hide_stat_errors = [], []
     data_label = None
 
@@ -584,6 +584,7 @@ def prepare_stack_plot_config(
             line_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
             line_colors.append(process_inst.color1)
             line_labels.append(process_inst.label)
+            line_linewidth.append(get_attr_or_aux(process_inst, "linewidth", 1))
             line_hide_stat_errors.append(proc_hide_stat_errors)
         else:
             mc_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
@@ -629,6 +630,7 @@ def prepare_stack_plot_config(
                 "norm": line_norm,
                 "label": line_labels[i],
                 "color": line_colors[i],
+                "linewidth": line_linewidth[i],
                 "error_type": "variance",
             },
             # "ratio_kwargs": {
