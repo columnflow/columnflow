@@ -787,7 +787,7 @@ def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
         "xmajorticks", "xminorticks", "xmajorticklabels", "xminorticklabels", "xloc", "xrotation",
         "ymajorticks", "yminorticks", "yloc", "yrotation", "xticklabelformat", "yticklabelformat",
         "xoffsettext", "yoffsettext",
-        "xlabel_fontsize", "ylabel_fontsize",
+        "xlabel_fontsize", "ylabel_fontsize", "majorgrid", "minorgrid",
     }
     for key, value in kwargs.items():
         (other_kwargs if key in other_keys else set_kwargs)[key] = value
@@ -848,6 +848,16 @@ def apply_ax_kwargs(ax: plt.Axes, kwargs: dict[str, Any]) -> None:
         ax.xaxis.label.set_size(other_kwargs.get("xlabel_fontsize"))
     if other_kwargs.get("ylabel_fontsize") is not None:
         ax.yaxis.label.set_size(other_kwargs.get("ylabel_fontsize"))
+    if (majorgrid_user_kwargs := other_kwargs.get("majorgrid")) is not None:
+        majorgrid_kwargs = {"visible": True, "which": "major", "linestyle": "--", "alpha": 0.6}
+        if isinstance(majorgrid_user_kwargs, dict):
+            majorgrid_kwargs.update(majorgrid_user_kwargs)
+        ax.grid(**majorgrid_kwargs)
+    if (minorgrid_user_kwargs := other_kwargs.get("minorgrid")) is not None:
+        minorgrid_kwargs = {"visible": True, "which": "minor", "linestyle": ":", "alpha": 0.3}
+        if isinstance(minorgrid_user_kwargs, dict):
+            minorgrid_kwargs.update(minorgrid_user_kwargs)
+        ax.grid(**minorgrid_kwargs)
 
 
 def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: bool = False) -> float:
