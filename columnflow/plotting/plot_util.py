@@ -289,14 +289,6 @@ def apply_variable_settings(
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
                 hists[proc_inst] = h
 
-        # overflow and underflow bins
-        overflow = get_attr_or_aux(var_inst, "overflow", False)
-        underflow = get_attr_or_aux(var_inst, "underflow", False)
-        if overflow or underflow:
-            for proc_inst, h in list(hists.items()):
-                h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
-                hists[proc_inst] = h
-
         # slicing
         slices = get_attr_or_aux(var_inst, "slice", None)
         if (
@@ -307,6 +299,20 @@ def apply_variable_settings(
             slice_1 = int(slices[1]) if try_int(slices[1]) else complex(slices[1])
             for proc_inst, h in list(hists.items()):
                 h = h[{var_inst.name: slice(slice_0, slice_1)}]
+                hists[proc_inst] = h
+        elif slices is not None:
+            logger.warning(
+                f"invalid slice setting '{slices}' for variable '{var_inst.name}'; expected two values that can be "
+                f"interpreted as integers or complex numbers; skipping slicing for this variable and all "
+                f"histograms",
+            )
+
+        # overflow and underflow bins
+        overflow = get_attr_or_aux(var_inst, "overflow", False)
+        underflow = get_attr_or_aux(var_inst, "underflow", False)
+        if overflow or underflow:
+            for proc_inst, h in list(hists.items()):
+                h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
                 hists[proc_inst] = h
 
         # additional x axis transformations
