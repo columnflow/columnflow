@@ -691,7 +691,13 @@ def create_category_combinations(
                 _categories.categories[i] = config.get_category(cat)
 
     n_created_categories = 0
-    unique_ids_cache = {cat.id for cat, _, _ in config.walk_categories()}
+    # lookup tables of all known categories by name and id, built once since deep lookups via
+    # config.has_category / get_category traverse all paths of the category graph and scale badly
+    known_categories: dict[str, od.Category] = {}
+    known_ids: dict[int, od.Category] = {}
+    for cat, _, _ in config.walk_categories():
+        known_categories.setdefault(cat.name, cat)
+        known_ids.setdefault(cat.id, cat)
     n_groups = len(categories)
     group_names = list(categories.keys())
     safe_groups = {name for name, group in categories.items() if group.is_partition}
@@ -729,7 +735,7 @@ def create_category_combinations(
                 cat_name = name_fn(root_cats)
 
                 # skip when already existing
-                if skip_existing and config.has_category(cat_name, deep=True):
+                if skip_existing and cat_name in known_categories:
                     continue
 
                 # skip when manually triggered
@@ -767,14 +773,15 @@ def create_category_combinations(
 
                 # ID uniqueness check: raise an error when a non-unique id is detected for a new category
                 if isinstance(kwargs["id"], int):
-                    if kwargs["id"] in unique_ids_cache:
-                        matching_cat = config.get_category(kwargs["id"])
+                    if kwargs["id"] in known_ids:
+                        matching_cat = known_ids[kwargs["id"]]
                         if matching_cat.name != cat.name:
                             raise ValueError(
                                 f"non-unique category id '{kwargs['id']}' for '{cat.name}' has already been used for "
                                 f"category '{matching_cat.name}'",
                             )
-                    unique_ids_cache.add(kwargs["id"])
+                known_categories.setdefault(cat.name, cat)
+                known_ids.setdefault(cat.id, cat)
 
                 # find combinations of parents and connect them, depending on parent_mode
                 if parent_mode == "all":
@@ -813,7 +820,7 @@ def create_category_combinations(
                         if parent_cat_name in created_categories:
                             parent_cat = created_categories[parent_cat_name]
                         else:
-                            parent_cat = config.get_category(parent_cat_name, deep=True)
+                            parent_cat = known_categories[parent_cat_name]
                     # connect
                     parent_cat.add_category(cat)
 
