@@ -630,7 +630,7 @@ def prepare_stack_plot_config(
             "kwargs": {
                 "norm": line_norm,
                 "error_type": "variance",
-                **line_kwargs,
+                **{k: v[i] for k, v in line_kwargs.items()},
             },
         }
 
