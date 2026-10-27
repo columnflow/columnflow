@@ -137,11 +137,12 @@ def hists_merge_cutflow_steps(
     hists: dict,
 ) -> dict:
     """
-    Make 'step' axis uniform among a set of histograms. Takes a dict of 1D histogram
-    objects with a single 'step' axis of type *StrCategory*, computes the full list of possible
-    'step' values across all histograms, and returns a dict of histograms whose 'step' axis
-    has a corresponding, uniform structure. The values and variances inserted for missing 'step'
-    are taken from the previous existing step.
+    Make 'step' axis uniform among a set of histograms. Takes a dict of histogram
+    objects with a 'step' axis of type *StrCategory* (any other axes are left untouched),
+    computes the full list of possible 'step' values across all histograms, and returns a
+    dict of histograms whose 'step' axis has a corresponding, uniform structure. The values
+    and variances inserted for missing 'step' entries are taken from the previous existing
+    step.
     """
     # return immediately if fewer than two hists to merge
     if len(hists) < 2:
@@ -150,10 +151,10 @@ def hists_merge_cutflow_steps(
     # get histogram instances
     hist_insts = list(hists.values())
 
-    # validate inputs
-    if any(h.ndim != 1 for h in hist_insts):
+    # validate inputs: every histogram must have a "step" axis
+    if any("step" not in h.axes.name for h in hist_insts):
         raise ValueError(
-            "cannot merge cutflow steps: histograms must be one-dimensional",
+            "cannot merge cutflow steps: all histograms must have a 'step' axis",
         )
 
     # ensure step structure is uniform by taking a linear
@@ -167,12 +168,12 @@ def hists_merge_cutflow_steps(
         hist_insts_merged.append(hist_row)
 
     # fill missing entries from preceding steps
-    merged_steps = list(hist_insts_merged[0].axes[0])
+    merged_steps = list(hist_insts_merged[0].axes["step"])
     for hist_inst, hist_inst_merged in zip(hist_insts, hist_insts_merged):
         last_step = merged_steps[0]
         for merged_step in merged_steps[1:]:
-            if merged_step not in hist_inst.axes[0]:
-                hist_inst_merged[merged_step] = hist_inst_merged[last_step]
+            if merged_step not in hist_inst.axes["step"]:
+                hist_inst_merged[{"step": merged_step}] = hist_inst_merged[{"step": last_step}].view(flow=True)
             else:
                 last_step = merged_step
 
@@ -182,7 +183,6 @@ def hists_merge_cutflow_steps(
         for k, h in zip(hists, hist_insts_merged)
     }
 
-    # return
     return hists
 
 

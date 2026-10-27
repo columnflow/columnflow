@@ -191,7 +191,7 @@ def plot_variable_variants(
     hists = remove_residual_axis(hists, "shift")
 
     variable_inst = variable_insts[0]
-    hists = apply_variable_settings(hists, variable_insts, variable_settings)
+    hists, variable_style_config = apply_variable_settings(hists, variable_insts, variable_settings)
     if kwargs.get("remove_negative", None):
         hists = remove_negative_contributions(hists)
     if density:
@@ -231,10 +231,15 @@ def plot_variable_variants(
         yscale=yscale,
     )
     # plot-function specific changes
-    default_style_config["rax_cfg"]["ylim"] = (0.0, 1.1)
+    default_style_config["rax_cfg"]["ylim"] = (- 0.1, 1.1)
     default_style_config["rax_cfg"]["ylabel"] = "Step / Initial"
 
-    style_config = law.util.merge_dicts(default_style_config, style_config, deep=True)
+    style_config = law.util.merge_dicts(
+        default_style_config,
+        variable_style_config[variable_inst],
+        style_config,
+        deep=True,
+    )
     if shape_norm:
         style_config["ax_cfg"]["ylabel"] = "Normalized entries"
 
@@ -366,6 +371,9 @@ def plot_cutflow(
     TODO.
     """
     hists = remove_residual_axis(hists, "shift")
+
+    # collapse any axes other than "step", so downstream code gets the 1D step histograms it expects
+    hists = {p: h.project("step") for p, h in hists.items()}
 
     hists, process_style_config = apply_process_settings(hists, process_settings)
     hists = apply_process_scaling(hists)
