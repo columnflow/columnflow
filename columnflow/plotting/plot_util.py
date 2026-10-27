@@ -656,7 +656,7 @@ def prepare_stack_plot_config(
         }
 
     # draw systematic error for stack
-    draw_syst_errors = bool(mc_syst_hists and h_mc_stack is not None)
+    draw_syst_errors = bool(mc_syst_hists and h_mc_stack is not None) and len(shift_insts) > 1
     if draw_syst_errors:
         mc_norm = shape_norm_func(h_mc, shape_norm)
         # when merging stat and syst errors, add a fake shift inst and extend shift axes of histograms to include it
