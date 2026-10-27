@@ -231,7 +231,7 @@ def plot_variable_variants(
         yscale=yscale,
     )
     # plot-function specific changes
-    default_style_config["rax_cfg"]["ylim"] = (- 0.1, 1.1)
+    default_style_config["rax_cfg"]["ylim"] = (0.0, 1.1)
     default_style_config["rax_cfg"]["ylabel"] = "Step / Initial"
 
     style_config = law.util.merge_dicts(
