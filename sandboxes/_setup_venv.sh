@@ -301,6 +301,18 @@ sys.exit(1) if Version(pip.__version__) >= Version('26.2.2') else print(certifi.
             echo
             patch_pip_cert
 
+            # overwrite the vendored certifi bundle of old pip versions with the updated one, so that it
+            # is safe even when PIP_CERT is ignored (e.g. "pip --isolated"); the file must not be deleted
+            # as pip expects it to exist (e.g. for isolated build environments)
+            python -c "
+import shutil, pip, certifi
+from pip._vendor import certifi as pip_certifi
+from pip._vendor.packaging.version import Version
+if Version(pip.__version__) < Version('26.2.2'):
+    shutil.copyfile(certifi.where(), pip_certifi.where())
+"
+            [ "$?" != "0" ] && clear_pending && return "27"
+
             # keep certifi pinned so that it is not downgraded by the requirements below
             add_requirements "'certifi>=2026.10.19'"
 
