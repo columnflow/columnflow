@@ -168,6 +168,25 @@ setup_venv() {
     # possible return value
     local ret="0"
 
+    # let pip < 26.2.2 (latest version supporting python 3.9) use the certifi bundle of the venv instead
+    # of its vendored one, which still contains the compromised emSign root; a PIP_CERT set by the
+    # user is kept, while one set by a previously sourced venv is updated
+    patch_pip_cert() {
+        [ ! -z "${PIP_CERT}" ] && [ "${PIP_CERT}" != "${CF_PATCHED_PIP_CERT}" ] && return "0"
+        local certifi_bundle="$( python -c "
+import sys, pip, certifi
+from pip._vendor.packaging.version import Version
+sys.exit(1) if Version(pip.__version__) >= Version('26.2.2') else print(certifi.where())
+" 2> /dev/null )"
+        if [ ! -z "${certifi_bundle}" ]; then
+            export PIP_CERT="${certifi_bundle}"
+            export CF_PATCHED_PIP_CERT="${certifi_bundle}"
+        elif [ ! -z "${CF_PATCHED_PIP_CERT}" ]; then
+            unset PIP_CERT CF_PATCHED_PIP_CERT
+        fi
+        return "0"
+    }
+
     # handle local environments
     if ! ${CF_REMOTE_ENV}; then
         # optionally remove the current installation
@@ -277,11 +296,10 @@ setup_venv() {
             }
 
             # update packaging tools and certifi first, then let pip use the updated certifi bundle
-            # instead of its vendored one (pip < 26.2.2 ships a bundle with the compromised emSign root)
             python -m pip install -I -U --no-cache-dir pip setuptools "certifi>=2026.10.19"
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
-            export PIP_CERT="$( python -c 'import certifi; print(certifi.where())' )"
+            patch_pip_cert
 
             # keep certifi pinned so that it is not downgraded by the requirements below
             add_requirements "'certifi>=2026.10.19'"
@@ -369,10 +387,8 @@ setup_venv() {
     export CF_VENV_NAME_HASHED="${venv_name_hashed}"
     export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "true" || echo "false" )"
 
-    # let pip use the certifi bundle of the venv instead of its vendored one (pip < 26.2.2 ships a
-    # bundle with the compromised emSign root and newer versions do not support python 3.9)
-    local certifi_bundle="$( python -c 'import certifi; print(certifi.where())' 2> /dev/null )"
-    [ ! -z "${certifi_bundle}" ] && export PIP_CERT="${certifi_bundle}"
+    # let old pip versions use the certifi bundle of the venv
+    patch_pip_cert
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"
