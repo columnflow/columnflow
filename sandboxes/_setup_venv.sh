@@ -276,8 +276,15 @@ setup_venv() {
                 install_reqs="${install_reqs}${args}"
             }
 
-            # update packaging tools
-            add_requirements pip setuptools
+            # update packaging tools and certifi first, then let pip use the updated certifi bundle
+            # instead of its vendored one (pip < 26.2.2 ships a bundle with the compromised emSign root)
+            python -m pip install -I -U --no-cache-dir pip setuptools "certifi>=2026.10.19"
+            [ "$?" != "0" ] && clear_pending && return "27"
+            echo
+            export PIP_CERT="$( python -c 'import certifi; print(certifi.where())' )"
+
+            # keep certifi pinned so that it is not downgraded by the requirements below
+            add_requirements "'certifi>=2026.10.19'"
 
             # basic cf requirements
             if ! ${requirement_files_contains_cf}; then
@@ -361,6 +368,11 @@ setup_venv() {
     export CF_VENV_HASH="${install_hash}"
     export CF_VENV_NAME_HASHED="${venv_name_hashed}"
     export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "true" || echo "false" )"
+
+    # let pip use the certifi bundle of the venv instead of its vendored one (pip < 26.2.2 ships a
+    # bundle with the compromised emSign root and newer versions do not support python 3.9)
+    local certifi_bundle="$( python -c 'import certifi; print(certifi.where())' 2> /dev/null )"
+    [ ! -z "${certifi_bundle}" ] && export PIP_CERT="${certifi_bundle}"
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"
