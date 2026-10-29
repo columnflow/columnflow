@@ -173,11 +173,22 @@ setup_venv() {
     # user is kept, while one set by a previously sourced venv is updated
     patch_pip_cert() {
         [ ! -z "${PIP_CERT}" ] && [ "${PIP_CERT}" != "${CF_PATCHED_PIP_CERT}" ] && return "0"
-        local certifi_bundle="$( python -c "
+        local certifi_bundle
+        certifi_bundle="$( python -c "
 import sys, pip, certifi
 from pip._vendor.packaging.version import Version
-sys.exit(1) if Version(pip.__version__) >= Version('26.2.2') else print(certifi.where())
+if Version(pip.__version__) >= Version('26.2.2'):
+    sys.exit(1)
+if Version(certifi.__version__) < Version('2026.10.19'):
+    sys.exit(2)
+print(certifi.where())
 " 2> /dev/null )"
+        if [ "$?" = "2" ]; then
+            >&2 echo "WARNING: certifi in venv ${CF_VENV_NAME} is older than 2026.10.19 and still contains"
+            >&2 echo "WARNING: the compromised emSign roots, not using it for PIP_CERT"
+            >&2 echo "WARNING: please consider updating the venv"
+            certifi_bundle=""
+        fi
         if [ ! -z "${certifi_bundle}" ]; then
             export PIP_CERT="${certifi_bundle}"
             export CF_PATCHED_PIP_CERT="${certifi_bundle}"
@@ -301,18 +312,6 @@ sys.exit(1) if Version(pip.__version__) >= Version('26.2.2') else print(certifi.
             echo
             patch_pip_cert
 
-            # overwrite the vendored certifi bundle of old pip versions with the updated one, so that it
-            # is safe even when PIP_CERT is ignored (e.g. "pip --isolated"); the file must not be deleted
-            # as pip expects it to exist (e.g. for isolated build environments)
-            python -c "
-import shutil, pip, certifi
-from pip._vendor import certifi as pip_certifi
-from pip._vendor.packaging.version import Version
-if Version(pip.__version__) < Version('26.2.2'):
-    shutil.copyfile(certifi.where(), pip_certifi.where())
-"
-            [ "$?" != "0" ] && clear_pending && return "27"
-
             # keep certifi pinned so that it is not downgraded by the requirements below
             add_requirements "'certifi>=2026.10.19'"
 
@@ -331,6 +330,19 @@ if Version(pip.__version__) < Version('26.2.2'):
             eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
+
+            # overwrite the vendored certifi bundle of old pip versions with the updated one, so that it
+            # is safe even when PIP_CERT is ignored (e.g. "pip --isolated"); the file must not be deleted
+            # as pip expects it to exist (e.g. for isolated build environments); this must happen after
+            # the installation above, as it might reinstall pip (e.g. as a dependency of pipdeptree)
+            python -c "
+import shutil, pip, certifi
+from pip._vendor import certifi as pip_certifi
+from pip._vendor.packaging.version import Version
+if Version(pip.__version__) < Version('26.2.2'):
+    shutil.copyfile(certifi.where(), pip_certifi.where())
+"
+            [ "$?" != "0" ] && clear_pending && return "27"
 
             # make newly installed packages relocatable
             cf_make_venv_relocatable "${venv_name_hashed}"
