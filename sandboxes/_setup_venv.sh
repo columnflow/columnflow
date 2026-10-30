@@ -168,6 +168,36 @@ setup_venv() {
     # possible return value
     local ret="0"
 
+    # let pip < 26.2.2 (latest version supporting python 3.9) use the certifi bundle of the venv instead
+    # of its vendored one, which still contains the compromised emSign root; a PIP_CERT set by the
+    # user is kept, while one set by a previously sourced venv is updated
+    patch_pip_cert() {
+        [ ! -z "${PIP_CERT}" ] && [ "${PIP_CERT}" != "${CF_PATCHED_PIP_CERT}" ] && return "0"
+        local certifi_bundle
+        certifi_bundle="$( python -c "
+import sys, pip, certifi
+from pip._vendor.packaging.version import Version
+if Version(pip.__version__) >= Version('26.2.2'):
+    sys.exit(1)
+if Version(certifi.__version__) < Version('2026.10.19'):
+    sys.exit(2)
+print(certifi.where())
+" 2> /dev/null )"
+        if [ "$?" = "2" ]; then
+            >&2 echo "WARNING: certifi in venv ${CF_VENV_NAME} is older than 2026.10.19 and still contains"
+            >&2 echo "WARNING: the compromised emSign roots, not using it for PIP_CERT"
+            >&2 echo "WARNING: please consider updating the venv"
+            certifi_bundle=""
+        fi
+        if [ ! -z "${certifi_bundle}" ]; then
+            export PIP_CERT="${certifi_bundle}"
+            export CF_PATCHED_PIP_CERT="${certifi_bundle}"
+        elif [ ! -z "${CF_PATCHED_PIP_CERT}" ]; then
+            unset PIP_CERT CF_PATCHED_PIP_CERT
+        fi
+        return "0"
+    }
+
     # handle local environments
     if ! ${CF_REMOTE_ENV}; then
         # optionally remove the current installation
@@ -276,8 +306,14 @@ setup_venv() {
                 install_reqs="${install_reqs}${args}"
             }
 
-            # update packaging tools
-            add_requirements pip setuptools
+            # update packaging tools and certifi first, then let pip use the updated certifi bundle
+            python -m pip install -I -U --no-cache-dir pip setuptools "certifi>=2026.10.19"
+            [ "$?" != "0" ] && clear_pending && return "27"
+            echo
+            patch_pip_cert
+
+            # keep certifi pinned so that it is not downgraded by the requirements below
+            add_requirements "'certifi>=2026.10.19'"
 
             # basic cf requirements
             if ! ${requirement_files_contains_cf}; then
@@ -294,6 +330,19 @@ setup_venv() {
             eval "python -m pip install -I -U --no-cache-dir ${install_reqs}"
             [ "$?" != "0" ] && clear_pending && return "27"
             echo
+
+            # overwrite the vendored certifi bundle of old pip versions with the updated one, so that it
+            # is safe even when PIP_CERT is ignored (e.g. "pip --isolated"); the file must not be deleted
+            # as pip expects it to exist (e.g. for isolated build environments); this must happen after
+            # the installation above, as it might reinstall pip (e.g. as a dependency of pipdeptree)
+            python -c "
+import shutil, pip, certifi
+from pip._vendor import certifi as pip_certifi
+from pip._vendor.packaging.version import Version
+if Version(pip.__version__) < Version('26.2.2'):
+    shutil.copyfile(certifi.where(), pip_certifi.where())
+"
+            [ "$?" != "0" ] && clear_pending && return "27"
 
             # make newly installed packages relocatable
             cf_make_venv_relocatable "${venv_name_hashed}"
@@ -361,6 +410,9 @@ setup_venv() {
     export CF_VENV_HASH="${install_hash}"
     export CF_VENV_NAME_HASHED="${venv_name_hashed}"
     export CF_DEV="$( [[ "${CF_VENV_NAME}" == *_dev ]] && echo "true" || echo "false" )"
+
+    # let old pip versions use the certifi bundle of the venv
+    patch_pip_cert
 
     # mark this as a bash sandbox for law
     export LAW_SANDBOX="bash::$( cf_sandbox_file_hash -p "${sandbox_file}" )"
