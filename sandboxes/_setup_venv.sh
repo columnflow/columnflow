@@ -142,7 +142,7 @@ setup_venv() {
     local install_path_repr="\$CF_VENV_BASE/${venv_name_hashed}"
     local venv_version="$( cat "${first_requirement_file}" | grep -Po "# version \K\d+.*" )"
     local pending_flag_file="${CF_VENV_BASE}/pending_${venv_name_hashed}"
-
+    local pyv="$( python -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" )"
     # whether pip should be patched to use an updated certifi bundle, which is only needed for python <= 3.9
     # whose latest supported pip version (26.2.2) still vendors the compromised emSign root
     local patch_pip_certifi="$( python -c "import sys; print(str(sys.version_info < (3, 10)).lower())" )"
