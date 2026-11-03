@@ -704,8 +704,17 @@ def btag_wp_weights_setup(
         "xxtight": "XXT",
     }
 
-    # sort the WPs therehold values and make the WP strings all lowercase
-    self.sorted_wps = dict(sorted(
+    raw_wps = dict(sorted(
         ((k.lower(), v) for k, v in self.cfg.btag_wps.items()),
+        key=(lambda tpl: tpl[1]),
+    ))
+
+    # collapse merged working points (e.g. xtight+xxtight) into a single entry per group, using
+    # the lowest (loosest) threshold in the group as its boundary
+    self.sorted_wps = dict(sorted(
+        (
+            (merged_name.lower(), min(raw_wps[m.lower()] for m in members))
+            for merged_name, members in self.cfg.wp_merging.items()
+        ),
         key=(lambda tpl: tpl[1]),
     ))
