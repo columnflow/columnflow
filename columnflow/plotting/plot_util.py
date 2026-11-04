@@ -12,7 +12,7 @@ import re
 import math
 import operator
 import functools
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 
 import law
 import order as od
@@ -84,7 +84,8 @@ def round_dynamic(value: int | float) -> int | float:
     Rounds a *value* at various scales to a subjective, sensible precision. Rounding rules:
 
         - 0 -> 0 (int)
-        - (0, 1) -> round to 1 significant digit (float)
+        - (0, 0.1) -> round to 2 significant digits (float)
+        - [0.1, 1) -> round to 1 significant digit (float)
         - [1, 10) -> round to 1 significant digit (int)
         - [10, inf) -> round to 2 significant digits (int)
 
@@ -92,7 +93,7 @@ def round_dynamic(value: int | float) -> int | float:
     :return: The rounded value.
     """
     # determine significant digits
-    digits = 1 if abs(value) < 10 else 2
+    digits = 1 if abs(value) < 10 and abs(value) >= 0.1 else 2
 
     # split into value and magnitude
     v_str, _, mag = sn.round_value(value, method=digits)
@@ -234,10 +235,12 @@ def apply_process_scaling(hists: dict[Hashable, hist.Hist]) -> dict[Hashable, hi
                 )
         if isinstance(scale_factor, (int, float)) and scale_factor != 1:
             hists[proc_inst] = h * scale_factor
+            mantissa, exp = f"{scale_factor:.1e}".split("e")
+            exp = int(exp)
             scale_factor_str = (
-                str(scale_factor)
-                if scale_factor < 1e5 else
-                re.sub(r"e(\+?)(-?)(0*)", r"e\2", f"{scale_factor:.1e}")
+                f"{scale_factor:g}"
+                if -5 < exp < 5 else
+                rf"${mantissa}\times10^{{{exp}}}$"
             )
             proc_inst.label = apply_label_placeholders(
                 proc_inst.label,
@@ -277,15 +280,13 @@ def apply_variable_settings(
         if try_int(rebin_factor):
             for proc_inst, h in list(hists.items()):
                 rebin_factor = int(rebin_factor)
+                if h.axes[var_inst.name].size < rebin_factor:
+                    logger.warning(
+                        f"cannot rebin variable '{var_inst.name}' with factor {rebin_factor} since it only has "
+                        f"{h.axes[var_inst.name].size} bins; skipping rebinning for this variable and histogram",
+                    )
+                    continue
                 h = h[{var_inst.name: hist.rebin(rebin_factor)}]
-                hists[proc_inst] = h
-
-        # overflow and underflow bins
-        overflow = get_attr_or_aux(var_inst, "overflow", False)
-        underflow = get_attr_or_aux(var_inst, "underflow", False)
-        if overflow or underflow:
-            for proc_inst, h in list(hists.items()):
-                h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
                 hists[proc_inst] = h
 
         # slicing
@@ -298,6 +299,20 @@ def apply_variable_settings(
             slice_1 = int(slices[1]) if try_int(slices[1]) else complex(slices[1])
             for proc_inst, h in list(hists.items()):
                 h = h[{var_inst.name: slice(slice_0, slice_1)}]
+                hists[proc_inst] = h
+        elif slices is not None:
+            logger.warning(
+                f"invalid slice setting '{slices}' for variable '{var_inst.name}'; expected two values that can be "
+                f"interpreted as integers or complex numbers; skipping slicing for this variable and all "
+                f"histograms",
+            )
+
+        # overflow and underflow bins
+        overflow = get_attr_or_aux(var_inst, "overflow", False)
+        underflow = get_attr_or_aux(var_inst, "underflow", False)
+        if overflow or underflow:
+            for proc_inst, h in list(hists.items()):
+                h = use_flow_bins(h, var_inst.name, underflow=underflow, overflow=overflow)
                 hists[proc_inst] = h
 
         # additional x axis transformations
@@ -558,10 +573,10 @@ def prepare_stack_plot_config(
     import hist
 
     # separate histograms into stack, lines and data hists
-    mc_hists, mc_colors, mc_edgecolors, mc_labels = [], [], [], []
-    mc_syst_hists = []
-    line_hists, line_colors, line_labels, line_hide_stat_errors = [], [], [], []
-    data_hists, data_hide_stat_errors = [], []
+    mc_hists, mc_syst_hists, line_hists, data_hists = [], [], [], []
+    mc_kwargs = defaultdict(list)
+    line_kwargs = defaultdict(list)
+    line_hide_stat_errors, data_hide_stat_errors = [], []
     data_label = None
 
     default_shift = shift_insts[0].name if len(shift_insts) == 1 else "nominal"
@@ -576,15 +591,17 @@ def prepare_stack_plot_config(
                 data_label = process_inst.label
         elif get_attr_or_aux(process_inst, "unstack", False):
             line_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
-            line_colors.append(process_inst.color1)
-            line_labels.append(process_inst.label)
+            line_kwargs["label"].append(process_inst.label)
+            line_kwargs["color"].append(process_inst.color1)
+            line_kwargs["linewidth"].append(get_attr_or_aux(process_inst, "linewidth", 1))
             line_hide_stat_errors.append(proc_hide_stat_errors)
         else:
             mc_hists.append(remove_residual_axis_single(h, "shift", select_value=default_shift))
             mc_syst_hists.append(ensure_categorical_axis_exists(h, "shift", default_shift))
-            mc_colors.append(process_inst.color1)
-            mc_edgecolors.append(process_inst.color2)
-            mc_labels.append(process_inst.label)
+            mc_kwargs["label"].append(process_inst.label)
+            mc_kwargs["color"].append(process_inst.color1)
+            mc_kwargs["edgecolor"].append(process_inst.color2)
+            mc_kwargs["linewidth"].append(0 if process_inst.color1 is None else 1)
 
     h_data, h_mc, h_mc_stack = None, None, None
     if data_hists:
@@ -606,10 +623,7 @@ def prepare_stack_plot_config(
             "hist": h_mc_stack,
             "kwargs": {
                 "norm": mc_norm,
-                "label": mc_labels,
-                "color": mc_colors,
-                "edgecolor": mc_edgecolors,
-                "linewidth": [(0 if c is None else 1) for c in mc_colors],
+                **mc_kwargs,
             },
         }
 
@@ -621,14 +635,9 @@ def prepare_stack_plot_config(
             "hist": h,
             "kwargs": {
                 "norm": line_norm,
-                "label": line_labels[i],
-                "color": line_colors[i],
                 "error_type": "variance",
+                **{k: v[i] for k, v in line_kwargs.items()},
             },
-            # "ratio_kwargs": {
-            #     "norm": h.values(),
-            #     "color": line_colors[i],
-            # },
         }
 
         # suppress error bars by overriding `yerr`
@@ -787,6 +796,7 @@ def split_ax_kwargs(kwargs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, A
         "xmajorticks", "xminorticks", "xmajorticklabels", "xminorticklabels", "xloc", "xrotation",
         "ymajorticks", "yminorticks", "yloc", "yrotation", "xticklabelformat", "yticklabelformat",
         "xoffsettext", "yoffsettext",
+        "xlabel_fontsize", "ylabel_fontsize", "majorgrid", "minorgrid",
     }
     for key, value in kwargs.items():
         (other_kwargs if key in other_keys else set_kwargs)[key] = value
@@ -843,6 +853,20 @@ def apply_ax_kwargs(ax: plt.Axes, kwargs: dict[str, Any]) -> None:
         ax.xaxis.get_offset_text().set(**other_kwargs["xoffsettext"])
     if other_kwargs.get("yoffsettext") is not None:
         ax.yaxis.get_offset_text().set(**other_kwargs["yoffsettext"])
+    if other_kwargs.get("xlabel_fontsize") is not None:
+        ax.xaxis.label.set_size(other_kwargs.get("xlabel_fontsize"))
+    if other_kwargs.get("ylabel_fontsize") is not None:
+        ax.yaxis.label.set_size(other_kwargs.get("ylabel_fontsize"))
+    if (majorgrid_user_kwargs := other_kwargs.get("majorgrid")) is not None:
+        majorgrid_kwargs = {"visible": True, "which": "major", "linestyle": "--", "alpha": 0.6}
+        if isinstance(majorgrid_user_kwargs, dict):
+            majorgrid_kwargs.update(majorgrid_user_kwargs)
+        ax.grid(**majorgrid_kwargs)
+    if (minorgrid_user_kwargs := other_kwargs.get("minorgrid")) is not None:
+        minorgrid_kwargs = {"visible": True, "which": "minor", "linestyle": ":", "alpha": 0.3}
+        if isinstance(minorgrid_user_kwargs, dict):
+            minorgrid_kwargs.update(minorgrid_user_kwargs)
+        ax.grid(**minorgrid_kwargs)
 
 
 def get_position(minimum: float, maximum: float, factor: float = 1.4, logscale: bool = False) -> float:
