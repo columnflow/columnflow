@@ -390,10 +390,17 @@ class DatacardWriter(object):
         if blocks.line_parameters:
             empty_lines.add("line_parameters")
 
-        # groups
+        # groups, only listing parameters that are actually part of this datacard
+        # (combine rejects groups referring to nuisances that do not exist in the card)
+        written_params = (
+            {line[0] for line in blocks.tabular_parameters} |
+            {line[0] for line in blocks.line_parameters}
+        )
         blocks.groups = []
         for group in self.inference_model_inst.get_parameter_groups():
-            blocks.groups.append([group.name, "group", "="] + group.parameter_names)
+            names = [name for name in group.parameter_names if name in written_params]
+            if names:
+                blocks.groups.append([group.name, "group", "="] + names)
 
         if blocks.groups:
             empty_lines.add("groups")
