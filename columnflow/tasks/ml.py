@@ -481,12 +481,32 @@ class MLTraining(
         return self.ml_model_inst.accepts_scheduler_messages
 
     @property
+    def ensemble_size(self):
+        return int(getattr(self.ml_model_inst, "ensemble_size", 1))
+
+    @property
     def fold(self):
-        return self.branch if self.is_branch() else None
+        if not self.is_branch():
+            return None
+        elif self.ensemble_size == 1:
+            return self.branch
+        else:
+            return self.branch_data["fold"]
 
     def create_branch_map(self):
-        # each fold to train corresponds to one branch
-        return list(range(self.ml_model_inst.folds))
+        if self.ensemble_size == 1:
+            # each fold to train corresponds to one branch
+            return list(range(self.ml_model_inst.folds))
+        else:
+            # each ensemble member corresponds to one branch
+            return [
+                {
+                    "fold": fold,
+                    "ensemble_member": ensemble_member,
+                }
+                for fold in range(self.ml_model_inst.folds)
+                for ensemble_member in range(self.ensemble_size)
+            ]
 
     def workflow_requires(self):
         reqs = super().workflow_requires()
@@ -537,7 +557,7 @@ class MLTraining(
                         fold=f,
                     )
                     for f in range(self.ml_model_inst.folds)
-                    if f != self.branch
+                    if f != self.fold
                 ]
                 for dataset_inst in dataset_insts
             }
