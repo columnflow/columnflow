@@ -71,6 +71,10 @@ def plot_variable_stack(
     if kwargs.get("remove_negative", None):
         hists = remove_negative_contributions(hists)
 
+    if len(shift_insts) == 1:
+        # when there is exactly one shift bin, we can remove the shift axis
+        hists = remove_residual_axis(hists, "shift")
+
     # process scaling
     hists = apply_process_scaling(hists)
 
@@ -86,10 +90,7 @@ def plot_variable_stack(
     if density:
         hists = apply_density(hists, density)
 
-    if len(shift_insts) == 1:
-        # when there is exactly one shift bin, we can remove the shift axis
-        hists = remove_residual_axis(hists, "shift")
-    else:
+    if len(shift_insts) > 1:
         # remove shift axis of histograms that are not to be stacked
         unstacked_hists = {
             proc_inst: h
