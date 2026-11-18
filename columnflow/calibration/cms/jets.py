@@ -234,7 +234,12 @@ class JECConfig(TAFConfig):
 
 
 # define default functions for jec calibrator
-def get_jerc_file_default(self: Calibrator, external_files: DotDict, *, get_config_attr: str) -> str:
+def get_jerc_file_default(
+    self: Calibrator,
+    external_files: DotDict[str, law.LocalFileTarget],
+    *,
+    get_config_attr: str,
+) -> law.LocalFileTarget:
     """
     Function to obtain external correction files for JEC and/or JER.
 
@@ -249,8 +254,9 @@ def get_jerc_file_default(self: Calibrator, external_files: DotDict, *, get_conf
             "fat_jet_jerc": "/afs/cern.ch/work/m/mrieger/public/mirrors/jsonpog-integration-9ea86c4c/POG/JME/2017_UL/fatJet_jerc.json.gz",
         })
 
-    :param external_files: Dictionary containing the information about the file location
-    :return: path or url to correction file(s)
+    :param external_files: Dictionary containing the targets of the bundled external files
+    :param get_config_attr: Name of the calibrator method that returns the JEC or JER config
+    :return: target of the correction file
     """  # noqa
     # get config
     jerc_config = getattr(self, get_config_attr)()
