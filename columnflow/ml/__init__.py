@@ -42,6 +42,7 @@ class MLModel(Derivable):
     assigned (:py:meth:`setup`), a fine-grained configuration of additional training requirements
     (:py:meth:`requires`), diverging training and evaluation phase spaces
     (:py:meth:`training_configs`, :py:meth:`training_calibrators`, :py:meth:`training_selector`,
+    :py:meth:`training_reducer`,
     :py:meth:`training_producers`, :py:meth:`evaluation_producers`), or how hyper-paramaters are
     string encoded for output declarations (:py:meth:`parameter_pairs`). The optional
     py:meth:`preparation_producer` allows setting a producer that is run during the initial
@@ -390,6 +391,25 @@ class MLModel(Derivable):
         :returns: Set with str of the *requested_selector*
         """
         return requested_selector
+
+    def training_reducer(
+        self: MLModel,
+        analysis_inst: od.Analysis,
+        requested_reducer: str,
+    ) -> str:
+        """
+        Given a *requested_reducer* for a *analysis_inst*, this method can change it to define a
+        different reducer for the preprocessing and training pipeline. This can be helpful in cases
+        where training and evaluation phase spaces, as well as the required input columns are
+        intended to diverge.
+        Example usage:
+        .. literalinclude:: ../../user_guide/examples/ml_code.py
+            :language: python
+            :pyobject: TestModel.training_reducer
+        :param analysis_inst: Analysis instance to extract the *requested_reducer* from
+        :returns: Set with str of the *requested_reducer*
+        """
+        return requested_reducer
 
     def training_producers(
         self: MLModel,
