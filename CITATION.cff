@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Rieger"
+  given-names: "Marcel"
+  orcid: "https://orcid.org/0000-0003-0797-2606"
+- family-names: "Frahm"
+  given-names: "Mathis"
+  orcid: "https://orcid.org/0009-0006-6183-7471"
+- family-names: "Savoiu"
+  given-names: "Daniel"
+  orcid: "https://orcid.org/0000-0001-6794-7475"
+- family-names: "Keicher"
+  given-names: "Philip"
+  orcid: "https://orcid.org/0000-0002-2001-2426"
+- family-names: "Prouvost"
+  given-names: "Nathan"
+- family-names: "Wiederspan"
+  given-names: "Bogdan"
+- family-names: "Andrade"
+  given-names: "Ana"
+  orcid: "https://orcid.org/0009-0009-2676-7473"
+- family-names: "Haddad"
+  given-names: "Anas"
+title: "columnflow"
+version: 0.3.0
+date-released: 2025-05-27
+url: "https://github.com/columnflow/columnflow"
+preferred-citation:
+  type: article
+  authors:
+  - family-names: "Frahm"
+    given-names: "Mathis"
+    orcid: "https://orcid.org/0009-0006-6183-7471"
+  doi: "10.1051/epjconf/202533701218"
+  journal: "EPJ Web Conf."
+  month: 10
+  start: "01218" # Article number
+  title: "Orchestrated columnar-based analysis with columnflow"
+  volume: 337
+  year: 2025
+  url: "https://doi.org/10.1051/epjconf/202533701218"
